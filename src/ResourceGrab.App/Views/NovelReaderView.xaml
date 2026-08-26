@@ -1,0 +1,68 @@
+﻿<UserControl x:Class="ResourceGrab.App.Views.NovelReaderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="16,12,16,12">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource GhostButtonStyle}" Content="‹ 返回" Click="BackButton_Click" Padding="14,6"/>
+                <TextBlock x:Name="TitleText" FontSize="14" FontWeight="Bold" Margin="16,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+                <TextBlock x:Name="PageText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border x:Name="ModeToggleBorder" CornerRadius="8" Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="2">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="PageModeBtn" Content="翻页" Padding="12,5" Click="ModePage_Click" Style="{StaticResource GhostButtonStyle}" FontSize="12"/>
+                        <Button x:Name="ScrollModeBtn" Content="滚动" Padding="12,5" Click="ModeScroll_Click" Style="{StaticResource GhostButtonStyle}" FontSize="12"/>
+                    </StackPanel>
+                </Border>
+                <Border Width="1" Background="{DynamicResource DividerBrush}" Margin="10,4" Height="20"/>
+                <Button Style="{StaticResource GhostButtonStyle}" Content="A-" Click="FontDec_Click" Padding="10,6" FontSize="12"/>
+                <Button Style="{StaticResource GhostButtonStyle}" Content="A+" Margin="6,0,0,0" Click="FontInc_Click" Padding="10,6" FontSize="12"/>
+                <Border Width="1" Background="{DynamicResource DividerBrush}" Margin="10,4" Height="20"/>
+                <TextBlock Text="背景" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <StackPanel x:Name="BgPanel" Orientation="Horizontal"/>
+            </StackPanel>
+        </Grid>
+        <Border x:Name="ReaderBorder" Grid.Row="1" Background="White" VerticalAlignment="Stretch" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="0" ClipToBounds="True">
+            <Grid>
+                <ScrollViewer x:Name="ReaderScroll" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ReaderScroll_PreviewMouseWheel" PanningMode="VerticalOnly" Padding="22">
+                    <TextBlock x:Name="ContentText" FontSize="14" LineHeight="24" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </ScrollViewer>
+                    <ListBox x:Name="ScrollList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Padding="22,12,22,28" ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource SpacedPlainListBoxItemStyle}" />
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap" LineHeight="24" Foreground="{Binding Foreground, ElementName=ContentText}" FontSize="{Binding FontSize, ElementName=ContentText}"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel IsVirtualizing="True" VirtualizationMode="Recycling" ScrollUnit="Pixel"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                </ListBox>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <StackPanel x:Name="PageBar" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button Style="{StaticResource GhostButtonStyle}" Content="上一页" Click="PrevPage_Click" x:Name="PrevBtn" Padding="14,6"/>
+                <TextBlock x:Name="PagerText" Text="1 / 1" Margin="12,0" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                <Button Style="{StaticResource GhostButtonStyle}" Content="下一页" Click="NextPage_Click" x:Name="NextBtn" Padding="14,6"/>
+                <Border Width="1" Background="{DynamicResource DividerBrush}" Margin="12,0" Height="18"/>
+                <TextBlock Text="跳至" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox x:Name="JumpBox" Width="56" Height="26" VerticalContentAlignment="Center" Padding="6,0" FontSize="12" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" KeyDown="JumpBox_KeyDown"/>
+                <TextBlock x:Name="JumpTotalText" Text="/ 1" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                <Button Style="{StaticResource GhostButtonStyle}" Content="跳转" Margin="6,0,0,0" Padding="10,4" Click="JumpButton_Click" FontSize="12"/>
+            </StackPanel>
+            <StackPanel x:Name="ScrollBar" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock Text="滚动模式 · 滚轮自由滚动 · 虚拟化渲染" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="ProgressText" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"/>
+        </Grid>
+    </Grid>
+</UserControl>

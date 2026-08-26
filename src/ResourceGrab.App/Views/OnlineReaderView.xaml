@@ -1,0 +1,102 @@
+﻿<UserControl x:Class="ResourceGrab.App.Views.OnlineReaderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 工具栏第 1 行：返回 / 标题 / 页码 / 翻页 / 章节 -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0">
+                <Button x:Name="BackButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 返回"
+                        DockPanel.Dock="Left" Click="BackButton_Click" Padding="14,6" />
+                <TextBlock x:Name="TitleText" FontSize="16" FontWeight="Bold"
+                           MaxWidth="420" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" Margin="16,0,0,0" DockPanel.Dock="Left" />
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <TextBlock x:Name="PageText" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Button x:Name="PrevPageButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="‹ 上一页" ToolTip="上一页（← 或滚轮上）" Click="PrevPage_Click" Padding="10,6" />
+                    <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="下一页 ›" ToolTip="下一页（→ 或滚轮下）" Margin="6,0,0,0"
+                            Click="NextPage_Click" Padding="10,6" />
+                    <Button x:Name="PrevChapterButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="上一章" Margin="10,0,0,0" Click="PrevChapter_Click" Padding="12,6" />
+                    <ComboBox x:Name="ChapterCombo" Width="220" Margin="8,0"
+                              SelectionChanged="ChapterCombo_SelectionChanged" />
+                    <Button x:Name="NextChapterButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="下一章" Click="NextChapter_Click" Padding="12,6" />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- 工具栏第 2 行：阅读模式 / 适应方式 -->
+            <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <ToggleButton x:Name="ScrollModeButton" Style="{StaticResource ReaderModeToggleStyle}"
+                                  Content="滚动" IsChecked="False" Click="ModeToggle_Click" />
+                    <ToggleButton x:Name="PageModeButton" Style="{StaticResource ReaderModeToggleStyle}"
+                                  Content="翻页" Margin="4,0,0,0" IsChecked="True" Click="ModeToggle_Click" />
+                    <TextBlock x:Name="ModeHintText" FontSize="12"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="12,0,0,0"
+                               Text="翻页浏览 · ←/→ 或滚轮翻页 · Ctrl + 滚轮缩放" />
+                    <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
+                            Margin="14,0,12,0" />
+                    <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="适应宽度" Click="FitWidth_Click" Padding="10,5" />
+                    <Button x:Name="FitHeightButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="适应高度" Margin="6,0,0,0" Click="FitHeight_Click" Padding="10,5" />
+                    <Button x:Name="FitPageButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="适应页面" Margin="6,0,0,0" Click="FitPage_Click" Padding="10,5" />
+                    <Button x:Name="ActualSizeButton" Style="{StaticResource GhostButtonStyle}"
+                            Content="实际大小" Margin="6,0,0,0" Click="ActualSize_Click" Padding="10,5" />
+                    <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
+                            Margin="14,0,12,0" />
+                    <TextBlock Text="滚动速度" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" />
+                    <Slider x:Name="ScrollSpeedSlider" Width="100" Minimum="0.3" Maximum="3.0"
+                            TickFrequency="0.1" IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                            Margin="8,0,0,0" ValueChanged="ScrollSpeedSlider_ValueChanged"
+                            ToolTip="仅滚动模式生效：拖动调节滚轮上下滚动速度" />
+                    <TextBlock x:Name="ScrollSpeedValueText" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" Margin="6,0,0,0" MinWidth="28" />
+                </StackPanel>
+            </DockPanel>
+        </Grid>
+
+        <!-- 阅读区 -->
+        <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="18" Padding="8">
+            <Grid>
+                <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              ScrollChanged="Scroller_ScrollChanged"
+                              SizeChanged="Scroller_SizeChanged"
+                              PreviewMouseWheel="Scroller_PreviewMouseWheel">
+                    <StackPanel x:Name="ImageStack" HorizontalAlignment="Center" />
+                </ScrollViewer>
+
+                <!-- 章节级加载/失败状态 -->
+                <StackPanel x:Name="ChapterStatePanel" Visibility="Collapsed"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock x:Name="ChapterStateText" FontSize="14"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="章节加载中…" Margin="20,12" HorizontalAlignment="Center" />
+                    <Button x:Name="ChapterRetryButton" Style="{StaticResource PrimaryButtonStyle}"
+                            Content="重试" Visibility="Collapsed" Click="ChapterRetryButton_Click"
+                            HorizontalAlignment="Center" Padding="18,8" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

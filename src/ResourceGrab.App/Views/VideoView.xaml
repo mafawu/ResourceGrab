@@ -1,0 +1,351 @@
+<UserControl x:Class="ResourceGrab.App.Views.VideoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views"
+             Background="{DynamicResource SurfaceBrush}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 主布局：左侧导航栏 + 右侧内容 -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧导航栏：与漫画主窗口同款（阴影 + Margin 14,14,0,14 + Width 196）-->
+            <Grid Width="196" Margin="14,14,0,14">
+                <Border Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                        CornerRadius="18"
+                        Effect="{StaticResource CardShadowEffect}" />
+                <Border CornerRadius="18" Padding="10,12">
+                    <StackPanel>
+                    <TextBlock Text="视频" FontSize="10.5" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextDisabledBrush}" Margin="12,4,0,6" />
+                    <RadioButton x:Name="NavSearch" GroupName="VideoNavGroup"
+                                 Style="{StaticResource NavItemStyle}" IsChecked="True"
+                                 Click="NavSearch_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="28" Height="28" CornerRadius="9" Margin="-2,0,0,0" Background="Transparent"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconSearch}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                      StrokeThickness="1.55" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="搜索" Margin="10,0,0,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavRecommend" GroupName="VideoNavGroup"
+                                 Style="{StaticResource NavItemStyle}"
+                                 Click="NavRecommend_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="28" Height="28" CornerRadius="9" Margin="-2,0,0,0" Background="Transparent"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconLibrary}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                      StrokeThickness="1.55" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="推荐" Margin="10,0,0,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="NavLocal" GroupName="VideoNavGroup"
+                                 Style="{StaticResource NavItemStyle}"
+                                 Click="NavLocal_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="28" Height="28" CornerRadius="9" Margin="-2,0,0,0" Background="Transparent"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconFolderOpen}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                      StrokeThickness="1.55" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="本地" Margin="10,0,0,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- 右侧内容区 -->
+            <Grid Grid.Column="1" Margin="20">
+                <!-- 搜索页 -->
+                <Grid x:Name="SearchPage" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 顶部：搜索框 + 源筛选 -->
+                    <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,14">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <controls:SearchBoxControl x:Name="OnlineSearchBox"
+                                                           Height="{StaticResource ToolbarHeight}"
+                                                           Watermark="输入番号 / 标题 / 演员搜索"
+                                                           SearchSubmitted="OnlineSearch_Submitted" />
+                                <Button Grid.Column="1" Style="{StaticResource LibraryPrimaryButtonStyle}"
+                                        MinWidth="96" Margin="10,0,0,0" Click="SearchButton_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Data="{StaticResource IconSearch}" Stroke="White" StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                              Stretch="Uniform" Width="14" Height="14" />
+                                        <TextBlock Text="搜索" FontSize="13" FontWeight="SemiBold" Foreground="White" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" Margin="0,14,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 结果区域 -->
+                    <Grid Grid.Row="1">
+                        <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                            <StackPanel>
+                                <WrapPanel x:Name="ResultCardsPanel" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Border Width="72" Height="72" CornerRadius="24" Background="{DynamicResource HoverBgBrush}">
+                                <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28" />
+                            </Border>
+                            <TextBlock x:Name="OnlineEmptyHint" Text="输入关键词开始在线搜索"
+                                       FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,16,0,0" />
+                        </StackPanel>
+                        <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
+                            <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 分页 -->
+                    <StackPanel x:Name="OnlinePagingHost" Grid.Row="2" Orientation="Horizontal"
+                                HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
+                        <Button x:Name="PrevPageBtn" Style="{StaticResource LibraryActionButtonStyle}"
+                                Content="上一页" Click="PrevPage_Click" />
+                        <TextBlock x:Name="PageInfoText" FontSize="12" VerticalAlignment="Center" Margin="14,0" />
+                        <Button x:Name="NextPageBtn" Style="{StaticResource LibraryActionButtonStyle}"
+                                Content="下一页" Click="NextPage_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 推荐页（占位） -->
+                <StackPanel x:Name="RecommendPage" Visibility="Collapsed"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="推荐功能开发中" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </StackPanel>
+
+                <!-- 本地页：左侧卡片 + 右侧筛选边栏 -->
+                <Grid x:Name="LocalPage" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="220" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 本地卡片区域 -->
+                    <Grid Grid.Column="0" Margin="0,0,14,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,14">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BackButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                        Click="BackButton_Click" Visibility="Collapsed" Margin="0,0,10,0">
+                                    <TextBlock Text="← 返回" FontSize="12" FontWeight="SemiBold" />
+                                </Button>
+                                <TextBlock x:Name="TitleText" Text="视频库" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+                                <Border Style="{StaticResource CountBadgeStyle}" Margin="8,0,0,0">
+                                    <TextBlock x:Name="VideoCountText" FontSize="11" Foreground="{DynamicResource PrimaryBrush}" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <ComboBox x:Name="SortBox" Style="{StaticResource LibrarySortComboBoxStyle}" SelectedIndex="0"
+                                          SelectionChanged="SortBox_SelectionChanged">
+                                    <ComboBoxItem Content="最近添加" Tag="AddedDesc" />
+                                    <ComboBoxItem Content="最早添加" Tag="AddedAsc" />
+                                    <ComboBoxItem Content="标题 A → Z" Tag="TitleAsc" />
+                                    <ComboBoxItem Content="发行日期 ↓" Tag="ReleaseDateDesc" />
+                                    <ComboBoxItem Content="评分最高" Tag="ScoreDesc" />
+                                    <ComboBoxItem Content="我的评分" Tag="UserRatingDesc" />
+                                </ComboBox>
+                                <Button x:Name="RescanButton" Style="{StaticResource LibraryActionButtonStyle}" Click="RescanRoots_Click"
+                                        ToolTip="重新扫描" Margin="8,0,0,0">
+                                    <TextBlock Text="重新扫描" FontSize="12" FontWeight="SemiBold" />
+                                </Button>
+                                <Button Style="{StaticResource LibraryPrimaryButtonStyle}" Content="添加文件夹" Margin="8,0,0,0" Click="AddFolder_Click" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ScrollViewer x:Name="ListScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                            <StackPanel>
+                                <WrapPanel x:Name="CardsPanel" />
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <ScrollViewer x:Name="DetailScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                            <StackPanel Margin="4,0,4,0">
+                                <Grid Margin="0,0,0,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Width="280" Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8">
+                                        <Image x:Name="DetailPoster" Stretch="Uniform" MinHeight="360" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="18,0,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="DetailNumber" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                            <Button x:Name="FavoriteButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0" Click="DetailFavorite_Click" ToolTip="收藏">
+                                                <TextBlock x:Name="FavoriteHeart" Text="♡" FontSize="15" />
+                                            </Button>
+                                            <Button Style="{StaticResource LibraryPrimaryButtonStyle}" Content="播放" Margin="8,0,0,0" Click="PlayDetail_Click" />
+                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="重刮削" Margin="8,0,0,0" Click="ScrapeDetail_Click" />
+                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="编辑信息" Margin="8,0,0,0" Click="DetailEdit_Click" />
+                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开目录" Margin="8,0,0,0" Click="OpenFolder_Click" />
+                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="移除" Margin="8,0,0,0" Click="RemoveDetail_Click" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="DetailTitle" FontSize="20" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,2" />
+                                        <TextBlock x:Name="OriginalTitleText" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
+                                        <WrapPanel x:Name="ActorChips" />
+                                        <TextBlock Text="标签" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />
+                                        <WrapPanel x:Name="TagChips" />
+                                        <TextBlock x:Name="MetaText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                        <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,3" />
+                                        <TextBox x:Name="DescriptionText" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 TextWrapping="Wrap" MaxHeight="96" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                                        <StackPanel x:Name="PartsHost" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed" />
+                                        <TextBlock x:Name="SeriesPartsHeader" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,4" Visibility="Collapsed" />
+                                        <WrapPanel x:Name="SeriesPartsHost" Orientation="Horizontal" Visibility="Collapsed" />
+                                        <StackPanel x:Name="RatingHost" Orientation="Horizontal" Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="PreviewHeader" Text="剧照" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                    <StackPanel x:Name="PreviewsHost" Orientation="Horizontal" />
+                                </ScrollViewer>
+                                <TextBlock Text="观看与文件" FontSize="15" FontWeight="Bold" Margin="0,18,0,8" />
+                                <Border Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                        BorderThickness="1" CornerRadius="10" Padding="14,12" MaxWidth="900"
+                                        HorizontalAlignment="Left">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="96" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="文件路径" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Top" />
+                                        <TextBlock x:Name="FilePathText" Grid.Row="0" Grid.Column="1" FontSize="12" TextWrapping="Wrap"
+                                                   Cursor="Hand" MouseLeftButtonUp="CopyFilePath_Click" ToolTip="点击复制完整路径" />
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="文件大小" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="FileSizeText" Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="修改时间" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="FileModifiedText" Grid.Row="2" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="观看次数" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="WatchStatsText" Grid.Row="3" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="打开目录" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="OpenStatsText" Grid.Row="4" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="目录路径" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="DirectoryPathText" Grid.Row="5" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
+                                                   Cursor="Hand" MouseLeftButtonUp="OpenDetailDirectory_Click" ToolTip="点击打开目录" />
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="NFO 文件" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="NfoStatusText" Grid.Row="6" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="文件状态" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="FileStatusText" Grid.Row="7" Grid.Column="1" FontSize="12" FontWeight="SemiBold" Margin="0,9,0,0" />
+
+                                        <TextBlock Grid.Row="8" Grid.Column="0" Text="外部详情页" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        <TextBlock x:Name="SourceUrlText" Grid.Row="8" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
+                                                   Cursor="Hand" MouseLeftButtonUp="CopySourceUrl_Click" ToolTip="点击复制来源详情页地址" />
+                                    </Grid>
+                                </Border>
+                                <TextBlock x:Name="SeriesRecommendHeader" Text="同系列" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                                <WrapPanel x:Name="SeriesRecommends" />
+                                <TextBlock x:Name="ActorRecommendHeader" Text="同演员" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                                <WrapPanel x:Name="ActorRecommends" />
+                                <TextBlock x:Name="RelatedRecommendHeader" Text="相关推荐" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                                <WrapPanel x:Name="RelatedRecommends" />
+                                <TextBlock x:Name="ReviewHeader" Text="短评" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                                <StackPanel x:Name="ReviewHost" />
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <StackPanel x:Name="EmptyPanel" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                            <TextBlock x:Name="EmptyTitle" Text="还没有视频文件" FontSize="15" FontWeight="SemiBold" />
+                            <Button x:Name="EmptyAddButton" Content="添加第一个文件夹" Style="{StaticResource LibraryPrimaryButtonStyle}"
+                                    Margin="0,18,0,0" Click="AddFolder_Click" />
+                        </StackPanel>
+
+                        <StackPanel x:Name="PagingHost" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
+                                    Visibility="Collapsed" Margin="0,14,0,0">
+                            <Button x:Name="PrevPageButton" Style="{StaticResource LibraryActionButtonStyle}" Content="上一页" Click="ChangePage" />
+                            <TextBlock x:Name="PageText" FontSize="12" VerticalAlignment="Center" Margin="14,0" />
+                            <Button x:Name="NextPageButton" Style="{StaticResource LibraryActionButtonStyle}" Content="下一页" Click="ChangePage" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 本地筛选边栏 -->
+                    <views:VideoSearchPanel x:Name="FilterPanel" Grid.Column="1" />
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Border x:Name="TaskBar" Grid.Row="2" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,10,0,0" Visibility="Collapsed">
+            <StackPanel>
+                <Grid>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="TaskTitle" Text="刮削中" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                        <ProgressBar x:Name="TaskProgress" Width="180" Height="6" Minimum="0" Maximum="100" Value="0" Margin="10,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TaskSummary" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="ViewNoMatchButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                Content="查看未匹配" Visibility="Collapsed" Click="ViewNoMatch_Click" />
+                        <Button x:Name="RetryFailedButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                Margin="8,0,0,0" Content="重试失败" Visibility="Collapsed" Click="RetryFailed_Click" />
+                        <Button Style="{StaticResource LibraryActionButtonStyle}" Content="展开日志" Click="ToggleLogs_Click" />
+                        <Button x:Name="StopButton" Style="{StaticResource LibraryActionButtonStyle}" Content="停止" Margin="8,0,0,0" Click="StopScrape_Click" />
+                    </StackPanel>
+                </Grid>
+                <ListBox x:Name="TaskLogList" MaxHeight="120" Visibility="Collapsed" FontSize="11" BorderThickness="0" Background="Transparent" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

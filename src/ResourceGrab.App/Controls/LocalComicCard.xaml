@@ -1,0 +1,92 @@
+<UserControl x:Class="ResourceGrab.App.Controls.LocalComicCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:ResourceGrab.App.Common"
+             Margin="0,0,14,14"
+             SizeChanged="Card_SizeChanged">
+    <Grid x:Name="Root" Cursor="Hand" MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave" MouseLeftButtonUp="Root_MouseLeftButtonUp">
+        <Grid.ToolTip>
+            <ToolTip MaxWidth="380" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="10">
+                <StackPanel MaxWidth="360">
+                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding NameCn}" Style="{StaticResource LocalNameCnToolTipTextStyle}" />
+                    <TextBlock Text="{Binding StatsText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,6,0,0" />
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" VerticalAlignment="Center" Style="{StaticResource HasPopularityVisibilityStyle}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Style="{StaticResource HasViewsVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityViews}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="10" Height="10" VerticalAlignment="Center" Opacity="0.85"/>
+                            <TextBlock Text="{Binding FormattedViews}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0" Style="{StaticResource HasLikesVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityLikes}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="10" Height="10" VerticalAlignment="Center" Opacity="0.85"/>
+                            <TextBlock Text="{Binding FormattedLikes}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0" Style="{StaticResource HasCommentsVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityComments}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="10" Height="10" VerticalAlignment="Center" Opacity="0.85"/>
+                            <TextBlock Text="{Binding FormattedComments}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Tags}" Margin="0,6,0,0">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><Border Style="{StaticResource CardTagPillStyle}"><TextBlock Text="{Binding}" Style="{StaticResource CardTagTextStyle}" /></Border></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ToolTip>
+        </Grid.ToolTip>
+        <Border Style="{StaticResource LocalComicCardBorderStyle}">
+            <StackPanel>
+                <Border x:Name="CoverHost" CornerRadius="14,14,0,0" Style="{StaticResource CardCoverHostStyle}">
+                    <Grid>
+                                                <Image common:ImageLoader.Source="{Binding CoverPath}" Stretch="UniformToFill" />
+                        <Border x:Name="KindBadgeLocal" Style="{StaticResource KindBadgeBorderStyle}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"><TextBlock Text="漫" Style="{StaticResource KindBadgeTextStyle}"/></Border>
+                        <!-- 多选框（仿 Green MediaCard multi-select） -->
+                        <Border Style="{StaticResource SelectionCheckBoxBorderStyle}">
+                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center"/>
+                        </Border>
+                        <!-- 底部进度条（仿 Green cardProgress） -->
+                        <Border Style="{StaticResource CardProgressTrackStyle}">
+                            <Border Style="{StaticResource LocalProgressFillStyle}" />
+                        </Border>
+                        <Border x:Name="Overlay" Background="{DynamicResource CardScrimBrush}" Visibility="Collapsed" CornerRadius="14,14,0,0">
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="{Binding ActualWidth, ElementName=Root}">
+                                <StackPanel Orientation="Horizontal" Margin="8,0">
+                                    <Button Style="{StaticResource PrimaryButtonStyle}" Content="阅读" Command="{Binding OpenReaderCommand}" Padding="14,6" />
+                                    <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开目录" Margin="8,0,0,0" Command="{Binding OpenFolderCommand}" Padding="14,6" />
+                                </StackPanel>
+                            </Viewbox>
+                        </Border>
+                    </Grid>
+                </Border>
+                <StackPanel Margin="10,10,10,12" MinHeight="72">
+                    <Grid MinHeight="32">
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource CardTitleTextStyle}" common:TextBlockExt.MaxLines="2" LineHeight="16" />
+                    </Grid>
+                    <TextBlock Text="{Binding NameCn}" Style="{StaticResource LocalNameCnTextStyle}" common:TextBlockExt.MaxLines="1" MaxHeight="16" />
+                    <ItemsControl ItemsSource="{Binding DisplayTags}" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate><Border Style="{StaticResource CardTagPillStyle}"><TextBlock Text="{Binding}" Style="{StaticResource CardTagTextStyle}" /></Border></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="{Binding StatsText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding ReadInfo}" Style="{StaticResource ReadInfoTextStyle}" />
+                    </StackPanel>
+                    <!-- 热度行：浏览 / 喜欢 / 评论（有元数据才显示） -->
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0" VerticalAlignment="Center" Style="{StaticResource HasPopularityVisibilityStyle}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Style="{StaticResource HasViewsVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityViews}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="11" Height="11" VerticalAlignment="Center" Opacity="0.9" />
+                            <TextBlock Text="{Binding FormattedViews}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0" Style="{StaticResource HasLikesVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityLikes}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="11" Height="11" VerticalAlignment="Center" Opacity="0.9" />
+                            <TextBlock Text="{Binding FormattedLikes}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0" Style="{StaticResource HasCommentsVisibilityStyle}">
+                            <Path Data="{StaticResource IconPopularityComments}" Fill="{DynamicResource TextSecondaryBrush}" Stretch="Uniform" Width="11" Height="11" VerticalAlignment="Center" Opacity="0.9" />
+                            <TextBlock Text="{Binding FormattedComments}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="3,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Text="{Binding RatingText}" Style="{StaticResource RatingTextStyle}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

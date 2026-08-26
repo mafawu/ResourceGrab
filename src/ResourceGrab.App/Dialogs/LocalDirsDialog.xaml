@@ -1,0 +1,84 @@
+<Window x:Class="ResourceGrab.App.Dialogs.LocalDirsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="管理本地路径" Width="512" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Background="{DynamicResource SurfaceBrush}"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <!-- 不用 AllowsTransparency（分层窗口 = 软件渲染 + 每帧把 DirectX 结果整幅像素拷贝到 GDI）；
+         WindowChrome 保持硬件加速，底部 1px 玻璃帧让 DWM 绘制窗口阴影，圆角由 DWM 裁剪（见 OnSourceInitialized） -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      ResizeBorderThickness="0"
+                      GlassFrameThickness="0,0,0,1"
+                      CornerRadius="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Border Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource CardBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="16"
+            Padding="26,22">
+        <StackPanel>
+            <Grid>
+                <TextBlock Text="管理本地路径" FontSize="17" FontWeight="Bold" VerticalAlignment="Center" />
+                <Button Style="{StaticResource IconButtonStyle}"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Click="CloseButton_Click" ToolTip="关闭">
+                    <Path Data="{StaticResource IconClose}" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="16" Height="16" />
+                </Button>
+            </Grid>
+            <TextBlock Text="本地模式将从这些目录中扫描已下载的漫画（每个一级子目录视为一部漫画，.下载中- 开头的临时目录会被跳过）"
+                       FontSize="11.5"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Margin="0,6,0,0" TextWrapping="Wrap" />
+
+            <Border BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1"
+                    CornerRadius="10" Margin="0,16,0,0">
+                <ListBox x:Name="DirList" Height="228" BorderThickness="0"
+                         Background="Transparent" Padding="6">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Path}" FontSize="12.5"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Path}" />
+                                <Button Grid.Column="1" Margin="8,0,0,0" ToolTip="移除该路径"
+                                            Style="{StaticResource DangerHoverIconButtonStyle}"
+                                            Click="RemoveDir_Click">
+                                    <Path Data="{StaticResource IconClose}" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="12" Height="12" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <Button Style="{StaticResource GhostButtonStyle}" Content="添加路径…"
+                        Click="AddDir_Click" />
+                <TextBlock x:Name="ErrorText" FontSize="12"
+                           Foreground="{DynamicResource DangerBrush}"
+                           VerticalAlignment="Center" Margin="12,0,0,0"
+                           Visibility="Collapsed" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Style="{StaticResource GhostButtonStyle}" Content="取消"
+                        Click="CancelButton_Click" />
+                <Button Style="{StaticResource PrimaryButtonStyle}" Content="确定"
+                        Margin="10,0,0,0" Click="OkButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

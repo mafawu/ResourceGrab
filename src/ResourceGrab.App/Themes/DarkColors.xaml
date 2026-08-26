@@ -1,0 +1,69 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- ================================================================
+         深色主题 · 午夜黑 + 霓虹粉（对齐新 mockup #0F0F12）
+         沉浸式，卡片微光，粉色仅作强调
+         ================================================================ -->
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0F0F12" />
+    <SolidColorBrush x:Key="AppBackgroundTopBrush" Color="#161618" />
+    <SolidColorBrush x:Key="AppBackgroundBottomBrush" Color="#0F0F12" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#1A1A1E" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#2A2A30" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#232327" />
+    <SolidColorBrush x:Key="DividerStrongBrush" Color="#2E2E34" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F2F2F5" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#9AA0A8" />
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="#6B7280" />
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#E85D75" />
+    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#FF6B8A" />
+    <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#D94A64" />
+    <SolidColorBrush x:Key="PrimaryFgBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="PrimaryLightBrush" Color="#FF7A94" />
+    <SolidColorBrush x:Key="PrimarySubtleBrush" Color="#2A1D22" />
+    <SolidColorBrush x:Key="PrimaryGradientStartBrush" Color="#E85D75" />
+    <SolidColorBrush x:Key="PrimaryGradientEndBrush" Color="#FF8A5B" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FF5A60" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#3DD598" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#F2B356" />
+    <SolidColorBrush x:Key="WarningSubtleBrush" Color="#33F2B356" />
+    <SolidColorBrush x:Key="NovelAccentBrush" Color="#8E7DFF" />
+    <SolidColorBrush x:Key="VideoAccentBrush" Color="#3DD598" />
+    <SolidColorBrush x:Key="CardScrimBrush" Color="#99000000" />
+    <SolidColorBrush x:Key="CardOverlayPanelBrush" Color="#CC000000" />
+    <SolidColorBrush x:Key="CardBadgeScrimBrush" Color="#E6000000" />
+    <SolidColorBrush x:Key="OnMediaBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="OnMediaSecondaryBrush" Color="#E6FFFFFF" />
+    <SolidColorBrush x:Key="SelectionPanelBrush" Color="#2A2A30" />
+    <SolidColorBrush x:Key="DangerSubtleBrush" Color="#40FF5A60" />
+    <Color x:Key="CardScrimColor">#99000000</Color>
+    <SolidColorBrush x:Key="InputBorderBrush" Color="#2A2A30" />
+    <SolidColorBrush x:Key="InputFocusBrush" Color="#E85D75" />
+    <SolidColorBrush x:Key="FocusGlowBrush" Color="#40E85D75" />
+    <SolidColorBrush x:Key="HoverBgBrush" Color="#14F2F2F5" />
+    <SolidColorBrush x:Key="ActiveNavBgBrush" Color="#1FE85D75" />
+    <SolidColorBrush x:Key="SelectionBgBrush" Color="#26E85D75" />
+    <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#3D6B7280" />
+    <SolidColorBrush x:Key="ScrollbarThumbHoverBrush" Color="#5A6B7280" />
+    <SolidColorBrush x:Key="OverlayBrush" Color="#66000000" />
+    <SolidColorBrush x:Key="WindowControlHoverBrush" Color="#14F2F2F5" />
+    <SolidColorBrush x:Key="CardHoverBrush" Color="#232327" />
+    <SolidColorBrush x:Key="CardHoverBorderBrush" Color="#3A2A30" />
+    <SolidColorBrush x:Key="CardShadowBrush" Color="#40000000" />
+    <SolidColorBrush x:Key="CardHoverShadowBrush" Color="#1AE85D75" />
+    <SolidColorBrush x:Key="SkeletonBrush" Color="#1E1E22" />
+    <SolidColorBrush x:Key="SnackbarBgBrush" Color="#F01A1A1E" />
+    <SolidColorBrush x:Key="TextLinkBrush" Color="#FF7A94" />
+    <Color x:Key="CardShadowColor">#40000000</Color>
+    <Color x:Key="PrimaryGlowColor">#33E85D75</Color>
+    <Color x:Key="PrimaryGradientStartColor">#E85D75</Color>
+    <Color x:Key="PrimaryGradientEndColor">#FF8A5B</Color>
+    <Color x:Key="PrimaryHoverColor">#FF6B8A</Color>
+    <Color x:Key="PrimaryPressedColor">#D94A64</Color>
+    <Color x:Key="AppBackgroundTopColor">#161618</Color>
+    <Color x:Key="AppBackgroundBottomColor">#0F0F12</Color>
+    <LinearGradientBrush x:Key="WindowBorderBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#2A2A30" Offset="0" />
+        <GradientStop Color="#2E2E34" Offset="0.5" />
+        <GradientStop Color="#332A32" Offset="1" />
+    </LinearGradientBrush>
+</ResourceDictionary>

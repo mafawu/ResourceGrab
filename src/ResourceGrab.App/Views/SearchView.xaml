@@ -1,0 +1,74 @@
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.SearchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <controls:SearchBoxControl x:Name="KeywordSearch"
+                                               Height="{StaticResource ToolbarHeight}"
+                                               Watermark="输入漫画名称 / ID / 作者搜索"
+                                               Margin="{StaticResource ToolbarItemSpacing}" VerticalAlignment="Center"
+                                               SearchChanged="KeywordSearch_SearchChanged"
+                                               SearchSubmitted="KeywordSearch_SearchSubmitted" />
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <controls:CardSizeSlider Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                                 VerticalAlignment="Center" />
+                        <Button Style="{StaticResource LibraryPrimaryButtonStyle}"
+                                MinWidth="96"
+                                Click="SearchButton_Click">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Path Data="{StaticResource IconSearch}" Stroke="White" StrokeThickness="1.8"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="搜索" FontSize="13" FontWeight="SemiBold" Foreground="White"
+                                           Margin="6,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" Margin="0,14,0,0" />
+            </StackPanel>
+        </Border>
+
+        <controls:StateHostControl Grid.Row="1"
+                                   State="{Binding CurrentState, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                   Result="{Binding Results, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                   ResultTemplate="{StaticResource ComicCardResultTemplate}"
+                                   SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                   DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                   CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
+                                   HintIcon="{StaticResource IconSearch}"
+                                   HintTitle="输入关键词，开始探索"
+                                   HintDescription="支持漫画名称 / ID / 作者搜索，回车或点击搜索按钮"
+                                   EmptyTitle="没有找到相关漫画"
+                                   EmptyDescription="换个关键词再试试吧"
+                                   RetryText="重新搜索"
+                                   RetryCommand="{Binding RetryCommand, RelativeSource={RelativeSource AncestorType=views:SearchView}}" />
+
+        <StackPanel x:Name="PagingPanel" Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
+            <Button x:Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页" Click="PrevButton_Click" Padding="12,5" />
+            <TextBlock Name="PageText" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Margin="14,0" MinWidth="76" TextAlignment="Center" />
+            <Button Name="NextButton" Style="{StaticResource GhostButtonStyle}"
+                    Content="下一页 ›" Click="NextButton_Click" Padding="12,5" />
+        </StackPanel>
+    </Grid>
+</controls:CardGridViewBase>

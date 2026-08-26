@@ -1,0 +1,207 @@
+<UserControl x:Class="ResourceGrab.App.Views.DownloadPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource SurfaceBrush}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Grid Grid.Row="0" Margin="18,16,18,12">
+            <StackPanel Orientation="Horizontal">
+                <Path Data="{StaticResource IconDownload}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="下载" FontSize="15" FontWeight="Bold"
+                           Margin="8,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="{Binding Speed}" FontSize="12" FontFamily="Consolas"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- 全局进度（背景/描边/圆角统一走 CardStyle，避免本地属性与 Style 重复设置） -->
+        <Border Grid.Row="1" Margin="14,0,14,12" Padding="14,12" Style="{StaticResource DownloadSummaryBorderStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding OverallProgress, StringFormat={}{0:0}%}"
+                               FontSize="24" FontWeight="Bold" FontFamily="Consolas"
+                               Foreground="{DynamicResource PrimaryBrush}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ProgressSummary}" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}" Style="{StaticResource DownloadSummaryTextStyle}" />
+                    <ProgressBar Height="7" Margin="0,9,0,0" Value="{Binding OverallProgress, Mode=OneWay}" Style="{StaticResource DownloadProgressBarStyle}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 当前 / 历史页签 -->
+        <Grid Grid.Row="2" Margin="14,0,14,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Margin="0,2,0,10">
+                <RadioButton x:Name="CurrentTab" GroupName="DownloadPanelTabs"
+                             Style="{StaticResource SegmentedTabStyle}" Content="当前下载"
+                             IsChecked="True" Click="CurrentTab_Click" />
+                <RadioButton x:Name="HistoryTab" GroupName="DownloadPanelTabs"
+                             Style="{StaticResource SegmentedTabStyle}" Content="历史下载"
+                             Margin="6,0,0,0" Click="HistoryTab_Click" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" x:Name="CurrentList"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="CurrentItems">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                                    Padding="14,12" CornerRadius="16">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Text="{Binding DisplayTitle}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="180" VerticalAlignment="Center" />
+                                        <Border x:Name="StatusBadge"
+                                                Style="{StaticResource StatusBadgeStyle}"
+                                                HorizontalAlignment="Right" Margin="8,0,0,0">
+                                            <TextBlock x:Name="BadgeText" Text="{Binding StatusText}"
+                                                       FontSize="10.5"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                    </Grid>
+                                    <ProgressBar x:Name="ItemProgress" Height="5" Margin="0,9,0,0"
+                                                 Value="{Binding Progress, Mode=OneWay}" />
+                                    <TextBlock Text="{Binding ProgressText}"
+                                               FontSize="10.5" FontFamily="Consolas"
+                                               Foreground="{DynamicResource TextDisabledBrush}"
+                                               Margin="0,5,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsDownloading}" Value="True">
+                                    <Setter TargetName="StatusBadge" Property="Background"
+                                            Value="{DynamicResource PrimaryBrush}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground"
+                                            Value="{DynamicResource PrimaryFgBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                    <Setter TargetName="StatusBadge" Property="Background"
+                                            Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground"
+                                            Value="{DynamicResource OnMediaBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel x:Name="CurrentEmptyHint" Grid.Row="1"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Border Width="72" Height="72" CornerRadius="14"
+                        Background="{DynamicResource PrimarySubtleBrush}">
+                    <Path Data="{StaticResource IconDownload}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="暂无当前下载" FontSize="13.5" FontWeight="SemiBold"
+                           Margin="0,16,0,0" HorizontalAlignment="Center" />
+                <TextBlock Text="在章节页选择章节即可下载" FontSize="11.5"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,6,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" x:Name="HistoryList"
+                          Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="HistoryItems">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                                    Padding="14,12" CornerRadius="16">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Text="{Binding DisplayTitle}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="180" VerticalAlignment="Center" />
+                                        <Border x:Name="StatusBadge"
+                                                Style="{StaticResource StatusBadgeStyle}"
+                                                HorizontalAlignment="Right" Margin="8,0,0,0">
+                                            <TextBlock x:Name="BadgeText" Text="{Binding StatusText}"
+                                                       FontSize="10.5"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                    </Grid>
+                                    <ProgressBar x:Name="ItemProgress" Height="4" Margin="0,9,0,0"
+                                                 Value="{Binding Progress, Mode=OneWay}" />
+                                    <TextBlock x:Name="ProgressText" Text="{Binding ProgressText}"
+                                               FontSize="10.5" FontFamily="Consolas"
+                                               Foreground="{DynamicResource TextDisabledBrush}"
+                                               Margin="0,5,0,0" />
+                                    <TextBlock x:Name="CompletedText" FontSize="10"
+                                               Foreground="{DynamicResource TextDisabledBrush}"
+                                               Margin="0,2,0,0"
+                                               Visibility="Collapsed">
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat="完成于 {0:MM-dd HH:mm}">
+                                                <Binding Path="CompletedAt" />
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsDownloading}" Value="True">
+                                    <Setter TargetName="StatusBadge" Property="Background"
+                                            Value="{DynamicResource PrimarySubtleBrush}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground"
+                                            Value="{DynamicResource TextSecondaryBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                    <Setter TargetName="StatusBadge" Property="Background"
+                                            Value="{DynamicResource SuccessBrush}" />
+                                    <Setter TargetName="ProgressText" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="BadgeText" Property="Foreground"
+                                            Value="{DynamicResource OnMediaBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                    <Setter TargetName="StatusBadge" Property="Background"
+                                            Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground"
+                                            Value="{DynamicResource OnMediaBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                    <Setter TargetName="CompletedText" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                    <Setter TargetName="CompletedText" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel x:Name="HistoryEmptyHint" Grid.Row="1"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Border Width="72" Height="72" CornerRadius="14"
+                        Background="{DynamicResource PrimarySubtleBrush}">
+                    <Path Data="{StaticResource IconDownload}" Stroke="{DynamicResource PrimaryBrush}"
+                          StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="暂无历史下载" FontSize="13.5" FontWeight="SemiBold"
+                           Margin="0,16,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

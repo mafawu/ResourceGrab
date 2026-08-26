@@ -1,0 +1,40 @@
+<UserControl x:Class="ResourceGrab.App.Controls.CardSizeSlider"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    <Border x:Name="RootBorder" Style="{StaticResource CardSizeSliderBorderStyle}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="58"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center" IsHitTestVisible="False">
+                <UniformGrid Rows="2" Columns="2">
+                    <Border Width="5" Height="5" CornerRadius="1.2" Background="{DynamicResource TextSecondaryBrush}" Margin="0,0,1.5,1.5"/>
+                    <Border Width="5" Height="5" CornerRadius="1.2" Background="{DynamicResource TextSecondaryBrush}" Margin="1.5,0,0,1.5"/>
+                    <Border Width="5" Height="5" CornerRadius="1.2" Background="{DynamicResource TextSecondaryBrush}" Margin="0,1.5,1.5,0"/>
+                    <Border Width="5" Height="5" CornerRadius="1.2" Background="{DynamicResource TextSecondaryBrush}" Margin="1.5,1.5,0,0"/>
+                </UniformGrid>
+            </Grid>
+
+
+
+            <Slider Grid.Column="1" x:Name="ScaleSlider" Minimum="3" Maximum="8" Value="5"
+                    IsSnapToTickEnabled="True" TickFrequency="1"
+                    Style="{StaticResource ColumnsSliderStyle}"
+                    VerticalAlignment="Center"
+                    ToolTip="拖动调整每行显示个数"
+                    ValueChanged="ScaleSlider_ValueChanged"/>
+
+            <Border Grid.Column="2" x:Name="BadgeBorder" CornerRadius="8" MinWidth="46"
+                    Background="{DynamicResource PrimarySubtleBrush}"
+                    Padding="6,3" Margin="6,0,0,0" VerticalAlignment="Center">
+                <TextBlock x:Name="ScaleText" Text="5 个/行" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource PrimaryBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,104 @@
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.LocalView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 页头：标题 + 计数 + 右侧操作 -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="本地漫画" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <Border Style="{StaticResource CountBadgeStyle}" Margin="10,0,0,0">
+                    <TextBlock x:Name="LocalCount" FontSize="11"
+                               Foreground="{DynamicResource PrimaryBrush}" />
+                </Border>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock Text="来源" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0" /><ComboBox x:Name="SourceFilterBox" Style="{StaticResource LibrarySortComboBoxStyle}" VerticalAlignment="Center" SelectionChanged="SourceFilterBox_SelectionChanged" /><TextBlock Text="排序" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,6,0" /><ComboBox x:Name="SortBox" Style="{StaticResource LibrarySortComboBoxStyle}" VerticalAlignment="Center" SelectedIndex="0" SelectionChanged="SortBox_SelectionChanged"><ComboBoxItem Content="最近更新" Tag="ModifiedDesc" /><ComboBoxItem Content="名称 A → Z" Tag="NameAsc" /><ComboBoxItem Content="名称 Z → A" Tag="NameDesc" /><ComboBoxItem Content="章节数 ↓" Tag="ChapterDesc" /><ComboBoxItem Content="图片数 ↓" Tag="ImageDesc" /><ComboBoxItem Content="最早更新" Tag="ModifiedAsc" /><ComboBoxItem Content="浏览最高" Tag="ViewsDesc" /><ComboBoxItem Content="热度最高" Tag="PopularityDesc" /><ComboBoxItem Content="评论最多" Tag="CommentsDesc" /><ComboBoxItem Content="评分最高" Tag="RatingDesc" /><ComboBoxItem Content="最近阅读" Tag="LastReadDesc" /><ComboBoxItem Content="最多阅读" Tag="ReadCountDesc" /></ComboBox><controls:CardSizeSlider Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:LocalView}}"
+                                         VerticalAlignment="Center" />
+                <!-- 刷新/管理路径已移至设置窗口 -->
+
+                <Button Style="{StaticResource LibraryActionButtonStyle}" Content="补全元数据"
+                        Click="BackfillButton_Click" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 内容区 -->
+        <Grid Grid.Row="1">
+            <StackPanel x:Name="NoDirsPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <Border Width="72" Height="72" CornerRadius="24"
+                        Background="{DynamicResource PrimarySubtleBrush}">
+                    <Path Data="{StaticResource IconFolderOpen}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="尚未配置本地目录" FontSize="15" FontWeight="SemiBold"
+                           Margin="0,16,0,0" HorizontalAlignment="Center" />
+                <TextBlock Text="添加下载目录后即可在本地模式浏览已下载的漫画" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,6,0,0" HorizontalAlignment="Center" />
+                <Button Content="添加本地路径" Style="{StaticResource PrimaryButtonStyle}"
+                        Margin="0,18,0,0" HorizontalAlignment="Center"
+                        Click="ManageDirsButton_Click" />
+            </StackPanel>
+
+            <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <Border Width="72" Height="72" CornerRadius="24"
+                        Background="{DynamicResource HoverBgBrush}">
+                    <Path Data="{StaticResource IconLoading}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="扫描中…" FontSize="15" FontWeight="SemiBold"
+                           Margin="0,16,0,0" HorizontalAlignment="Center" />
+                <TextBlock Text="正在扫描本地目录，稍候片刻" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,6,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <Border Width="72" Height="72" CornerRadius="24"
+                        Background="{DynamicResource HoverBgBrush}">
+                    <Path Data="{StaticResource IconLibrary}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock x:Name="EmptyTitleText" Text="所选目录下还没有已下载的漫画" FontSize="15" FontWeight="SemiBold"
+                           Margin="0,16,0,0" HorizontalAlignment="Center" />
+                <TextBlock x:Name="EmptySubtitleText" Text="去搜索页下载漫画后即可在这里看到" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,6,0,0" HorizontalAlignment="Center" />
+                <Button Style="{StaticResource PillGhostButtonStyle}" Content="重新扫描"
+                        Margin="0,18,0,0" HorizontalAlignment="Center"
+                        Click="RefreshButton_Click" />
+            </StackPanel>
+
+            <controls:VirtualizedCardGrid x:Name="LocalItems" Visibility="Collapsed" SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=views:LocalView}}" DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:LocalView}}" CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=views:LocalView}}"><controls:VirtualizedCardGrid.ItemTemplate><DataTemplate><controls:LocalComicCard HorizontalAlignment="Center" Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}" /></DataTemplate></controls:VirtualizedCardGrid.ItemTemplate></controls:VirtualizedCardGrid>
+        </Grid>
+
+        <!-- 分页 -->
+        <Grid Grid.Row="2" Margin="0,8,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button x:Name="PrevPageButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="‹ 上一页" Click="PrevPage_Click" Padding="12,5" />
+                <TextBlock x:Name="PageText" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="14,0" MinWidth="76" TextAlignment="Center" />
+                <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="下一页 ›" Click="NextPage_Click" Padding="12,5" />
+                <ComboBox x:Name="PageSizeBox" Width="84" Margin="16,0,0,0"
+                          VerticalAlignment="Center"
+                          SelectionChanged="PageSizeBox_SelectionChanged" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</controls:CardGridViewBase>
+
+
+
+
+

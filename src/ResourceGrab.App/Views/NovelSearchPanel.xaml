@@ -1,0 +1,39 @@
+<UserControl x:Class="ResourceGrab.App.Views.NovelSearchPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource SurfaceBrush}">
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="18,16,18,12">
+            <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource KindBadgeBorderStyle}" Background="{DynamicResource NovelAccentBrush}" VerticalAlignment="Center"><TextBlock Text="小" Style="{StaticResource KindBadgeTextStyle}"/></Border>
+                <TextBlock Text="小说筛选" FontSize="15" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+        <Border Grid.Row="1" Height="{StaticResource ToolbarHeight}" Margin="14,0,14,12"
+                Style="{StaticResource SearchFieldBorderStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Path Grid.Column="0" Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextDisabledBrush}"
+                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Stretch="Uniform" Width="16" Height="16" Margin="14,0,0,0"
+                      VerticalAlignment="Center" IsHitTestVisible="False" />
+                <TextBox x:Name="KeywordBox" Style="{StaticResource SearchInputTextStyle}" Grid.Column="1"
+                         Margin="10,0,0,0" Padding="0" TextChanged="KeywordBox_TextChanged"
+                         GotFocus="KeywordBox_GotFocus" LostFocus="KeywordBox_LostFocus"/>
+                <TextBlock x:Name="PlaceholderText" Text="搜索小说名 / 标签" Grid.Column="1" Margin="34,0,0,0"
+                           HorizontalAlignment="Left" Style="{StaticResource SearchWatermarkTextStyle}"/>
+                <Button x:Name="ClearButton" Grid.Column="2" Style="{StaticResource SidebarSearchClearButtonStyle}"
+                        Click="ClearButton_Click" Visibility="Collapsed">
+                </Button>
+            </Grid>
+        </Border>
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="14,0,14,14">
+            <StackPanel x:Name="TreeHost"/>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

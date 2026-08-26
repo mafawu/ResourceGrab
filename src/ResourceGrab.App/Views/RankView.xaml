@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.RankView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:ResourceGrab.App.Controls" xmlns:views="clr-namespace:ResourceGrab.App.Views">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,14">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="人气排行" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+          <RadioButton Name="PeriodAll" GroupName="RankPeriod" Style="{StaticResource NavItemStyle}" IsChecked="True" Content="總排行" Click="Period_Checked" />
+          <RadioButton Name="PeriodToday" GroupName="RankPeriod" Style="{StaticResource NavItemStyle}" Content="今天" Click="Period_Checked" />
+          <RadioButton Name="PeriodWeek" GroupName="RankPeriod" Style="{StaticResource NavItemStyle}" Content="本周" Click="Period_Checked" />
+          <RadioButton Name="PeriodMonth" GroupName="RankPeriod" Style="{StaticResource NavItemStyle}" Content="本月" Click="Period_Checked" />
+          <controls:CardSizeSlider Margin="{StaticResource ToolbarItemSpacing}" VerticalAlignment="Center" Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+          <ComboBox Name="SortBox" Style="{StaticResource LibrarySortComboBoxStyle}" SelectionChanged="SortBox_SelectionChanged">
+            <ComboBoxItem Content="最多观看" Tag="View" />
+            <ComboBoxItem Content="最新发布" Tag="Latest" />
+            <ComboBoxItem Content="图片最多" Tag="Picture" />
+            <ComboBoxItem Content="最多点赞" Tag="Like" />
+          </ComboBox>
+          <TextBlock Name="TotalText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="12,0,0,0" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <controls:StateHostControl Grid.Row="1"
+                       State="{Binding CurrentState, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       Result="{Binding Results, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       ResultTemplate="{StaticResource ComicCardResultTemplate}"
+                       SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       EmptyTitle="暂无漫画数据"
+                       RetryText="重新加载"
+                       RetryCommand="{Binding RetryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+    <StackPanel Name="PagingPanel" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
+      <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="999" Padding="4">
+        <StackPanel Orientation="Horizontal">
+          <Button Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页" Click="PrevButton_Click" Padding="12,5" />
+          <TextBlock Name="PageText" FontSize="12" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextSecondaryBrush}"
+                     Margin="14,0" MinWidth="76" TextAlignment="Center" />
+          <Button Name="NextButton" Style="{StaticResource GhostButtonStyle}"
+                  Content="下一页 ›" Click="NextButton_Click" Padding="12,5" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Grid>
+</controls:CardGridViewBase>

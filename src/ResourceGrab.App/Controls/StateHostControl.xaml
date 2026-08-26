@@ -1,0 +1,8 @@
+<UserControl x:Class="ResourceGrab.App.Controls.StateHostControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+    
+
+    <ContentControl Style="{DynamicResource UnifiedStateHostStyle}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+</UserControl>

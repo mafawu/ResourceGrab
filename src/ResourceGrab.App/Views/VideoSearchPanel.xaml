@@ -1,0 +1,144 @@
+<UserControl x:Class="ResourceGrab.App.Views.VideoSearchPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource SurfaceBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Grid Grid.Row="0" Margin="18,16,18,12">
+            <StackPanel Orientation="Horizontal">
+                <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                <TextBlock x:Name="PanelTitleText" Text="本地搜索" FontSize="15" FontWeight="Bold"
+                           Margin="8,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 在线源选择器（仅在线模式显示） -->
+        <StackPanel x:Name="SourceSelectorHost" Grid.Row="1" Margin="14,0,14,8" Visibility="Collapsed">
+            <TextBlock Text="数据源" FontSize="11" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+            <ComboBox x:Name="SourceBox" Style="{StaticResource LibrarySortComboBoxStyle}"
+                      MinWidth="0" SelectedIndex="0"
+                      SelectionChanged="SourceBox_SelectionChanged">
+                <ComboBoxItem Content="MissAV" Tag="missav" />
+                <ComboBoxItem Content="Hanime1" Tag="hanime1" IsEnabled="False" />
+                <ComboBoxItem Content="SupJav" Tag="supjav" IsEnabled="False" />
+                <ComboBoxItem Content="JableTV" Tag="jabletv" IsEnabled="False" />
+            </ComboBox>
+        </StackPanel>
+
+        <!-- 关键字输入框 -->
+        <Border Grid.Row="2" Height="{StaticResource ToolbarHeight}" Margin="14,0,14,12"
+                Style="{StaticResource SearchFieldBorderStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Path Grid.Column="0" Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextDisabledBrush}"
+                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Stretch="Uniform" Width="16" Height="16" Margin="14,0,0,0"
+                      VerticalAlignment="Center" IsHitTestVisible="False" />
+                <TextBox x:Name="KeywordBox" Style="{StaticResource SearchInputTextStyle}"
+                         Grid.Column="1" Margin="10,0,0,0" Padding="0"
+                         TextChanged="KeywordBox_TextChanged"
+                         KeyDown="KeywordBox_KeyDown"
+                         GotFocus="KeywordBox_GotFocus" LostFocus="KeywordBox_LostFocus" />
+                <TextBlock x:Name="PlaceholderText" Text="搜索番号 / 标题 / 演员 / 标签"
+                           Grid.Column="1" Margin="34,0,0,0" HorizontalAlignment="Left"
+                           Style="{StaticResource SearchWatermarkTextStyle}" />
+                <Button x:Name="ClearButton" Grid.Column="2"
+                        Style="{StaticResource SidebarSearchClearButtonStyle}"
+                        ToolTip="清除全部筛选" Click="ClearButton_Click"
+                        Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- 筛选区 -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Padding="14,0,14,14">
+            <StackPanel>
+                <!-- 类型 -->
+                <Grid Margin="0,0,0,6">
+                    <TextBlock Text="类型" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                </Grid>
+                <WrapPanel x:Name="CensorHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 标签 -->
+                <Grid Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="标签筛选" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TagCountText" FontSize="10.5" Foreground="{DynamicResource TextDisabledBrush}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                    <TextBlock x:Name="TagEmptyText" Text="暂无标签" FontSize="11"
+                               Foreground="{DynamicResource TextDisabledBrush}" Margin="0,2,0,8" Visibility="Collapsed" />
+                    <WrapPanel x:Name="TagsHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 演员 -->
+                <Grid Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="演员筛选" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="ActorCountText" FontSize="10.5" Foreground="{DynamicResource TextDisabledBrush}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                    <TextBlock x:Name="ActorEmptyText" Text="暂无演员" FontSize="11"
+                               Foreground="{DynamicResource TextDisabledBrush}" Margin="0,2,0,8" Visibility="Collapsed" />
+                    <WrapPanel x:Name="ActorsHost" />
+                <TextBlock Text="左键包含 · 右键排除" FontSize="10" Foreground="{DynamicResource TextDisabledBrush}" Margin="0,12,0,0" HorizontalAlignment="Center" Opacity="0.7" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 系列 -->
+                <Grid Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="系列筛选" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="SeriesCountText" FontSize="10.5" Foreground="{DynamicResource TextDisabledBrush}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                    <TextBlock x:Name="SeriesEmptyText" Text="暂无系列" FontSize="11"
+                               Foreground="{DynamicResource TextDisabledBrush}" Margin="0,2,0,8" Visibility="Collapsed" />
+                    <WrapPanel x:Name="SeriesHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 制作商 -->
+                <Grid Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="制作商筛选" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="StudioCountText" FontSize="10.5" Foreground="{DynamicResource TextDisabledBrush}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+                    <TextBlock x:Name="StudioEmptyText" Text="暂无制作商" FontSize="11"
+                               Foreground="{DynamicResource TextDisabledBrush}" Margin="0,2,0,8" Visibility="Collapsed" />
+                    <WrapPanel x:Name="StudioHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 分辨率 -->
+                <TextBlock Text="分辨率" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <WrapPanel x:Name="ResolutionHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 时长 -->
+                <TextBlock Text="时长" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <WrapPanel x:Name="DurationHost" />
+                <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,10" />
+
+                <!-- 状态 -->
+                <TextBlock Text="状态" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <WrapPanel x:Name="StatusHost" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

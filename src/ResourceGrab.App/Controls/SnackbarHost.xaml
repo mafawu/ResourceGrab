@@ -1,0 +1,5 @@
+<UserControl x:Class="ResourceGrab.App.Controls.SnackbarHost"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel x:Name="Host" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+</UserControl>
