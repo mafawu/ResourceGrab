@@ -34,7 +34,7 @@
             <StackPanel Orientation="Horizontal">
                 <ComboBox x:Name="CategoryBox" Style="{StaticResource LibrarySortComboBoxStyle}"
                           SelectionChanged="CategoryBox_SelectionChanged" />
-                <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="10"
+                <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusMd}"
                         Padding="3" Margin="8,0,0,0" VerticalAlignment="Center">
                     <StackPanel x:Name="TypePanel" Orientation="Horizontal" />
                 </Border>
@@ -45,7 +45,7 @@
         <Grid Grid.Row="2">
             <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="24"
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource HoverBgBrush}">
                     <Path Data="{StaticResource IconLoading}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -58,7 +58,7 @@
 
             <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="24"
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource HoverBgBrush}">
                     <Path Data="{StaticResource IconWeekly}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -86,5 +86,6 @@
         </Grid>
     </Grid>
 </controls:CardGridViewBase>
+
 
 

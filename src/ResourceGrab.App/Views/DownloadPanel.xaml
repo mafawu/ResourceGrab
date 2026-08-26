@@ -59,11 +59,11 @@
 
             <ScrollViewer Grid.Row="1" x:Name="CurrentList"
                           VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="CurrentItems">
+                <ItemsControl x:Name="CurrentItems" ItemsSource="{Binding CurrentItems}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                                    Padding="14,12" CornerRadius="16">
+                                    Padding="14,12" CornerRadius="{DynamicResource RadiusXl}">
                                 <StackPanel>
                                     <Grid>
                                         <TextBlock Text="{Binding DisplayTitle}"
@@ -121,11 +121,11 @@
             <ScrollViewer Grid.Row="1" x:Name="HistoryList"
                           Visibility="Collapsed"
                           VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="HistoryItems">
+                <ItemsControl x:Name="HistoryItems" ItemsSource="{Binding HistoryItems}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                                    Padding="14,12" CornerRadius="16">
+                                    Padding="14,12" CornerRadius="{DynamicResource RadiusXl}">
                                 <StackPanel>
                                     <Grid>
                                         <TextBlock Text="{Binding DisplayTitle}"

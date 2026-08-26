@@ -34,7 +34,7 @@
         <Grid Grid.Row="1">
             <StackPanel x:Name="NoDirsPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="24"
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource PrimarySubtleBrush}">
                     <Path Data="{StaticResource IconFolderOpen}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -50,7 +50,7 @@
 
             <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="24"
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource HoverBgBrush}">
                     <Path Data="{StaticResource IconLoading}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -63,7 +63,7 @@
 
             <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="24"
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource HoverBgBrush}">
                     <Path Data="{StaticResource IconLibrary}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -97,6 +97,7 @@
         </Grid>
     </Grid>
 </controls:CardGridViewBase>
+
 
 
 

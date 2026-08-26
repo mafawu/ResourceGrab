@@ -27,7 +27,7 @@
 
             <!-- 空状态 -->
             <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <Border Width="72" Height="72" CornerRadius="24" Background="{DynamicResource HoverBgBrush}">
+                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
                     <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
                           StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28"
                           HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -50,3 +50,4 @@
         </Grid>
     </Grid>
 </UserControl>
+

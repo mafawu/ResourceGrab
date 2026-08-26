@@ -30,15 +30,16 @@ public partial class DownloadPanel : UserControl
 
     private void UpdateEmptyStates(DownloadPanelViewModel viewModel)
     {
-        if (HistoryTab.IsChecked == true)
-        {
-            HistoryList.Visibility = viewModel.HasHistoryDownloads ? Visibility.Visible : Visibility.Collapsed;
-            HistoryEmptyHint.Visibility = viewModel.HasHistoryDownloads ? Visibility.Collapsed : Visibility.Visible;
-            return;
-        }
+        // 两个列表同处一个 Grid 单元格，必须显式互斥，否则先显示的一方会一直盖住另一方。
+        var showHistory = HistoryTab.IsChecked == true;
 
-        CurrentList.Visibility = viewModel.HasCurrentDownloads ? Visibility.Visible : Visibility.Collapsed;
-        CurrentEmptyHint.Visibility = viewModel.HasCurrentDownloads ? Visibility.Collapsed : Visibility.Visible;
+        var hasHistory = viewModel.HasHistoryDownloads;
+        HistoryList.Visibility = showHistory && hasHistory ? Visibility.Visible : Visibility.Collapsed;
+        HistoryEmptyHint.Visibility = showHistory && !hasHistory ? Visibility.Visible : Visibility.Collapsed;
+
+        var hasCurrent = viewModel.HasCurrentDownloads;
+        CurrentList.Visibility = !showHistory && hasCurrent ? Visibility.Visible : Visibility.Collapsed;
+        CurrentEmptyHint.Visibility = !showHistory && !hasCurrent ? Visibility.Visible : Visibility.Collapsed;
     }
 }
 

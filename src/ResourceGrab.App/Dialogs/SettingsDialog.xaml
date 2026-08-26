@@ -1,229 +1,508 @@
-﻿<Window x:Class="ResourceGrab.App.Dialogs.SettingsDialog"
+<Window x:Class="ResourceGrab.App.Dialogs.SettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="设置" Width="552" SizeToContent="Height"
+        Title="设置" Width="900" Height="700"
+        MinWidth="820" MinHeight="620"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         ShowInTaskbar="False"
         UseLayoutRounding="True"
         Background="{DynamicResource SurfaceBrush}"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
-    <!-- 不用 AllowsTransparency（分层窗口 = 软件渲染 + 每帧把 DirectX 结果整幅像素拷贝到 GDI）；
-         WindowChrome 保持硬件加速，底部 1px 玻璃帧让 DWM 绘制窗口阴影，圆角由 DWM 裁剪（见 OnSourceInitialized） -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0"
-                      ResizeBorderThickness="0"
+                      ResizeBorderThickness="6"
                       GlassFrameThickness="0,0,0,1"
                       CornerRadius="0"
                       UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <Style x:Key="SettingsNavItemStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,3" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Name="Bd" Background="#00FFFFFF" BorderBrush="#00FFFFFF" BorderThickness="1"
+                                CornerRadius="10" Padding="12,9">
+                            <StackPanel Orientation="Horizontal">
+                                <ContentPresenter ContentSource="Tag" VerticalAlignment="Center" />
+                                <TextBlock Text="{TemplateBinding Content}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBgBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PrimarySubtleBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingsSectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+
+        <Style x:Key="SettingLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SettingHintStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,7,0,0" />
+        </Style>
+
+        <Style x:Key="SettingValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="MinWidth" Value="46" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SettingGroupStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource HoverBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="Margin" Value="0,14,0,0" />
+        </Style>
+    </Window.Resources>
+
     <Border Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource CardBorderBrush}"
             BorderThickness="1"
-            CornerRadius="16"
-            Padding="26,22">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="680">
-        <StackPanel>
-            <Grid>
-                <TextBlock Text="设置" FontSize="17" FontWeight="Bold" VerticalAlignment="Center" />
-                <Button Style="{StaticResource IconButtonStyle}"
-                        HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Click="CloseButton_Click" ToolTip="关闭">
-                    <Path Data="{StaticResource IconClose}" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="16" Height="16" />
-                </Button>
-            </Grid>
-
-            <TextBlock Text="下载设置" FontSize="13" FontWeight="Bold" Margin="0,16,0,0" />
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="下载目录" Grid.Row="0" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <Grid Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="DownloadDirBox" Padding="8,6" VerticalAlignment="Center" />
-                    <Button Grid.Column="1" Style="{StaticResource GhostButtonStyle}" Content="浏览…"
-                            Margin="8,0,0,0" VerticalAlignment="Center"
-                            Click="BrowseDownloadDir_Click" />
+            CornerRadius="16">
+        <Grid RowDefinitions="62,*,72">
+            <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                <Grid Margin="24,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Path Data="{StaticResource IconSetting}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.8"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                              Stretch="Uniform" Width="19" Height="19" />
+                        <TextBlock Text="设置" FontSize="17" FontWeight="Bold" Margin="11,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Button Style="{StaticResource IconButtonStyle}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Click="CloseButton_Click" ToolTip="关闭">
+                        <Path Data="{StaticResource IconClose}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              StrokeLineJoin="Round" Stretch="Uniform" Width="16" Height="16" />
+                    </Button>
                 </Grid>
+            </Border>
 
-                <TextBlock Text="图片格式" Grid.Row="1" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <ComboBox x:Name="FormatBox" Grid.Row="1" Grid.Column="1" Width="160"
-                          HorizontalAlignment="Left" Margin="0,0,0,10" VerticalAlignment="Center">
-                    <ComboBoxItem Content="JPEG" Tag="Jpeg" />
-                    <ComboBoxItem Content="PNG" Tag="Png" />
-                    <ComboBoxItem Content="WEBP" Tag="Webp" />
-                </ComboBox>
+            <Grid Grid.Row="1" ColumnDefinitions="224,*">
+                <Border Grid.Column="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,18,14,14">
+                        <StackPanel>
+                            <RadioButton x:Name="MangaNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
+                                         Content="漫画" Tag="{StaticResource IconKindManga}" IsChecked="True" Checked="Nav_Checked" />
+                            <RadioButton x:Name="NovelNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
+                                         Content="小说" Tag="{StaticResource IconNovel}" Checked="Nav_Checked" />
+                            <RadioButton x:Name="VideoNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
+                                         Content="视频" Tag="{StaticResource IconVideo}" Checked="Nav_Checked" />
+                            <RadioButton x:Name="GeneralNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
+                                         Content="通用" Tag="{StaticResource IconLocal}" Checked="Nav_Checked" />
 
-                <TextBlock Text="接口域名" Grid.Row="2" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="ApiDomainsBox" Grid.Row="2" Grid.Column="1"
-                         Margin="0,0,0,4" Padding="8,6" Height="64"
-                         AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" VerticalAlignment="Top" />
+                            <Separator Margin="8,16" />
+                            <TextBlock Text="分类设置只影响对应媒体类型；通用项会应用到整个应用。"
+                                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap" Margin="5,0,0,0" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
 
-                <TextBlock Text="多个域名用逗号分隔，请求失败自动切换；留空使用默认列表" Grid.Row="3" Grid.Column="1"
-                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                <Grid Grid.Column="1" Margin="24,18,26,8">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,2,0">
+                        <Grid>
+                            <!-- 漫画 -->
+                            <StackPanel x:Name="MangaPage">
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="阅读与下载" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="下载目录" />
+                                            <Grid Grid.Column="1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="DownloadDirBox" Padding="8,6" VerticalAlignment="Center" />
+                                                <Button Grid.Column="1" Style="{StaticResource GhostButtonStyle}" Content="浏览…"
+                                                        Margin="8,0,0,0" Click="BrowseDownloadDir_Click" />
+                                            </Grid>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="图片格式" />
+                                            <ComboBox x:Name="FormatBox" Grid.Column="1" Width="180" HorizontalAlignment="Left">
+                                                <ComboBoxItem Content="JPEG" Tag="Jpeg" />
+                                                <ComboBoxItem Content="PNG" Tag="Png" />
+                                                <ComboBoxItem Content="WEBP" Tag="Webp" />
+                                            </ComboBox>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="接口域名" VerticalAlignment="Top" Margin="0,8,0,0" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBox x:Name="ApiDomainsBox" Height="66" Padding="8,6" AcceptsReturn="True"
+                                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" />
+                                                <TextBlock Style="{StaticResource SettingHintStyle}"
+                                                           Text="多个域名用逗号分隔，请求失败自动切换；留空使用默认列表。" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="滚动速度" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="ScrollSpeedSlider" Width="220" Minimum="0.2" Maximum="5.0"
+                                                        TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                        AutoToolTipPlacement="BottomRight" VerticalAlignment="Center"
+                                                        ValueChanged="ScrollSpeedSlider_ValueChanged" />
+                                                <TextBlock x:Name="ScrollSpeedValueText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="阅读方向" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <RadioButton x:Name="DirectionRtlRadio" GroupName="MangaDirection" Content="从右到左" Margin="0,0,10,0" />
+                                                <RadioButton x:Name="DirectionLtrRadio" GroupName="MangaDirection" Content="从左到右" Margin="0,0,10,0" />
+                                                <RadioButton x:Name="DirectionVerticalRadio" GroupName="MangaDirection" Content="上下滚动" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="页面适配" />
+                                            <ComboBox x:Name="PageFitBox" Grid.Column="1" Width="180" HorizontalAlignment="Left">
+                                                <ComboBoxItem Content="适应宽度" Tag="FitWidth" />
+                                                <ComboBoxItem Content="适应高度" Tag="FitHeight" />
+                                                <ComboBoxItem Content="原始尺寸" Tag="OriginalSize" />
+                                            </ComboBox>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="双页拼合" />
+                                            <CheckBox x:Name="DoublePageBox" Grid.Column="1" Content="宽屏时自动并排显示两页" />
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="预加载数量" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="PreloadSlider" Width="220" Minimum="0" Maximum="10"
+                                                        IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"
+                                                        ValueChanged="PreloadSlider_ValueChanged" />
+                                                <TextBlock x:Name="PreloadValueText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <CheckBox x:Name="DirectArchiveBox" Content="压缩包直读（不展开到磁盘）" />
+                                        <CheckBox x:Name="ExtractCoverBox" Content="导入本地漫画时提取封面" Margin="0,12,0,0" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <CheckBox x:Name="TranslateEnabledBox" FontSize="13"
+                                                  Content="启用标题翻译（扫描时补齐缺失中文名）" />
+                                        <Grid ColumnDefinitions="150,*" Margin="0,14,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="接口地址" />
+                                            <TextBox x:Name="TranslateBaseUrlBox" Grid.Column="1" Margin="0,0,0,10" Padding="8,6" />
+                                            <TextBlock Grid.Row="1" Style="{StaticResource SettingLabelStyle}" Text="API Key" />
+                                            <TextBox x:Name="TranslateApiKeyBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,10" Padding="8,6" />
+                                            <TextBlock Grid.Row="2" Style="{StaticResource SettingLabelStyle}" Text="模型" />
+                                            <TextBox x:Name="TranslateModelBox" Grid.Row="2" Grid.Column="1" Padding="8,6" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 小说 -->
+                            <StackPanel x:Name="NovelPage" Visibility="Collapsed">
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="排版与解析" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="字体" />
+                                            <ComboBox x:Name="FontFamilyBox" Grid.Column="1" Width="260" HorizontalAlignment="Left" IsEditable="True">
+                                                <sys:String xmlns:sys="clr-namespace:System;assembly=mscorlib">Microsoft YaHei UI</sys:String>
+                                                <sys:String xmlns:sys="clr-namespace:System;assembly=mscorlib">SimSun</sys:String>
+                                                <sys:String xmlns:sys="clr-namespace:System;assembly=mscorlib">KaiTi</sys:String>
+                                                <sys:String xmlns:sys="clr-namespace:System;assembly=mscorlib">Segoe UI</sys:String>
+                                            </ComboBox>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="字号" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="NovelFontSizeSlider" Width="220" Minimum="10" Maximum="24"
+                                                        IsSnapToTickEnabled="True" TickFrequency="0.5" TickPlacement="BottomRight"
+                                                        VerticalAlignment="Center" ValueChanged="NovelFontSizeSlider_ValueChanged" />
+                                                <TextBlock x:Name="NovelFontSizeText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="行距" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="LineHeightSlider" Width="220" Minimum="1.0" Maximum="2.5"
+                                                        IsSnapToTickEnabled="True" TickFrequency="0.05" VerticalAlignment="Center"
+                                                        ValueChanged="LineHeightSlider_ValueChanged" />
+                                                <TextBlock x:Name="LineHeightText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="段落缩进" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="IndentSlider" Width="220" Minimum="0" Maximum="8"
+                                                        IsSnapToTickEnabled="True" TickFrequency="0.5" VerticalAlignment="Center"
+                                                        ValueChanged="IndentSlider_ValueChanged" />
+                                                <TextBlock x:Name="IndentText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid ColumnDefinitions="150,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="翻页方式" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <RadioButton x:Name="NovelPageModeRadio" GroupName="NovelMode" Content="分页" Margin="0,0,10,0" />
+                                                <RadioButton x:Name="NovelScrollModeRadio" GroupName="NovelMode" Content="滚动" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <CheckBox x:Name="AutoDetectEncodingBox" Content="自动识别 TXT 编码（UTF-8 / GBK / GB18030）" />
+                                        <TextBlock Style="{StaticResource SettingHintStyle}" Margin="26,6,0,14"
+                                                   Text="关闭后按 UTF-8 读取；遇到 BOM 时仍优先使用 BOM 编码。" />
+                                        <TextBlock Style="{StaticResource SettingLabelStyle}" Text="章节切分规则" VerticalAlignment="Top" Margin="0,8,0,0" />
+                                        <TextBox x:Name="ChapterPatternBox" Height="70" Margin="0,9,0,0" Padding="8,6"
+                                                 AcceptsReturn="False" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto" ToolTip="每行匹配该正则时识别为章节标题" />
+                                        <TextBlock Style="{StaticResource SettingHintStyle}"
+                                                   Text="默认匹配「第 X 章 / 卷 / 回」和 Chapter 1。保存前会检查正则是否有效。" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 视频 -->
+                            <StackPanel x:Name="VideoPage" Visibility="Collapsed">
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="播放体验" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="硬解" />
+                                            <CheckBox x:Name="HardwareDecodeBox" Grid.Column="1" Content="优先使用硬件解码" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="进度记忆" />
+                                            <CheckBox x:Name="RememberProgressBox" Grid.Column="1" Content="记住每个文件的播放位置" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="连播" />
+                                            <CheckBox x:Name="AutoPlayNextBox" Grid.Column="1" Content="当前文件结束后播放同系列下一集" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="默认倍速" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="PlaybackRateSlider" Width="220" Minimum="0.25" Maximum="4"
+                                                        IsSnapToTickEnabled="True" TickFrequency="0.25" VerticalAlignment="Center"
+                                                        ValueChanged="PlaybackRateSlider_ValueChanged" />
+                                                <TextBlock x:Name="PlaybackRateText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="快进步长" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <ComboBox x:Name="SeekStepBox" Width="130" HorizontalAlignment="Left">
+                                                    <ComboBoxItem Content="5 秒" Tag="5" />
+                                                    <ComboBoxItem Content="10 秒" Tag="10" />
+                                                    <ComboBoxItem Content="30 秒" Tag="30" />
+                                                    <ComboBoxItem Content="60 秒" Tag="60" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="字幕加载" />
+                                            <CheckBox x:Name="LoadSubtitleBox" Grid.Column="1" Content="自动加载同名外挂字幕" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="首选字幕语言" />
+                                            <ComboBox x:Name="SubtitleLanguageBox" Grid.Column="1" Width="180" HorizontalAlignment="Left">
+                                                <ComboBoxItem Content="中文" Tag="zh-CN" />
+                                                <ComboBoxItem Content="日文" Tag="ja-JP" />
+                                                <ComboBoxItem Content="英文" Tag="en-US" />
+                                                <ComboBoxItem Content="原始顺序" Tag="original" />
+                                            </ComboBox>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="元数据刮削" FontSize="13" FontWeight="Bold" />
+                                        <CheckBox x:Name="ScrapeEnabledBox" Content="启用视频刮削" Margin="0,12,0,0" />
+                                        <CheckBox x:Name="AutoScrapeNewFilesBox" Content="自动刮削新增文件" Margin="0,10,0,0" />
+                                        <CheckBox x:Name="WriteNfoBox" Content="生成 Kodi / Jellyfin 兼容 NFO" Margin="0,10,0,0" />
+                                        <CheckBox x:Name="AiravEnabledBox" Content="使用 AirAv 补充中文标题和简介" Margin="0,10,0,0" />
+
+                                        <Grid ColumnDefinitions="170,*" Margin="0,14,0,10">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="代理" />
+                                            <TextBox x:Name="ScrapeProxyBox" Grid.Column="1" Padding="8,6" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,10">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="JavBus 地址" />
+                                            <TextBox x:Name="JavBusUrlBox" Grid.Column="1" Padding="8,6" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,0,0,10">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="JavDB 地址" />
+                                            <TextBox x:Name="JavDbUrlBox" Grid.Column="1" Padding="8,6" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="170,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="Cookie" VerticalAlignment="Top" Margin="0,8,0,0" />
+                                            <TextBox x:Name="JavBusCookieBox" Grid.Column="1" Padding="8,6" Height="58" AcceptsReturn="True"
+                                                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                     ToolTip="从浏览器复制 JavBus 的 Cookie，用于通过年龄验证 / Cloudflare 检测。" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 通用 -->
+                            <StackPanel x:Name="GeneralPage" Visibility="Collapsed">
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="外观与语言" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="160,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="界面语言" />
+                                            <ComboBox x:Name="LanguageBox" Grid.Column="1" Width="180" HorizontalAlignment="Left">
+                                                <ComboBoxItem Content="简体中文" Tag="zh-CN" />
+                                                <ComboBoxItem Content="English" Tag="en-US" />
+                                            </ComboBox>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="160,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="主题" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <RadioButton x:Name="LightThemeRadio" GroupName="AppTheme" Content="浅色" Margin="0,0,10,0" />
+                                                <RadioButton x:Name="DarkThemeRadio" GroupName="AppTheme" Content="深色" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource SettingHintStyle}"
+                                                   Text="主题在点击保存后应用；取消设置会恢复进入窗口前的状态。" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="160,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="媒体库目录" />
+                                            <Grid Grid.Column="1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="MediaLibraryDirBox" Padding="8,6" />
+                                                <Button Grid.Column="1" Style="{StaticResource GhostButtonStyle}" Content="浏览…"
+                                                        Margin="8,0,0,0" Click="BrowseMediaLibrary_Click" />
+                                            </Grid>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="160,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="启动扫描" />
+                                            <CheckBox x:Name="StartupScanBox" Grid.Column="1" Content="启动时扫描已登记的媒体库目录" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="160,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="本地路径管理" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Button Style="{StaticResource GhostButtonStyle}" Content="管理路径…" Click="ManageLocalDirs_Click" Padding="10,5" />
+                                                <Button Style="{StaticResource GhostButtonStyle}" Content="刷新本地" Margin="8,0,0,0" Click="RefreshLocal_Click" Padding="10,5" />
+                                                <Button Style="{StaticResource GhostButtonStyle}" Content="查看日志" Margin="8,0,0,0" Click="ViewLogs_Click" Padding="10,5" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="160,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="缓存上限" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Slider x:Name="CacheLimitSlider" Width="220" Minimum="128" Maximum="8192"
+                                                        IsSnapToTickEnabled="True" TickFrequency="128" VerticalAlignment="Center"
+                                                        ValueChanged="CacheLimitSlider_ValueChanged" />
+                                                <TextBlock x:Name="CacheLimitText" Style="{StaticResource SettingValueStyle}" Margin="12,0,0,0" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="160,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="清理缓存" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <Button Style="{StaticResource DangerButtonStyle}" Content="清理缓存…" Click="ClearCache_Click" Padding="12,5" />
+                                                <Button Style="{StaticResource GhostButtonStyle}" Content="清空视频库…" Margin="8,0,0,0"
+                                                        Click="ClearVideoLibrary_Click" Padding="10,5" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <CheckBox x:Name="CloseToTrayBox" Content="点击关闭按钮时最小化到系统托盘" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
 
-            <TextBlock Text="阅读设置" FontSize="13" FontWeight="Bold" Margin="0,16,0,0" />
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock Text="滚动速度" Grid.Row="0" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Slider x:Name="ScrollSpeedSlider" Width="200" Minimum="0.3" Maximum="3.0"
-                            TickFrequency="0.1" IsSnapToTickEnabled="True" AutoToolTipPlacement="BottomRight"
-                            TickPlacement="BottomRight" VerticalAlignment="Center"
-                            ValueChanged="ScrollSpeedSlider_ValueChanged"/>
-                    <TextBlock x:Name="ScrollSpeedValueText" Margin="10,0,0,0" VerticalAlignment="Center"
-                               FontSize="12.5" FontWeight="Bold" MinWidth="40"/>
-                </StackPanel>
-                <TextBlock Text="仅滚动模式生效：0.3 慢 — 1.0 默认 — 3.0 快，可在阅读页即时调节" Grid.Row="1" Grid.Column="1"
-                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-            </Grid>
-
-            <TextBlock Text="本地管理" FontSize="13" FontWeight="Bold" Margin="0,16,0,0" />
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock Text="本地路径" Grid.Row="0" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource GhostButtonStyle}" Content="管理本地路径…"
-                            Click="ManageLocalDirs_Click" Padding="10,5" />
-                    <Button Style="{StaticResource GhostButtonStyle}" Content="刷新本地"
-                            Margin="8,0,0,0" Click="RefreshLocal_Click" Padding="10,5" />
-                    <Button Style="{StaticResource GhostButtonStyle}" Content="查看日志"
-                            Margin="8,0,0,0" Click="ViewLogs_Click" Padding="10,5" />
-                </StackPanel>
-                <TextBlock Text="管理本地漫画扫描目录、重新扫描本地库、打开日志/数据目录" Grid.Row="1" Grid.Column="1"
-                           FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-            </Grid>
-
-            <TextBlock Text="标题翻译（中文名）" FontSize="13" FontWeight="Bold" Margin="0,14,0,0" />
-            <CheckBox x:Name="TranslateEnabledBox"
-                      Content="启用翻译（扫描时自动为缺失中文名的漫画翻译标题）"
-                      Margin="0,10,0,0" FontSize="12.5" />
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="接口地址" Grid.Row="0" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="TranslateBaseUrlBox" Grid.Row="0" Grid.Column="1"
-                         Margin="0,0,0,10" Padding="8,6" VerticalAlignment="Center" />
-
-                <TextBlock Text="API Key" Grid.Row="1" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="TranslateApiKeyBox" Grid.Row="1" Grid.Column="1"
-                         Margin="0,0,0,10" Padding="8,6" VerticalAlignment="Center" />
-
-                <TextBlock Text="模型" Grid.Row="2" VerticalAlignment="Center"
-                           FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="TranslateModelBox" Grid.Row="2" Grid.Column="1"
-                         Padding="8,6" VerticalAlignment="Center" />
-            </Grid>
-
-            <TextBlock Text="视频刮削" FontSize="13" FontWeight="Bold" Margin="0,14,0,0" />
-            <CheckBox x:Name="ScrapeEnabledBox" Content="启用视频刮削（添加文件后自动补齐元数据）" Margin="0,10,0,0" FontSize="12.5" />
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="代理" Grid.Row="0" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="ScrapeProxyBox" Grid.Row="0" Grid.Column="1" Padding="8,6" VerticalAlignment="Center" />
-
-                <TextBlock Text="JavBus 地址" Grid.Row="1" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="JavBusUrlBox" Grid.Row="1" Grid.Column="1" Margin="0,10,0,10" Padding="8,6" VerticalAlignment="Center" />
-
-                <TextBlock Text="Cookie" Grid.Row="2" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}"
-                           ToolTip="从浏览器复制 JavBus 的 Cookie，用于通过年龄验证 / Cloudflare 检测。格式：PHPSESSID=xxx; existmag=mag" />
-                <TextBox x:Name="JavBusCookieBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" Padding="8,6" VerticalAlignment="Center"
-                         ToolTip="从浏览器复制 JavBus 的 Cookie，用于通过年龄验证 / Cloudflare 检测。格式：PHPSESSID=xxx; existmag=mag" />
-
-                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,32,0,10" FontSize="10.5"
-                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                       Text="浏览器 F12 → Network → 任意请求 → Request Headers → Cookie 值整段复制粘贴到这里"/>
-
-                <TextBlock Text="JavDB 地址" Grid.Row="3" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <TextBox x:Name="JavDbUrlBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,10" Padding="8,6" VerticalAlignment="Center"
-                         ToolTip="JavDB 提供中文标题、评分、短评、剧照；域名经常更换，填当前可用的镜像地址（如 javdb575.com）" />
-                <CheckBox x:Name="AutoScrapeNewFilesBox" Content="自动刮削新增文件" Grid.Row="5" Grid.Column="1" FontSize="12.5" />
-                <CheckBox x:Name="WriteNfoBox" Content="生成 Kodi / Jellyfin 兼容 NFO" Grid.Row="6" Grid.Column="1" Margin="0,8,0,0" FontSize="12.5" />
-                <CheckBox x:Name="AiravEnabledBox" Content="使用 AirAv 补充中文标题和简介" Grid.Row="7" Grid.Column="1" Margin="0,8,0,0" FontSize="12.5"
-                          ToolTip="JavDB 没有中文译名或简介时，从 AirAv 补齐；失败不影响其他刮削数据。" />
-            </Grid>
-
-            <TextBlock Text="视频库管理" FontSize="13" FontWeight="Bold" Margin="0,14,0,0" />
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Button Style="{StaticResource GhostButtonStyle}" Content="清空视频库…"
-                        Click="ClearVideoLibrary_Click" Padding="10,5" ToolTip="移除所有视频记录，不删除磁盘文件" />
-                <Button Style="{StaticResource GhostButtonStyle}" Content="打开日志目录"
-                        Margin="8,0,0,0" Click="ViewLogs_Click" Padding="10,5" />
-            </StackPanel>
-            <TextBlock Text="清空后需重新「添加文件夹」导入视频；封面缓存和刮削数据保留但不再关联"
-                       FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-
-            <TextBlock x:Name="ErrorText" FontSize="12"
-                       Foreground="{DynamicResource DangerBrush}"
-                       Margin="0,10,0,0" Visibility="Collapsed" />
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                <Button Style="{StaticResource GhostButtonStyle}" Content="取消"
-                        Click="CancelButton_Click" />
-                <Button Style="{StaticResource PrimaryButtonStyle}" Content="保存"
-                        Margin="10,0,0,0" Click="SaveButton_Click" />
-            </StackPanel>
-        </StackPanel>
-        </ScrollViewer>
+            <Border Grid.Row="2" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+                <Grid Margin="24,0">
+                    <TextBlock x:Name="ErrorText" Text="" FontSize="12" Foreground="{DynamicResource DangerBrush}"
+                               MaxWidth="380" HorizontalAlignment="Left" VerticalAlignment="Center"
+                               TextWrapping="Wrap" Visibility="Hidden" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Style="{StaticResource GhostButtonStyle}" Content="恢复默认" Click="RestoreDefaults_Click" Padding="14,6" />
+                        <Button Style="{StaticResource GhostButtonStyle}" Content="取消" Margin="10,0,0,0"
+                                Click="CancelButton_Click" Padding="18,6" MinWidth="82" />
+                        <Button Style="{StaticResource PrimaryButtonStyle}" Content="保存" Margin="10,0,0,0"
+                                Click="SaveButton_Click" Padding="22,6" MinWidth="92" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Border>
 </Window>

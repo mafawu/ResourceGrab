@@ -28,7 +28,7 @@
                     ToolTip="拖动调整每行显示个数"
                     ValueChanged="ScaleSlider_ValueChanged"/>
 
-            <Border Grid.Column="2" x:Name="BadgeBorder" CornerRadius="8" MinWidth="46"
+            <Border Grid.Column="2" x:Name="BadgeBorder" CornerRadius="{DynamicResource RadiusSm}" MinWidth="46"
                     Background="{DynamicResource PrimarySubtleBrush}"
                     Padding="6,3" Margin="6,0,0,0" VerticalAlignment="Center">
                 <TextBlock x:Name="ScaleText" Text="5 个/行" FontSize="11" FontWeight="SemiBold"
@@ -38,3 +38,4 @@
         </Grid>
     </Border>
 </UserControl>
+

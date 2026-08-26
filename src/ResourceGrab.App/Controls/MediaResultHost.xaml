@@ -1,0 +1,63 @@
+<UserControl x:Class="ResourceGrab.App.Controls.MediaResultHost"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <!-- Loading -->
+        <StackPanel x:Name="LoadingPanel" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Path Data="{StaticResource IconLoading}"
+                  Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="2.5"
+                  StrokeStartLineCap="Round" Stretch="Uniform"
+                  Width="36" Height="36"
+                  RenderTransformOrigin="0.5,0.5">
+                <Path.RenderTransform>
+                    <RotateTransform x:Name="LoadingRotation" />
+                </Path.RenderTransform>
+                <Path.Triggers>
+                    <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                            <Storyboard RepeatBehavior="Forever">
+                                <DoubleAnimation Storyboard.TargetName="LoadingRotation"
+                                                 Storyboard.TargetProperty="Angle"
+                                                 From="0" To="360" Duration="0:0:1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Path.Triggers>
+            </Path>
+            <TextBlock Text="加载中…" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- Empty -->
+        <StackPanel x:Name="EmptyPanel" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock x:Name="EmptyTitleText" Text="暂无数据"
+                       HorizontalAlignment="Center" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <TextBlock x:Name="EmptyMessageText" Text=""
+                       HorizontalAlignment="Center" FontSize="{DynamicResource FontCaption}"
+                       Foreground="{DynamicResource TextDisabledBrush}"
+                       TextWrapping="Wrap" MaxWidth="280" TextAlignment="Center" />
+        </StackPanel>
+
+        <!-- Error -->
+        <StackPanel x:Name="ErrorPanel" Visibility="Collapsed"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Path Data="{StaticResource IconInfo}"
+                  Stroke="{DynamicResource DangerBrush}" StrokeThickness="1.8"
+                  Stretch="Uniform" Width="32" Height="32"
+                  HorizontalAlignment="Center" />
+            <TextBlock Text="加载失败" HorizontalAlignment="Center" FontWeight="SemiBold" />
+            <TextBlock x:Name="ErrorDescriptionText" Text=""
+                       HorizontalAlignment="Center" FontSize="{DynamicResource FontCaption}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
+            <Button Content="重试" Style="{DynamicResource IconButtonStyle}"
+                    Click="Retry_Click" HorizontalAlignment="Center" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <!-- Result: VirtualizedCardGrid -->
+        <ContentControl x:Name="ResultHost" Visibility="Collapsed" />
+    </Grid>
+</UserControl>
+

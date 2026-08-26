@@ -14,6 +14,8 @@ using ResourceGrab.App.Services;
 using ResourceGrab.App.Themes;
 using ResourceGrab.App.ViewModels;
 using ResourceGrab.App.Views;
+using ResourceGrab.App.Shell;
+using ResourceGrab.App.Shell.Providers;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Services;
@@ -45,6 +47,7 @@ public partial class MainWindow : Window
     private UserControl? _lastNovelContent;
     private UserControl? _lastVideoContent;
     private NovelSearchPanel? _novelSearchPanel;
+    private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
 
     /// <summary>章节详情页缓存：按最近访问 LRU 淘汰，限制常驻内存。</summary>
@@ -52,8 +55,10 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, ChapterView> _chapterViews = new();
     private readonly LinkedList<string> _chapterOrder = new();
     private UserControl? _lastPage;
-    private bool _panelVisible;
+    private bool _rightPanelVisible;
     private ResourceKind _currentKind = ResourceKind.Manga;
+    private readonly ShellController _shellController;
+    private readonly Shell.ShellNavigator _navigator;
 
     /// <summary>窗口标题（copymanga 版可覆盖）。</summary>
     protected virtual string WindowTitle => "抓资源";
@@ -62,6 +67,7 @@ public partial class MainWindow : Window
     private LocalComicDetailPanel? _localDetailPanel;
     private NovelSearchPanel NovelSearchPanelView => _novelSearchPanel ??= new NovelSearchPanel();
     private LocalComicDetailPanel LocalDetailPanelView => _localDetailPanel ??= new LocalComicDetailPanel();
+    private VideoSearchPanel VideoSearchPanelView => _videoSearchPanel ??= new VideoSearchPanel();
     private NovelReaderView NovelReaderViewInstance => _novelReaderView ??= new NovelReaderView();
 
     private LocalSearchPanel SearchPanelView
@@ -81,10 +87,17 @@ public partial class MainWindow : Window
     {
         Title = WindowTitle;
         InitializeComponent();
-        UpdatePanelVisibility();
+        ApplyRightPanelVisibility();
+
+        // Shell 架构：初始化控制器和导航栏
+        _shellController = new ShellController();
+        _navigator = new Shell.ShellNavigator(_shellController);
+        RegisterRoutes();
+        InitializeNavRail();
 
         _session = App.Services.GetRequiredService<SessionService>();
         _sourceManager = App.Services.GetRequiredService<SourceManager>();
+        RefreshNavRailSections();
         _config = App.Services.GetRequiredService<ConfigService>();
         _localLibrary = App.Services.GetRequiredService<LocalLibraryService>();
         _searchView = new SearchView();
@@ -104,12 +117,12 @@ public partial class MainWindow : Window
         {
             if (PageHost.Content is NovelReaderView)
             {
-                PageHost.Content = _novelView ?? new NovelLocalView();
+                SetPage(_novelView ?? new NovelLocalView());
                 RightPanelHost.Content = _novelSearchPanel ?? new NovelSearchPanel();
                 RightPanelHost.Visibility = Visibility.Visible;
                 LeftNavHost.Visibility = Visibility.Collapsed;
-                _panelVisible = true;
-                UpdatePanelVisibility();
+                _rightPanelVisible = true;
+                ApplyRightPanelVisibility();
                 try { (_novelView as ResourceGrab.App.Views.NovelLocalView)?.RefreshHistory(); } catch { }
                 UpdateTopBarForKind();
                 return;
@@ -123,7 +136,7 @@ public partial class MainWindow : Window
             if (PageHost.Content is OnlineReaderView)
             {
                 // 在线阅读器返回：回到章节详情页
-                PageHost.Content = _lastPage;
+                SetPage(_lastPage);
                 return;
             }
             if (ReferenceEquals(PageHost.Content, _localTabContent) && _localTabContent is ReaderView)
@@ -132,12 +145,16 @@ public partial class MainWindow : Window
                 ShowLocalList();
                 return;
             }
-            HideRightPanel();
-            PageHost.Content = _lastPage;
+            CollapseRightPanel();
+            SetPage(_lastPage);
         };
 
         RefreshSourceBoxForKind(_currentKind);
-        _sourceManager.CurrentChanged += () => Dispatcher.Invoke(UpdateNavCapabilities);
+        _sourceManager.CurrentChanged += () => Dispatcher.Invoke(() =>
+        {
+            RefreshNavRailSections();
+            UpdateNavCapabilities();
+        });
         UpdateNavCapabilities();
 
         _session.PropertyChanged += (_, e) =>
@@ -155,7 +172,7 @@ public partial class MainWindow : Window
         };
         UpdateLoginArea();
         UpdateThemeIcon();
-        UpdatePanelVisibility();
+        ApplyRightPanelVisibility();
         UpdateTopBarForKind();
 
         Loaded += (_, _) => ToastService.ShowHandler = (message, kind) => Snackbars.Show(message, kind);
@@ -203,8 +220,8 @@ public partial class MainWindow : Window
                         ? Visibility.Visible
                         : Visibility.Collapsed;
             }
-            // 小说模式隐藏登录区（本地无需登录）
-            if (AccountHost != null) AccountHost.Visibility = isNovel ? Visibility.Collapsed : Visibility.Visible;
+            // 漫画源需要账号；视频和小说为本地/免登流程。
+            if (AccountHost != null) AccountHost.Visibility = _currentKind == ResourceKind.Manga ? Visibility.Visible : Visibility.Collapsed;
 
         } catch {}
     }
@@ -221,6 +238,7 @@ public partial class MainWindow : Window
                 else _lastMangaContent = leaving;
             }
             _currentKind = kind;
+            RefreshNavRailSections();
             RefreshSourceBoxForKind(kind);
             UpdateNavCapabilities();
             if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
@@ -237,6 +255,115 @@ public partial class MainWindow : Window
     }
 
 
+
+    // ====================== Shell NavRail ======================
+
+    private void InitializeNavRail()
+    {
+        NavRailControl.ItemClicked += OnNavItemClicked;
+        RefreshNavRailSections();
+    }
+
+    /// <summary>按当前媒体类型刷新左侧导航栏的分组数据。</summary>
+    private void RefreshNavRailSections()
+    {
+        if (_sourceManager is null) return;
+        INavSectionProvider provider = _currentKind switch
+        {
+            ResourceKind.Video => new VideoNavSectionProvider(),
+            ResourceKind.Novel => new NovelNavSectionProvider(),
+            _ => new MangaNavSectionProvider(_sourceManager.Current.Info),
+        };
+        NavRailControl.Sections = provider.GetSections();
+    }
+
+    private void OnNavItemClicked(object? sender, NavItem item)
+    {
+        if (!item.IsEnabled) return;
+        switch (item.Id)
+        {
+            case "manga.search":
+                NavigateToSearch(); break;
+            case "manga.rank":
+                NavigateToRank(); break;
+            case "manga.category":
+                NavigateToCategory(); break;
+            case "manga.weekly":
+                NavigateToWeekly(); break;
+            case "manga.local":
+                NavigateToLocal(); break;
+            case "manga.favorites":
+                NavigateToFavorites(); break;
+            case "video.online":
+                ShowVideoWithNav("search"); break;
+            case "video.local":
+                ShowVideoWithNav("local"); break;
+            case "novel.index":
+                OpenNovelLocal(); break;
+        }
+    }
+
+    private void NavigateToSearch() { LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel(); PageHost.Content = _searchView; }
+    private void NavigateToRank()
+    {
+        LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel();
+        if (_sourceManager.Current is IRankSource) { _rankBrowseView ??= new RankBrowseView(); PageHost.Content = _rankBrowseView; _rankBrowseView.OnShown(); }
+        else { _rankView ??= new RankView(); PageHost.Content = _rankView; _rankView.OnShown(); }
+    }
+    private void NavigateToCategory()
+    {
+        LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel();
+        if (_sourceManager.Current is ICategorySource) { _categoryBrowseView ??= new CategoryBrowseView(); PageHost.Content = _categoryBrowseView; _categoryBrowseView.OnShown(); }
+        else { _categoryView ??= new CategoryView(); PageHost.Content = _categoryView; _categoryView.OnShown(); }
+    }
+    private void NavigateToWeekly()
+    {
+        LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel();
+        _weeklyView ??= new WeeklyView(); PageHost.Content = _weeklyView; _weeklyView.OnShown();
+    }
+    private void NavigateToLocal() { ShowLocalList(); }
+    private void NavigateToFavorites()
+    {
+        LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel();
+        _favoriteView ??= new FavoriteView(); PageHost.Content = _favoriteView; _favoriteView.OnShown();
+    }
+
+    private void ShowVideoWithNav(string nav)
+    {
+        OpenVideoView();
+        _videoView?.SwitchNav(nav);
+    }
+
+    // ====================== Route Registration ======================
+
+    private void RegisterRoutes()
+    {
+        _navigator.Register("manga.search", () => { EnsureSearchView(); return _searchView; });
+        _navigator.Register("manga.rank", () => { _rankView ??= new RankView(); return _rankView; });
+        _navigator.Register("manga.category", () => { _categoryView ??= new CategoryView(); return _categoryView; });
+        _navigator.Register("manga.local", () => { _localView ??= new LocalView(); return _localView; });
+        _navigator.Register("manga.favorites", () => { _favoriteView ??= new FavoriteView(); return _favoriteView; });
+        _navigator.Register("video.library", () => { _videoView ??= new VideoView(); return _videoView; });
+        _navigator.Register("novel.index", () => { _novelView ??= new NovelLocalView(); return _novelView; });
+        _navigator.Register("novel.reader", () => { NovelReaderViewInstance.LoadFile(""); return NovelReaderViewInstance; });
+    }
+
+    private void EnsureSearchView()
+    {
+        if (_searchView == null)
+            throw new InvalidOperationException("SearchView not initialized");
+    }
+
+    /// <summary>统一的页面切换方法：设置 PageHost 内容并跟踪返回栈。</summary>
+    private void SetPage(UserControl page)
+    {
+        if (PageHost.Content is UserControl current && !ReferenceEquals(current, page))
+        {
+            _lastPage = current;
+        }
+        PageHost.Content = page;
+    }
+
     // ====================== 导航 ======================
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
@@ -246,7 +373,7 @@ public partial class MainWindow : Window
             return;
         }
         LeftNavHost.Visibility = Visibility.Visible;
-        HideRightPanel();
+        CollapseRightPanel();
         if (ReferenceEquals(sender, NavSearch))
         {
             // 从详情页等页面进入搜索时，保留返回目标。
@@ -254,7 +381,7 @@ public partial class MainWindow : Window
                 _lastPage = page;
             else
                 _lastPage = _searchView;
-            PageHost.Content = _searchView;
+            SetPage(_searchView);
         }
         else if (ReferenceEquals(sender, NavRank))
         {
@@ -262,14 +389,14 @@ public partial class MainWindow : Window
             {
                 _rankBrowseView ??= new RankBrowseView();
                 _lastPage = _rankBrowseView;
-                PageHost.Content = _rankBrowseView;
+                SetPage(_rankBrowseView);
                 _rankBrowseView.OnShown();
             }
             else
             {
                 _rankView ??= new RankView();
                 _lastPage = _rankView;
-                PageHost.Content = _rankView;
+                SetPage(_rankView);
                 _rankView.OnShown();
             }
         }
@@ -277,14 +404,14 @@ public partial class MainWindow : Window
         {
             _categoryView ??= new CategoryView();
             _lastPage = _categoryView;
-            PageHost.Content = _categoryView;
+            SetPage(_categoryView);
             _categoryView.OnShown();
         }
         else if (ReferenceEquals(sender, NavFavorite))
         {
             _favoriteView ??= new FavoriteView();
             _lastPage = _favoriteView;
-            PageHost.Content = _favoriteView;
+            SetPage(_favoriteView);
             _favoriteView.OnShown();
         }
         else if (ReferenceEquals(sender, NavLocal))
@@ -300,16 +427,16 @@ public partial class MainWindow : Window
             {
                 // 本地页签停留在阅读页：恢复右侧漫画详情面板
                 RightPanelHost.Content = LocalDetailPanelView;
-                _panelVisible = true;
-                UpdatePanelVisibility();
-                PageHost.Content = _localTabContent;
+                _rightPanelVisible = true;
+                ApplyRightPanelVisibility();
+                SetPage(_localTabContent);
             }
         }
         else if (ReferenceEquals(sender, NavWeekly))
         {
             _weeklyView ??= new WeeklyView();
             _lastPage = _weeklyView;
-            PageHost.Content = _weeklyView;
+            SetPage(_weeklyView);
             _weeklyView.OnShown();
         }
         UpdateTopBarForKind();
@@ -317,7 +444,7 @@ public partial class MainWindow : Window
 
     private void OpenComic(string sourceId, string comicId)
     {
-        HideRightPanel();
+        CollapseRightPanel();
         var source = _sourceManager.Get(sourceId);
         var key = $"{source.Info.Id}:{comicId}";
         // 复用已打开的详情页，保持章节列表/滚动位置/选择状态；缓存按 LRU 淘汰，限制内存
@@ -337,23 +464,23 @@ public partial class MainWindow : Window
             _chapterOrder.Remove(key);
         }
         _chapterOrder.AddLast(key);
-        PageHost.Content = view;
+        SetPage(view);
     }
 
     private void OpenRank(RankPeriod period)
     {
-        HideRightPanel();
+        CollapseRightPanel();
         _rankView ??= new RankView();
         _lastPage = _rankView;
-        PageHost.Content = _rankView;
+        SetPage(_rankView);
         _rankView.OnShown(period);
     }
 
     private void OpenOnlineReader(IComicSource source, IReadOnlyList<Chapter> chapters, int startIndex)
     {
-        HideRightPanel();
+        CollapseRightPanel();
         _lastPage = (UserControl)PageHost.Content;
-        PageHost.Content = new OnlineReaderView(source, chapters, startIndex);
+        SetPage(new OnlineReaderView(source, chapters, startIndex));
     }
 
     private void OpenSearch(string keyword, string? sourceId)
@@ -363,7 +490,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        HideRightPanel();
+        CollapseRightPanel();
 
         if (!ReferenceEquals(PageHost.Content, _searchView))
         {
@@ -373,7 +500,7 @@ public partial class MainWindow : Window
             }
 
             NavSearch.IsChecked = true;
-            PageHost.Content = _searchView;
+            SetPage(_searchView);
         }
 
         _searchView.Search(keyword.Trim(), sourceId);
@@ -403,10 +530,10 @@ public partial class MainWindow : Window
     {
         RightPanelHost.Content = LocalDetailPanelView;
         LocalDetailPanelView.Show(comic, true);
-        _panelVisible = true;
-        UpdatePanelVisibility();
+        _rightPanelVisible = true;
+        ApplyRightPanelVisibility();
         _localTabContent = new ReaderView(comic);
-        PageHost.Content = _localTabContent;
+        SetPage(_localTabContent);
     }
 
     /// <summary>本地列表点击卡片：右侧切换到本地漫画详情面板（检查更新/更新下载）。</summary>
@@ -414,8 +541,8 @@ public partial class MainWindow : Window
     {
         RightPanelHost.Content = LocalDetailPanelView;
         LocalDetailPanelView.Show(comic);
-        _panelVisible = true;
-        UpdatePanelVisibility();
+        _rightPanelVisible = true;
+        ApplyRightPanelVisibility();
     }
     // ====================== 内容源切换 ======================
 
@@ -427,60 +554,59 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>按当前源能力显隐导航项；切源后把不能由新源服务的页面重置回搜索页。</summary>
+    /// <summary>按当前源能力刷新导航；切到不支持的能力时回退搜索页。</summary>
     private void UpdateNavCapabilities()
     {
         var info = _sourceManager.Current.Info;
-        NavRank.Visibility = info.SupportsRank ? Visibility.Visible : Visibility.Collapsed;
-        NavWeekly.Visibility = info.SupportsWeekly ? Visibility.Visible : Visibility.Collapsed;
-        NavCategory.Visibility = info.SupportsCategories ? Visibility.Visible : Visibility.Collapsed;
-        NavFavorite.Visibility = info.SupportsFavorites ? Visibility.Visible : Visibility.Collapsed;
+        var selectedId = NavRailControl.SelectedItemId;
 
-        var onUnsupportedPage = (NavWeekly.IsChecked == true && !info.SupportsWeekly)
-                               || (NavFavorite.IsChecked == true && !info.SupportsFavorites)
-                               || (NavRank.IsChecked == true && !info.SupportsRank);
+        var onUnsupportedPage =
+            (selectedId == "manga.rank" && !info.SupportsRank) ||
+            (selectedId == "manga.category" && !info.SupportsCategories) ||
+            (selectedId == "manga.weekly" && !info.SupportsWeekly) ||
+            (selectedId == "manga.favorites" && !info.SupportsFavorites);
+
         if (onUnsupportedPage)
         {
-            NavSearch.IsChecked = true;
+            NavRailControl.SelectItem("manga.search");
+            selectedId = "manga.search";
             _lastPage = _searchView;
-            PageHost.Content = _searchView;
+            SetPage(_searchView);
             return;
         }
 
-        // 排行页按源切换：IRankSource 用通用排行浏览，禁漫保留原排行页
-        if (NavRank.IsChecked == true)
+        if (selectedId == "manga.rank")
         {
             if (_sourceManager.Current is IRankSource && !ReferenceEquals(PageHost.Content, _rankBrowseView))
             {
                 _rankBrowseView ??= new RankBrowseView();
                 _lastPage = _rankBrowseView;
-                PageHost.Content = _rankBrowseView;
+                SetPage(_rankBrowseView);
                 _rankBrowseView.OnShown();
             }
             else if (_sourceManager.Current is not IRankSource && !ReferenceEquals(PageHost.Content, _rankView))
             {
                 _rankView ??= new RankView();
                 _lastPage = _rankView;
-                PageHost.Content = _rankView;
+                SetPage(_rankView);
                 _rankView.OnShown();
             }
         }
 
-        // 分类页按源切换：支持 ICategorySource 的源用通用分类浏览，禁漫保留主题页
-        if (NavCategory.IsChecked == true)
+        if (selectedId == "manga.category")
         {
             if (_sourceManager.Current is ICategorySource && !ReferenceEquals(PageHost.Content, _categoryBrowseView))
             {
                 _categoryBrowseView ??= new CategoryBrowseView();
                 _lastPage = _categoryBrowseView;
-                PageHost.Content = _categoryBrowseView;
+                SetPage(_categoryBrowseView);
                 _categoryBrowseView.OnShown();
             }
             else if (_sourceManager.Current is not ICategorySource && !ReferenceEquals(PageHost.Content, _categoryView))
             {
                 _categoryView ??= new CategoryView();
                 _lastPage = _categoryView;
-                PageHost.Content = _categoryView;
+                SetPage(_categoryView);
                 _categoryView.OnShown();
             }
         }
@@ -520,19 +646,16 @@ public partial class MainWindow : Window
 
     private void PanelToggle_Click(object sender, RoutedEventArgs e)
     {
-        _panelVisible = !_panelVisible;
-        UpdatePanelVisibility();
+        _rightPanelVisible = !_rightPanelVisible;
+        ApplyRightPanelVisibility();
     }
 
-    private void UpdatePanelVisibility()
+    /// <summary>只控制右侧面板列的展开收起，不影响左侧导航。</summary>
+    private void ApplyRightPanelVisibility()
     {
-        // 视频页等场景可能把整个宿主设为 Collapsed；
-        // 这里统一恢复，避免列宽展开后右侧内容仍是空白。
-        RightPanelHost.Visibility = _panelVisible ? Visibility.Visible : Visibility.Collapsed;
-
-        if (_panelVisible)
+        RightPanelHost.Visibility = _rightPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_rightPanelVisible)
         {
-            // 显示侧栏：恢复可拖动范围与宽度（MinWidth 会顶住 Width=0，收起时必须先放开）
             PanelColumn.MinWidth = 300;
             PanelColumn.MaxWidth = 440;
             PanelColumn.Width = new GridLength(348);
@@ -543,17 +666,31 @@ public partial class MainWindow : Window
             PanelColumn.MaxWidth = 420;
             PanelColumn.Width = new GridLength(0);
         }
-        PanelSplitter.Visibility = _panelVisible ? Visibility.Visible : Visibility.Collapsed;
+        PanelSplitter.Visibility = _rightPanelVisible ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>离开阅读页（进入列表/详情等页面）时：隐藏右侧面板，恢复下载队列内容。</summary>
-    private void HideRightPanel()
+    /// <summary>只控制左侧导航栏显隐，不影响右侧面板。</summary>
+    private void ShowLeftRail() => LeftNavHost.Visibility = Visibility.Visible;
+    private void HideLeftRail() => LeftNavHost.Visibility = Visibility.Collapsed;
+
+    /// <summary>设置右栏内容并展开（不影响左栏）。</summary>
+    private void ShowRightContent(UserControl content)
+    {
+        RightPanelHost.Content = content;
+        _rightPanelVisible = true;
+        ApplyRightPanelVisibility();
+    }
+
+    /// <summary>隐藏右栏并恢复默认内容（不影响左栏）。</summary>
+    private void CollapseRightPanel()
     {
         RightPanelHost.Content = DownloadPanelView;
-        _panelVisible = false;
-        UpdatePanelVisibility();
+        _rightPanelVisible = false;
+        ApplyRightPanelVisibility();
     }
 
+
+    /// <summary>离开阅读页（进入列表/详情等页面）时：隐藏右侧面板，恢复下载队列内容。</summary>
     public async Task TriggerLocalRefreshAsync()
     {
         if (_localView is not null)
@@ -580,11 +717,11 @@ private void OpenNovelLocal()
         {
             if (_lastNovelContent is NovelReaderView)
             {
-                PageHost.Content = _lastNovelContent;
+                SetPage(_lastNovelContent);
                 RightPanelHost.Visibility = Visibility.Collapsed;
-                LeftNavHost.Visibility = Visibility.Collapsed;
-                _panelVisible = false;
-                UpdatePanelVisibility();
+                LeftNavHost.Visibility = Visibility.Visible;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
                 UpdateTopBarForKind();
                 return;
             }
@@ -592,12 +729,12 @@ private void OpenNovelLocal()
             if (_novelSearchPanel == null) _novelSearchPanel = new NovelSearchPanel();
             _novelView.SetSearchPanel(_novelSearchPanel);
             _lastPage = _novelView;
-            PageHost.Content = _novelView;
+            SetPage(_novelView);
             RightPanelHost.Content = _novelSearchPanel;
             RightPanelHost.Visibility = Visibility.Visible;
-            LeftNavHost.Visibility = Visibility.Collapsed;
-            _panelVisible = true;
-            UpdatePanelVisibility();
+            LeftNavHost.Visibility = Visibility.Visible;
+            _rightPanelVisible = true;
+            ApplyRightPanelVisibility();
             UpdateTopBarForKind();
         }
         catch (Exception ex)
@@ -612,12 +749,13 @@ private void OpenNovelLocal()
         try
         {
             _videoView ??= new VideoView();
+            _videoView.SetSearchPanel(VideoSearchPanelView);
             _lastPage = _videoView;
-            PageHost.Content = _videoView;
-            RightPanelHost.Visibility = Visibility.Collapsed;
-            LeftNavHost.Visibility = Visibility.Collapsed;
-            _panelVisible = false;
-            UpdatePanelVisibility();
+            SetPage(_videoView);
+            RightPanelHost.Content = VideoSearchPanelView;
+            LeftNavHost.Visibility = Visibility.Visible;
+            _rightPanelVisible = true;
+            ApplyRightPanelVisibility();
             UpdateTopBarForKind();
             _videoView.OnShown();
         }
@@ -647,16 +785,16 @@ private void OpenNovelLocal()
         if (content is ReaderView)
         {
             RightPanelHost.Content = LocalDetailPanelView;
-            _panelVisible = true;
+            _rightPanelVisible = true;
         }
         else
         {
-            HideRightPanel();
+            CollapseRightPanel();
             content ??= _searchView;
         }
-        PageHost.Content = content;
+        SetPage(content);
         _lastPage = content;
-        UpdatePanelVisibility();
+        ApplyRightPanelVisibility();
         UpdateTopBarForKind();
     }
 
@@ -669,12 +807,12 @@ private void OpenNovelLocal()
     private void OpenNovelReader(string path)
     {
         LeftNavHost.Visibility = Visibility.Collapsed;
-        _panelVisible = false;
-        UpdatePanelVisibility();
+        _rightPanelVisible = false;
+        ApplyRightPanelVisibility();
         _novelReaderView ??= new NovelReaderView();
         _novelReaderView.LoadFile(path);
         _lastPage = PageHost.Content as UserControl;
-        PageHost.Content = _novelReaderView;
+        SetPage(_novelReaderView);
         RightPanelHost.Visibility = Visibility.Collapsed;
         UpdateTopBarForKind();
     }
@@ -688,11 +826,11 @@ private void OpenNovelLocal()
         LeftNavHost.Visibility = Visibility.Visible;
         _localView ??= new LocalView();
         _localTabContent = _localView;
-        PageHost.Content = _localView;
+        SetPage(_localView);
         RightPanelHost.Content = SearchPanelView;
         _localView.SetSearchPanel(SearchPanelView);
-        _panelVisible = true;
-        UpdatePanelVisibility();
+        _rightPanelVisible = true;
+        ApplyRightPanelVisibility();
         _localView.OnShown();
     }
 
@@ -974,21 +1112,3 @@ private void OpenNovelLocal()
         _favoriteView?.Refresh();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

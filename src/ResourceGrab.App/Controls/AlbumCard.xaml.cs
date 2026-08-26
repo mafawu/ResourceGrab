@@ -7,6 +7,7 @@ using ResourceGrab.App.ViewModels;
 namespace ResourceGrab.App.Controls;
 
 /// <summary>漫画卡片：封面 + 标题 + 作者，悬停显示一键下载，点击打开详情。</summary>
+[System.Obsolete("Use MediaCard + MediaCardAdapters instead")]
 public partial class AlbumCard : UserControl
 {
     /// <summary>封面宽高比 166:222，高度随卡片宽度自适应，窗口缩放时保持不变形。</summary>
@@ -64,3 +65,4 @@ public partial class AlbumCard : UserControl
         }
     }
 }
+

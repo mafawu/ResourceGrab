@@ -13,6 +13,7 @@ using ResourceGrab.Core.Models;
 
 namespace ResourceGrab.App.Controls;
 
+[System.Obsolete("Use MediaCard + MediaCardAdapters instead")]
 public partial class VideoFileCard : UserControl
 {
     public double CardWidth
@@ -190,3 +191,4 @@ public partial class VideoFileCard : UserControl
         return $"{bytes / 1024.0 / 1024.0 / 1024.0:F2} GB";
     }
 }
+

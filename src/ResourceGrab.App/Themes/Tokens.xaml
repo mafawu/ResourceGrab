@@ -11,4 +11,33 @@
 
     <Thickness x:Key="ToolbarItemSpacing">8,0,0,0</Thickness>
     <Thickness x:Key="FilterChipSpacing">0,0,6,6</Thickness>
+
+    <!-- Radius Scale -->
+    <CornerRadius x:Key="RadiusXs">6</CornerRadius>
+    <CornerRadius x:Key="RadiusSm">8</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">12</CornerRadius>
+    <CornerRadius x:Key="RadiusXl">16</CornerRadius>
+    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
+
+    <!-- Spacing Scale -->
+    <Thickness x:Key="SpacingXs">4</Thickness>
+    <Thickness x:Key="SpacingSm">8</Thickness>
+    <Thickness x:Key="SpacingMd">12</Thickness>
+    <Thickness x:Key="SpacingLg">16</Thickness>
+    <Thickness x:Key="SpacingXl">20</Thickness>
+
+    <!-- Sidebar Dimensions -->
+    <sys:Double x:Key="LeftRailWidth">220</sys:Double>
+    <sys:Double x:Key="RightSidebarMinWidth">300</sys:Double>
+    <sys:Double x:Key="RightSidebarDefaultWidth">348</sys:Double>
+    <sys:Double x:Key="RightSidebarMaxWidth">440</sys:Double>
+
+    <!-- Font Size Aliases -->
+    <sys:Double x:Key="FontCaption">11</sys:Double>
+    <sys:Double x:Key="FontBody">12.5</sys:Double>
+    <sys:Double x:Key="FontEmphasis">13</sys:Double>
+    <sys:Double x:Key="FontCardTitle">13</sys:Double>
+    <sys:Double x:Key="FontSectionTitle">15</sys:Double>
+    <sys:Double x:Key="FontPageTitle">18</sys:Double>
 </ResourceDictionary>

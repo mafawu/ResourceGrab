@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ResourceGrab.Core.Models;
@@ -37,6 +37,8 @@ public class ConfigService
             DownloadFormat = DownloadFormat.Jpeg,
             LocalDirs = new List<string> { Path.Combine(AppPaths.AppDataDir, "漫画下载") },
         };
+        defaultConfig.General.MediaLibraryDir = defaultConfig.DownloadDir;
+
         if (!File.Exists(_configPath))
         {
             Save(defaultConfig);
@@ -61,6 +63,9 @@ public class ConfigService
             config.TitleTranslate ??= new TitleTranslateOptions();
             config.ReaderScrollSpeed = NormalizeScrollSpeed(config.ReaderScrollSpeed);
             config.VideoScraping ??= new VideoScrapeSettings();
+            config.Manga ??= new MangaSettings();
+            config.VideoPlayback = NormalizeVideoPlayback(config.VideoPlayback);
+            config.General = NormalizeGeneral(config.General, config.DownloadDir);
 
             config.Password = Decrypt(config.Password);
             config.TitleTranslate.ApiKey = Decrypt(config.TitleTranslate.ApiKey);
@@ -93,9 +98,16 @@ public class ConfigService
     public void Save(Config config)
     {
         config.ReaderScrollSpeed = NormalizeScrollSpeed(config.ReaderScrollSpeed);
+        config.Manga ??= new MangaSettings();
+        config.VideoPlayback = NormalizeVideoPlayback(config.VideoPlayback);
+        config.General = NormalizeGeneral(config.General, config.DownloadDir);
+
         Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
         var translate = config.TitleTranslate ?? new TitleTranslateOptions();
         var scraping = config.VideoScraping ?? new VideoScrapeSettings();
+        var manga = config.Manga;
+        var playback = config.VideoPlayback;
+        var general = config.General;
         var persisted = new Config
         {
             ApiDomain = config.ApiDomain,
@@ -130,6 +142,17 @@ public class ConfigService
                 ApiKey = Encrypt(translate.ApiKey),
                 Model = translate.Model,
             },
+            Manga = new MangaSettings
+            {
+                ReadingDirection = manga.ReadingDirection,
+                PageFitMode = manga.PageFitMode,
+                DoublePageSpread = manga.DoublePageSpread,
+                PreloadPageCount = Math.Clamp(manga.PreloadPageCount, 0, 10),
+                DirectArchiveRead = manga.DirectArchiveRead,
+                ExtractCover = manga.ExtractCover,
+            },
+            VideoPlayback = playback,
+            General = general,
         };
         File.WriteAllText(_configPath, JsonSerializer.Serialize(persisted, JsonOptions));
     }
@@ -141,6 +164,36 @@ public class ConfigService
             return 1.0;
         }
         return Math.Clamp(v, 0.2, 5.0);
+    }
+
+    private static VideoPlaybackSettings NormalizeVideoPlayback(VideoPlaybackSettings? settings)
+    {
+        settings ??= new VideoPlaybackSettings();
+        var rate = settings.DefaultPlaybackRate;
+        settings.DefaultPlaybackRate = double.IsNaN(rate) || double.IsInfinity(rate) || rate <= 0
+            ? 1.0
+            : Math.Clamp(rate, 0.25, 4.0);
+        settings.SeekStepSeconds = Math.Clamp(settings.SeekStepSeconds, 5, 60);
+        return settings;
+    }
+
+    private static GeneralSettings NormalizeGeneral(GeneralSettings? settings, string downloadDir)
+    {
+        settings ??= new GeneralSettings();
+        if (string.IsNullOrWhiteSpace(settings.MediaLibraryDir))
+        {
+            settings.MediaLibraryDir = downloadDir;
+        }
+        settings.CacheLimitMb = Math.Clamp(settings.CacheLimitMb, 128, 8192);
+        if (settings.InterfaceLanguage != "en-US")
+        {
+            settings.InterfaceLanguage = "zh-CN";
+        }
+        if (settings.Theme is not ("light" or "dark"))
+        {
+            settings.Theme = "dark";
+        }
+        return settings;
     }
 
     /// <summary>用 Windows DPAPI（当前用户作用域）加密；非 Windows 或失败时退回明文。</summary>

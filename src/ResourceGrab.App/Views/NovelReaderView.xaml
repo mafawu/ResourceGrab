@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="ResourceGrab.App.Views.NovelReaderView"
+<UserControl x:Class="ResourceGrab.App.Views.NovelReaderView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Margin="16,12,16,12">
@@ -11,7 +11,7 @@
                 <TextBlock x:Name="PageText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="12,0,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Border x:Name="ModeToggleBorder" CornerRadius="8" Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="2">
+                <Border x:Name="ModeToggleBorder" CornerRadius="{DynamicResource RadiusSm}" Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="2">
                     <StackPanel Orientation="Horizontal">
                         <Button x:Name="PageModeBtn" Content="翻页" Padding="12,5" Click="ModePage_Click" Style="{StaticResource GhostButtonStyle}" FontSize="12"/>
                         <Button x:Name="ScrollModeBtn" Content="滚动" Padding="12,5" Click="ModeScroll_Click" Style="{StaticResource GhostButtonStyle}" FontSize="12"/>
@@ -25,7 +25,7 @@
                 <StackPanel x:Name="BgPanel" Orientation="Horizontal"/>
             </StackPanel>
         </Grid>
-        <Border x:Name="ReaderBorder" Grid.Row="1" Background="White" VerticalAlignment="Stretch" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="0" ClipToBounds="True">
+        <Border x:Name="ReaderBorder" Grid.Row="1" Background="White" VerticalAlignment="Stretch" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="0" ClipToBounds="True">
             <Grid>
                 <ScrollViewer x:Name="ReaderScroll" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ReaderScroll_PreviewMouseWheel" PanningMode="VerticalOnly" Padding="22">
                     <TextBlock x:Name="ContentText" FontSize="14" LineHeight="24" TextWrapping="Wrap" Foreground="{DynamicResource TextPrimaryBrush}"/>
@@ -66,3 +66,4 @@
         </Grid>
     </Grid>
 </UserControl>
+

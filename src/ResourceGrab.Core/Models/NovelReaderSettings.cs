@@ -8,6 +8,11 @@ public class NovelReaderSettings
     [JsonPropertyName("bgIndex")] public int BgIndex { get; set; } = 0;
     [JsonPropertyName("fontSize")] public double FontSize { get; set; } = 14;
     [JsonPropertyName("charsPerPage")] public int CharsPerPage { get; set; } = 1000;
+    [JsonPropertyName("fontFamily")] public string FontFamily { get; set; } = "Microsoft YaHei UI";
+    [JsonPropertyName("lineHeight")] public double LineHeight { get; set; } = 1.6;
+    [JsonPropertyName("paragraphIndentEm")] public double ParagraphIndentEm { get; set; } = 2;
+    [JsonPropertyName("autoDetectEncoding")] public bool AutoDetectEncoding { get; set; } = true;
+    [JsonPropertyName("chapterPattern")] public string ChapterPattern { get; set; } = @"^\s*(第[0-9零一二三四五六七八九十百千万]+[章节卷回部]|Chapter\s+\d+).*$";
 }
 
 public static class NovelReaderBgPresets

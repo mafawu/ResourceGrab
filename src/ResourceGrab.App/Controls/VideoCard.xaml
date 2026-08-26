@@ -35,18 +35,18 @@
                     </Border>
                     <!-- hover 浏览提示 -->
                     <Border x:Name="BrowseOverlay" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Background="{DynamicResource CardOverlayPanelBrush}" CornerRadius="16" Padding="14,7"
+                            Background="{DynamicResource CardOverlayPanelBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="14,7"
                             Visibility="Collapsed" IsHitTestVisible="False">
                         <TextBlock Text="浏览文件" FontSize="12" Foreground="White" FontWeight="SemiBold" />
                     </Border>
                     <!-- 文件数角标（左上） -->
                     <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
-                            Background="{DynamicResource CardBadgeScrimBrush}" CornerRadius="6" Padding="6,2">
+                            Background="{DynamicResource CardBadgeScrimBrush}" CornerRadius="{DynamicResource RadiusXs}" Padding="6,2">
                         <TextBlock x:Name="FileCountText" Text="0 个" FontSize="10" Foreground="White" FontWeight="Bold" />
                     </Border>
                     <!-- 收藏心形（右上，点击切换） -->
                     <Border x:Name="FavoriteBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
-                            Background="{DynamicResource CardBadgeScrimBrush}" CornerRadius="999" Padding="6,3" Cursor="Hand"
+                            Background="{DynamicResource CardBadgeScrimBrush}" CornerRadius="{DynamicResource RadiusPill}" Padding="6,3" Cursor="Hand"
                             MouseLeftButtonUp="Favorite_Click"
                             ToolTip="收藏 / 取消收藏">
                         <TextBlock x:Name="FavoriteIcon" Text="♡" FontSize="12" Foreground="{DynamicResource OnMediaBrush}" FontWeight="Bold" />
@@ -71,7 +71,7 @@
                     <TextBlock x:Name="RatingText" FontSize="11" Foreground="{DynamicResource WarningBrush}" Margin="8,0,0,0"
                                Visibility="Collapsed" />
                     <!-- 丢失提示 -->
-                    <Border x:Name="MissingBadge" Background="{DynamicResource DangerSubtleBrush}" CornerRadius="999" Padding="6,1"
+                    <Border x:Name="MissingBadge" Background="{DynamicResource DangerSubtleBrush}" CornerRadius="{DynamicResource RadiusPill}" Padding="6,1"
                             Margin="8,0,0,0" Visibility="Collapsed">
                         <TextBlock x:Name="MissingText" Text="缺失" FontSize="10" Foreground="{DynamicResource DangerBrush}" FontWeight="Bold" />
                     </Border>
@@ -90,3 +90,4 @@
         </Grid>
     </Border>
 </UserControl>
+

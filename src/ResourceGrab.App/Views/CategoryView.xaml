@@ -67,30 +67,10 @@
     <Grid Column="1" Margin="12,0,0,0">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
-      <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16,12" Margin="0,0,0,10">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <StackPanel Orientation="Horizontal">
-            <Path Data="{StaticResource IconCategory}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="15" Height="15" Margin="0,0,8,0" VerticalAlignment="Center" />
-            <TextBlock Text="主题发现" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
-          </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="排行" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <Button Style="{StaticResource PillGhostButtonStyle}" Content="總排行" Padding="10,4" FontSize="12" Margin="0,0,6,0" Click="RankAll_Click" />
-            <Button Style="{StaticResource PillGhostButtonStyle}" Content="日排行" Padding="10,4" FontSize="12" Margin="0,0,6,0" Click="RankToday_Click" />
-            <Button Style="{StaticResource PillGhostButtonStyle}" Content="周排行" Padding="10,4" FontSize="12" Margin="0,0,6,0" Click="RankWeek_Click" />
-            <Button Style="{StaticResource PillGhostButtonStyle}" Content="月排行" Padding="10,4" FontSize="12" Click="RankMonth_Click" />
-          </StackPanel>
-        </Grid>
-      </Border>
-      <Border Grid.Row="1" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,12">
+      <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,12">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -123,7 +103,7 @@
           <controls:CardSizeSlider Grid.Column="4" Margin="{StaticResource ToolbarItemSpacing}" VerticalAlignment="Center" Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}" />
         </Grid>
       </Border>
-      <controls:StateHostControl Grid.Row="2"
+      <controls:StateHostControl Grid.Row="1"
                          State="{Binding CurrentState, RelativeSource={RelativeSource AncestorType=UserControl}}"
                          Result="{Binding Results, RelativeSource={RelativeSource AncestorType=UserControl}}"
                          ResultTemplate="{StaticResource ComicCardResultTemplate}"
@@ -133,7 +113,7 @@
                          EmptyTitle="暂无漫画数据"
                          RetryText="重新加载"
                          RetryCommand="{Binding RetryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-      <StackPanel Name="PagingPanel" Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
+      <StackPanel Name="PagingPanel" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
           <Button Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页" Click="PrevButton_Click" Padding="12,5" />
           <TextBlock Name="PageText" FontSize="12" VerticalAlignment="Center"
                      Foreground="{DynamicResource TextSecondaryBrush}"

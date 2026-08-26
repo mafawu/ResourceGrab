@@ -19,7 +19,7 @@ using Microsoft.Win32;
 
 namespace ResourceGrab.App.Views;
 
-public partial class VideoView : UserControl
+public partial class VideoView : CardGridViewBase
 {
     private readonly VideoLibraryService _library;
     private readonly VideoScrapeService _scrapeService;
@@ -34,7 +34,7 @@ public partial class VideoView : UserControl
     private bool _selectionMode;
     private int _page = 1;
     private int _pageCount = 1;
-    private const int PageSize = 120;
+    private int _pageSize = 30;
     private Style _chipBorderStyle = null!;
     private Style _chipTextStyle = null!;
     private Style _chipCountStyle = null!;
@@ -43,22 +43,13 @@ public partial class VideoView : UserControl
     private int _onlinePage = 1;
     private CancellationTokenSource? _onlineSearchCts;
     private int _onlineSearchVersion;
+    private VideoSearchPanel? _searchPanel;
     private IVideoSource? OnlineSource => App.Services.GetServices<IVideoSource>()
         .FirstOrDefault(s => s.Info.Id == "missav");
 
     public VideoView()
     {
         InitializeComponent();
-        FilterPanel.FilterChanged += state =>
-        {
-            _searchText = state.Keyword;
-            ApplyAndRender();
-        };
-        FilterPanel.SearchTextChanged += text =>
-        {
-            _searchText = text;
-            ApplyAndRender();
-        };
         _library = App.Services.GetRequiredService<VideoLibraryService>();
         _scrapeService = App.Services.GetRequiredService<VideoScrapeService>();
         _logger = App.Services.GetRequiredService<ILogger>();
@@ -71,6 +62,27 @@ public partial class VideoView : UserControl
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
     }
 
+    public void SetSearchPanel(VideoSearchPanel panel)
+    {
+        if (_searchPanel != null) { _searchPanel.FilterChanged -= OnFilterChanged; _searchPanel.SearchTextChanged -= OnSearchTextChanged; }
+        _searchPanel = panel;
+        _searchPanel.FilterChanged += OnFilterChanged;
+        _searchPanel.SearchTextChanged += OnSearchTextChanged;
+    }
+
+    private void OnFilterChanged(VideoSearchPanel.VideoFilterState state)
+    {
+        _searchText = state.Keyword;
+        _filterState = state;
+        ApplyAndRender();
+    }
+
+    private void OnSearchTextChanged(string text)
+    {
+        _searchText = text;
+        ApplyAndRender();
+    }
+
     public void OnShown()
     {
         if (_currentNav == "local") Refresh();
@@ -80,7 +92,7 @@ public partial class VideoView : UserControl
     private void NavRecommend_Click(object sender, RoutedEventArgs e) => SwitchNav("recommend");
     private void NavLocal_Click(object sender, RoutedEventArgs e) => SwitchNav("local");
 
-    private void SwitchNav(string nav)
+    public void SwitchNav(string nav)
     {
         _currentNav = nav;
         SearchPage.Visibility = nav == "search" ? Visibility.Visible : Visibility.Collapsed;
@@ -146,7 +158,7 @@ public partial class VideoView : UserControl
 
     private void SyncPanelCounts()
     {
-        FilterPanel.SetCounts(
+        _searchPanel?.SetCounts(
             _library.GetTagCounts(),
             _library.GetActorCounts(),
             _library.GetSeriesCounts(),
@@ -157,48 +169,55 @@ public partial class VideoView : UserControl
     {
         // 侧栏渲染由 VideoSearchPanel 接管；这里只同步计数数据。
         SyncPanelCounts();
-        _filterState = FilterPanel.BuildState();
+        _filterState = _searchPanel?.BuildState();
     }
 
     private void RenderList()
     {
         BackButton.Visibility = Visibility.Collapsed;
         DetailScroll.Visibility = Visibility.Collapsed;
-        ListScroll.Visibility = _filtered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        VideoItems.Visibility = _filtered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyPanel.Visibility = _filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _library.Items.Count > 0 ? "没有符合筛选条件的视频" : "还没有视频文件";
         EmptyAddButton.Visibility = _library.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         VideoCountText.Text = $"共 {_filtered.Count} 个";
 
         var pageItems = _filtered
-            .Skip((_page - 1) * PageSize)
-            .Take(PageSize)
+            .Skip((_page - 1) * _pageSize)
+            .Take(_pageSize)
             .ToList();
 
-        CardsPanel.Children.Clear();
-        foreach (var item in pageItems)
-        {
-            var card = new VideoFileCard { Item = item, CardWidth = 180, SelectionMode = _selectionMode, IsSelected = _selectedIds.Contains(item.Id) };
-            card.DetailRequested += detail => Dispatcher.Invoke(() =>
-            {
-                _currentItem = detail;
-                ApplyAndRender();
-            });
-            card.SelectedChanged += (detail, selected) => Dispatcher.Invoke(() =>
-            {
-                if (selected) _selectedIds.Add(detail.Id);
-                else _selectedIds.Remove(detail.Id);
-            });
-            CardsPanel.Children.Add(card);
-        }
+        VideoItems.ItemsSource = pageItems;
+        VideoItems.ScrollToTop();
         RenderPaging();
         KickEnrichment(_filtered);
+    }
+
+    private void VideoCard_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not VideoFileCard card) return;
+        card.DetailRequested -= VideoCard_DetailRequested;
+        card.SelectedChanged -= VideoCard_SelectedChanged;
+        card.DetailRequested += VideoCard_DetailRequested;
+        card.SelectedChanged += VideoCard_SelectedChanged;
+    }
+
+    private void VideoCard_DetailRequested(VideoItem item)
+    {
+        _currentItem = item;
+        ApplyAndRender();
+    }
+
+    private void VideoCard_SelectedChanged(VideoItem item, bool selected)
+    {
+        if (selected) _selectedIds.Add(item.Id);
+        else _selectedIds.Remove(item.Id);
     }
 
     private void RenderDetail(VideoItem item)
     {
         BackButton.Visibility = Visibility.Visible;
-        ListScroll.Visibility = Visibility.Collapsed;
+        VideoItems.Visibility = Visibility.Collapsed;
         EmptyPanel.Visibility = Visibility.Collapsed;
         DetailScroll.Visibility = Visibility.Visible;
         VideoCountText.Text = item.Number;
@@ -250,7 +269,7 @@ public partial class VideoView : UserControl
         RenderRecommends(item);
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e) { _currentItem = null; ApplyAndRender(); TitleText.Text = "视频库"; }
+    private void BackButton_Click(object sender, RoutedEventArgs e) { _currentItem = null; ApplyAndRender(); TitleText.Text = "本地视频"; }
 
     private Border MakeDetailChip(string text, Action onClick)
     {
@@ -304,7 +323,7 @@ public partial class VideoView : UserControl
                 Text = i <= item.UserRating ? "★" : "☆",
                 FontSize = 20,
                 Cursor = Cursors.Hand,
-                Foreground = i <= item.UserRating ? new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)) : (Brush)FindResource("TextSecondaryBrush"),
+                Foreground = i <= item.UserRating ? (Brush)FindResource("WarningBrush") : (Brush)FindResource("TextSecondaryBrush"),
             };
             var value = i;
             star.MouseLeftButtonUp += (_, _) =>
@@ -349,7 +368,7 @@ public partial class VideoView : UserControl
         FileStatusText.Text = item.FileExists ? "正常" : "丢失";
         FileStatusText.Foreground = item.FileExists
             ? (Brush)FindResource("TextPrimaryBrush")
-            : new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35));
+            : (Brush)FindResource("DangerBrush");
         SourceUrlText.Text = item.SourceUrls.TryGetValue("javbus", out var javBus)
             ? javBus
             : item.SourceUrls.TryGetValue("javdb", out var javDb) ? javDb : "";
@@ -408,14 +427,14 @@ public partial class VideoView : UserControl
     private void FilterByActor(string actor)
     {
         _currentItem = null;
-        FilterPanel.AddActorFilter(actor);
+        _searchPanel?.AddActorFilter(actor);
         ApplyAndRender();
     }
 
     private void FilterByTag(string tag)
     {
         _currentItem = null;
-        FilterPanel.AddTagFilter(tag);
+        _searchPanel?.AddTagFilter(tag);
         ApplyAndRender();
     }
 
@@ -697,8 +716,8 @@ public partial class VideoView : UserControl
     private void ViewNoMatch_Click(object sender, RoutedEventArgs e)
     {
         _currentItem = null;
-        var state = FilterPanel.BuildState();
-        FilterPanel.ApplyState(new VideoSearchPanel.VideoFilterState(
+        var state = _searchPanel?.BuildState();
+        _searchPanel?.ApplyState(new VideoSearchPanel.VideoFilterState(
             state?.Keyword ?? "",
             state?.IncludedTags ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             state?.ExcludedTags ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
@@ -788,17 +807,28 @@ public partial class VideoView : UserControl
     }
 
     private List<VideoItem> CurrentPageItems()
-        => _filtered.Skip((_page - 1) * PageSize).Take(PageSize).ToList();
+        => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
 
     private void RenderPaging()
     {
-        PagingHost.Visibility = _filtered.Count <= PageSize ? Visibility.Collapsed : Visibility.Visible;
-        if (PagingHost.Visibility == Visibility.Collapsed) return;
-        _pageCount = Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)PageSize));
+        _pageCount = Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
         _page = Math.Clamp(_page, 1, _pageCount);
-        PageText.Text = $"{_page} / {_pageCount}";
+        PageText.Text = _filtered.Count == 0 ? "" : $"第 {_page} / {_pageCount} 页";
         PrevPageButton.IsEnabled = _page > 1;
         NextPageButton.IsEnabled = _page < _pageCount;
+    }
+
+    private void PageSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PageSizeBox.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var size) && size != _pageSize)
+        {
+            _pageSize = size;
+            if (IsReady)
+            {
+                _page = 1;
+                ApplyAndRender();
+            }
+        }
     }
 
     private void ChangePage(object sender, RoutedEventArgs e)
@@ -902,3 +932,5 @@ public partial class VideoView : UserControl
     }
 
 }
+
+

@@ -192,8 +192,8 @@ public partial class VideoSearchPanel : UserControl
             _tagStates.TryGetValue(tag, out var s);
             var state = (ChipState)s;
             TagsHost.Children.Add(MakeChip(tag, state, $"({count})",
-                onClick: () => { _tagStates[tag] = ((int)state + 1) % 3 == 0 ? 0 : (int)state + 1; if (_tagStates[tag] == 0) _tagStates.Remove(tag); NotifyChanged(); },
-                onRightClick: () => { _tagStates[tag] = 2; NotifyChanged(); }));
+                onClick: () => { if (!_tagStates.Remove(tag)) _tagStates[tag] = 1; NotifyChanged(); },
+                onRightClick: () => { if (_tagStates.TryGetValue(tag, out var cur) && cur == 2) _tagStates.Remove(tag); else _tagStates[tag] = 2; NotifyChanged(); }));
             if (state == ChipState.Exclude) continue;
         }
         TagEmptyText.Visibility = tagCounts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -340,5 +340,9 @@ public partial class VideoSearchPanel : UserControl
     private IReadOnlyDictionary<string, int> _lastStudioCounts =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-    private void NotifyChanged() => FilterChanged?.Invoke(BuildState());
+    private void NotifyChanged()
+    {
+        FilterChanged?.Invoke(BuildState());
+        RebuildAll();
+    }
 }

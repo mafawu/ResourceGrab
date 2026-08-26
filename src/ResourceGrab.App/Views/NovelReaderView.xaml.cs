@@ -23,6 +23,10 @@ public partial class NovelReaderView : UserControl
     private double _fontSize = 14;
     private bool _isScrollMode = false;
     private int _bgIndex = 0;
+    private string _fontFamily = "Microsoft YaHei UI";
+    private double _lineHeight = 1.6;
+    private double _paragraphIndentEm = 2;
+    private bool _autoDetectEncoding = true;
     private NovelReadingHistoryService? _history;
     private NovelReaderSettingsService? _settings;
 
@@ -45,16 +49,32 @@ public partial class NovelReaderView : UserControl
                 _isScrollMode = _settings.Current.IsScrollMode;
                 _bgIndex = Math.Clamp(_settings.Current.BgIndex, 0, NovelReaderBgPresets.Presets.Length - 1);
                 _fontSize = _settings.Current.FontSize;
+                _fontFamily = _settings.Current.FontFamily;
+                _lineHeight = _settings.Current.LineHeight;
+                _paragraphIndentEm = _settings.Current.ParagraphIndentEm;
+                _autoDetectEncoding = _settings.Current.AutoDetectEncoding;
             }
         }
         catch { }
         BuildBgPanel();
         ApplyMode();
         ApplyBg(_bgIndex);
-        ContentText.FontSize = _fontSize;
-        ScrollList.FontSize = _fontSize;
+        ApplyTypography();
     }
 
+    private void ApplyTypography()
+    {
+        FontFamily family;
+        try { family = new FontFamily(_fontFamily); }
+        catch { family = new FontFamily("Microsoft YaHei UI"); }
+
+        ContentText.FontFamily = family;
+        ScrollList.FontFamily = family;
+        var lineHeight = _fontSize * _lineHeight;
+        var indent = _fontSize * _paragraphIndentEm;
+        TextBlock.SetLineHeight(ContentText, lineHeight);
+        TextBlock.SetLineHeight(ScrollList, lineHeight);
+    }
     private void BuildBgPanel()
     {
         try
@@ -71,7 +91,7 @@ public partial class NovelReaderView : UserControl
                     BorderBrush = (Brush)FindResource("CardBorderBrush"), BorderThickness = new Thickness(1),
                     Margin = new Thickness(3,0,0,0), Cursor = Cursors.Hand, ToolTip = preset.Name
                 };
-                if (idx == _bgIndex) { btn.BorderBrush = (Brush)new BrushConverter().ConvertFromString("#7C6CF6")!; btn.BorderThickness = new Thickness(2); }
+                if (idx == _bgIndex) { btn.BorderBrush = (Brush)FindResource("PrimaryBrush"); btn.BorderThickness = new Thickness(2); }
                 btn.MouseLeftButtonUp += (_, _) => { _bgIndex = idx; ApplyBg(idx); _settings?.SetBg(idx); };
                 BgPanel.Children.Add(btn);
             }
@@ -158,6 +178,10 @@ public partial class NovelReaderView : UserControl
                 _isScrollMode = _settings.Current.IsScrollMode;
                 _bgIndex = _settings.Current.BgIndex;
                 _fontSize = _settings.Current.FontSize;
+                _fontFamily = _settings.Current.FontFamily;
+                _lineHeight = _settings.Current.LineHeight;
+                _paragraphIndentEm = _settings.Current.ParagraphIndentEm;
+                _autoDetectEncoding = _settings.Current.AutoDetectEncoding;
             }
         }
         catch { }
@@ -168,14 +192,13 @@ public partial class NovelReaderView : UserControl
             // 解码与分块放后台，避免 UI 卡顿
             var result = await Task.Run(() =>
             {
-                var text = DecodeBytes(bytes);
+                var text = DecodeBytes(bytes, _autoDetectEncoding);
                 var chks = SplitChunks(text, ScrollChunkSize);
                 return (text, chks);
             });
             _content = result.text;
             _chunks = result.chks;
-            ContentText.FontSize = _fontSize;
-            ScrollList.FontSize = _fontSize;
+            ApplyTypography();
             _pageCount = Math.Max(1, (int)Math.Ceiling(_content.Length / (double)_charsPerPage));
             JumpTotalText.Text = $"/ {_pageCount}";
 
@@ -188,12 +211,12 @@ public partial class NovelReaderView : UserControl
             if (hist != null && hist.FontSize >= 10 && hist.FontSize <= 24)
             {
                 _fontSize = hist.FontSize;
-                ContentText.FontSize = _fontSize;
-                ScrollList.FontSize = _fontSize;
+                ApplyTypography();
                 _settings?.SetFontSize(_fontSize);
             }
 
             ApplyBg(_bgIndex);
+            ApplyTypography();
             ApplyMode();
             if (!_isScrollMode) RenderPage();
             SaveHistory();
@@ -217,7 +240,7 @@ public partial class NovelReaderView : UserControl
         return list;
     }
 
-    private static string DecodeBytes(byte[] bytes)
+    private static string DecodeBytes(byte[] bytes, bool autoDetect)
     {
         if (bytes.Length == 0) return "";
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
@@ -226,6 +249,7 @@ public partial class NovelReaderView : UserControl
             return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
         if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
             return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        if (!autoDetect) return Encoding.UTF8.GetString(bytes);
         try
         {
             var utf8Strict = Encoding.GetEncoding("utf-8", EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
@@ -311,8 +335,7 @@ public partial class NovelReaderView : UserControl
     private void FontDec_Click(object sender, RoutedEventArgs e)
     {
         _fontSize = Math.Max(10, _fontSize - 1);
-        ContentText.FontSize = _fontSize;
-        ScrollList.FontSize = _fontSize;
+        ApplyTypography();
         _settings?.SetFontSize(_fontSize);
         SaveHistory();
     }
@@ -320,8 +343,7 @@ public partial class NovelReaderView : UserControl
     private void FontInc_Click(object sender, RoutedEventArgs e)
     {
         _fontSize = Math.Min(24, _fontSize + 1);
-        ContentText.FontSize = _fontSize;
-        ScrollList.FontSize = _fontSize;
+        ApplyTypography();
         _settings?.SetFontSize(_fontSize);
         SaveHistory();
     }

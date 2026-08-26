@@ -7,6 +7,7 @@ using ResourceGrab.App.ViewModels;
 namespace ResourceGrab.App.Controls;
 
 /// <summary>本地漫画卡片：封面 + 名字 + 标签，悬停显示"打开目录"，点击打开所在文件夹。</summary>
+[System.Obsolete("Use MediaCard + MediaCardAdapters instead")]
 public partial class LocalComicCard : UserControl
 {
     /// <summary>封面宽高比 166:222，高度随卡片宽度自适应，窗口缩放时保持不变形。</summary>
@@ -38,3 +39,4 @@ public partial class LocalComicCard : UserControl
         }
     }
 }
+

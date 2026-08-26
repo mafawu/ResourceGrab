@@ -11,7 +11,7 @@
 
         <!-- 未登录提示 -->
         <StackPanel x:Name="LoginPrompt" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <Border Width="76" Height="76" CornerRadius="24"
+            <Border Width="76" Height="76" CornerRadius="{DynamicResource RadiusXl}"
                     Background="{DynamicResource PrimarySubtleBrush}">
                 <Path Data="{StaticResource IconFavoriteStar}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
@@ -52,7 +52,7 @@
 
             <Grid Grid.Row="1">
                 <StackPanel x:Name="FavoriteLoading" VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Border Width="72" Height="72" CornerRadius="24"
+                    <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                             Background="{DynamicResource HoverBgBrush}">
                         <Path Data="{StaticResource IconLoading}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -64,7 +64,7 @@
                 </StackPanel>
                 <StackPanel x:Name="FavoriteEmpty" VerticalAlignment="Center" HorizontalAlignment="Center"
                             Visibility="Collapsed">
-                    <Border Width="72" Height="72" CornerRadius="24"
+                    <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
                             Background="{DynamicResource HoverBgBrush}">
                         <Path Data="{StaticResource IconHeart}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -91,7 +91,7 @@
         <!-- 分页 -->
         <StackPanel x:Name="FavoritePaging" Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
-            <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="999" Padding="4">
+            <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusPill}" Padding="4">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="FavPrevButton" Style="{StaticResource PaginationButtonStyle}"
                             ToolTip="上一页" Click="FavPrevButton_Click">
@@ -112,5 +112,6 @@
         </StackPanel>
     </Grid>
 </controls:CardGridViewBase>
+
 
 

@@ -166,16 +166,12 @@
                     <DockPanel>
                         <StackPanel x:Name="AccountHost" DockPanel.Dock="Bottom" Margin="2,8,2,0" />
                         <StackPanel>
+                    <!-- 旧导航项（兼容层，视觉隐藏） -->
+                    <StackPanel x:Name="LegacyNavItems" Visibility="Collapsed">
                     <!-- 发现 -->
                     <TextBlock Text="发现" FontSize="10.5" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextDisabledBrush}"
                                Margin="12,4,0,6" />
-                    <Border x:Name="SourceSwitcherHost" Style="{StaticResource KindPillGroupStyle}" Margin="2,0,2,8">
-                        <ComboBox x:Name="SourceBox" Width="164"
-                                  FontSize="12"
-                                  SelectionChanged="SourceBox_SelectionChanged"
-                                  ToolTip="当前漫画源（影响排行 / 分类 / 收藏）" />
-                    </Border>
                     <RadioButton x:Name="NavSearch" GroupName="Nav"
                                  Style="{StaticResource NavItemStyle}" IsChecked="True"
                                  Click="Nav_Checked">
@@ -261,9 +257,24 @@
                             </Border>
                             <TextBlock Text="收藏" Margin="10,0,0,0" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
-                    </RadioButton>
-                </StackPanel>
-                    </DockPanel>
+                   </RadioButton>
+                   </StackPanel>
+                    <!-- 漫画源切换：仅漫画模式显示 -->
+                    <StackPanel x:Name="SourceSwitcherHost" Margin="2,0,2,8">
+                        <TextBlock Text="漫画源" FontSize="10.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextDisabledBrush}"
+                                   Margin="10,8,0,6" />
+                        <ComboBox x:Name="SourceBox" Width="164"
+                                  FontSize="12"
+                                  SelectionChanged="SourceBox_SelectionChanged"
+                                  ToolTip="当前漫画源（影响搜索 / 排行 / 分类 / 收藏）" />
+                    </StackPanel>
+
+                    <!-- 数据驱动导航栏 -->
+
+                   <controls:NavRail x:Name="NavRailControl" Margin="0,4,0,0" />
+               </StackPanel>
+                   </DockPanel>
                 </Border>
             </Grid>
 
@@ -274,8 +285,7 @@
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           Background="Transparent" ShowsPreview="True" />
 
-            <!-- 右侧面板：同一时刻只有一个在视觉树中（ContentControl 换内容），
-                 其余实例惰性创建、切走后离树仅保留状态，减少常驻渲染/绑定开销 -->
+            <!-- 右侧面板（兼容层保留；新代码通过 ISidebarPanel + ShellController 控制） -->
             <ContentControl x:Name="RightPanelHost" Grid.Column="3">
                 <views:DownloadPanel x:Name="DownloadPanelView" />
             </ContentControl>
@@ -289,6 +299,3 @@
         </Border>
     </Border>
 </Window>
-
-
-

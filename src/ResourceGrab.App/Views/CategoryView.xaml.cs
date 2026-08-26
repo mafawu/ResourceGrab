@@ -16,7 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace ResourceGrab.App.Views;
 
-/// <summary>主题发现页：左侧主题分区（对应网站 /theme/ 页）+ 分类/标签搜索，点击后组合搜索。</summary>
+/// <summary>分类页：左侧主题分区（对应网站 /theme/ 页）+ 分类/标签搜索，点击后组合搜索。</summary>
 public partial class CategoryView : CardGridViewBase
 {
     private const int PageSize = 20;
@@ -148,13 +148,6 @@ public partial class CategoryView : CardGridViewBase
         }
     }
 
-    private void RankAll_Click(object sender, RoutedEventArgs e) => Navigation.OpenRank(RankPeriod.All);
-
-    private void RankToday_Click(object sender, RoutedEventArgs e) => Navigation.OpenRank(RankPeriod.Today);
-
-    private void RankWeek_Click(object sender, RoutedEventArgs e) => Navigation.OpenRank(RankPeriod.Week);
-
-    private void RankMonth_Click(object sender, RoutedEventArgs e) => Navigation.OpenRank(RankPeriod.Month);
 
     private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

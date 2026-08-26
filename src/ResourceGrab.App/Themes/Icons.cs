@@ -39,4 +39,13 @@ public static class Icons
     public static Geometry Document => G("M 6 3.5 L 12 3.5 L 18 9.5 L 18 20.5 L 6 20.5 Z M 12 3.5 L 12 9.5 L 18 9.5");
     public static Geometry Loading => G("M 12 4 A 8 8 0 1 1 4.5 8.5");
     public static Geometry PanelToggle => G("M 4.5 4.5 L 19.5 4.5 L 19.5 19.5 L 4.5 19.5 Z M 13 4.5 L 13 19.5");
+    public static Geometry Local => G("M 4.4 5.6 Q 4.4 3.6 6.4 3.6 H 17.6 Q 19.6 3.6 19.6 5.6 V 18.4 Q 19.6 20.4 17.6 20.4 H 6.4 Q 4.4 20.4 4.4 18.4 Z M 4.4 11.4 L 19.6 11.4 M 9.4 7.6 L 14.6 7.6 M 9.4 15.4 L 14.6 15.4");
+    public static Geometry HeartOutline => G("M 12 19.5 C 6.5 15 3.5 11.5 3.5 8.5 C 3.5 6 5.5 4 8 4 C 9.5 4 11 4.8 12 6.2 C 13 4.8 14.5 4 16 4 C 18.5 4 20.5 6 20.5 8.5 C 20.5 11.5 17.5 15 12 19.5 Z");
+    public static Geometry HeartFilled => Heart;
+    public static Geometry StarFilled => FavoriteStar;
+    public static Geometry ChevronUp => G("M 6 14 L 12 8 L 18 14");
+    public static Geometry ChevronDown => G("M 6 10 L 12 16 L 18 10");
+    public static Geometry History => G("M 12 4 A 8 8 0 1 1 4.5 8.5 M 12 8 L 12 12 L 15.5 14");
+    public static Geometry TaskProgress => G("M 4 6 L 20 6 M 4 12 L 14 12 M 4 18 L 17 18 M 17.5 15.5 L 19.5 17.5 L 22 13");
+    public static Geometry FolderPlus => G("M 3 7 L 10 7 L 12 9 L 21 9 L 21 19 L 3 19 Z M 3 7 L 3 5.5 L 10 5.5 L 12 7.5 L 21 7.5 M 12 12 L 12 16 M 10 14 L 14 14");
 }

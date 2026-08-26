@@ -10,6 +10,7 @@ namespace ResourceGrab.App.Controls;
 /// 视频文件夹卡片：封面 + 名称 + 标签 + 收藏心形 + 丢失提示 + 右键菜单。
 /// 左键点击 → 浏览文件夹内视频；右键 → 管理（编辑/重扫/收藏/移除等）。
 /// </summary>
+[System.Obsolete("Use MediaCard + MediaCardAdapters instead")]
 public partial class VideoCard : UserControl
 {
     public static readonly DependencyProperty FolderProperty =
@@ -163,3 +164,4 @@ public partial class VideoCard : UserControl
         if (Folder is not null) DeleteRequested?.Invoke(this, Folder);
     }
 }
+

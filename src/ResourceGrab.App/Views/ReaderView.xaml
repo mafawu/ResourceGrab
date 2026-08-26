@@ -13,7 +13,7 @@
         <Border Grid.Row="0" Margin="0,0,0,12"
                 Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                CornerRadius="16" Padding="12"
+                CornerRadius="{DynamicResource RadiusXl}" Padding="12"
                 SnapsToDevicePixels="True">
             <Grid>
                 <Grid.RowDefinitions>
@@ -39,7 +39,7 @@
                         </Button>
                         <StackPanel Margin="12,0,0,0" VerticalAlignment="Center" MaxWidth="420">
                             <TextBlock x:Name="TitleText" FontSize="14" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="420" />
-                            <Border CornerRadius="10" Background="{DynamicResource PrimarySubtleBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="8,3" Margin="0,5,0,0" HorizontalAlignment="Left" SnapsToDevicePixels="True">
+                            <Border CornerRadius="{DynamicResource RadiusMd}" Background="{DynamicResource PrimarySubtleBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" Padding="8,3" Margin="0,5,0,0" HorizontalAlignment="Left" SnapsToDevicePixels="True">
                                 <TextBlock x:Name="PageText" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
                             </Border>
                         </StackPanel>
@@ -47,7 +47,7 @@
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <!-- 页码胶囊 -->
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="3" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="PrevPageButton" Style="{StaticResource GhostButtonStyle}" Padding="10,6" Click="PrevPage_Click" ToolTip="上一页">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -65,7 +65,7 @@
                             </StackPanel>
                         </Border>
                         <!-- 跳转胶囊 -->
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="4" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="4" Margin="8,0,0,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBox x:Name="PageJumpBox" Width="52" Height="24" VerticalContentAlignment="Center" FontSize="12" Padding="6,0" ToolTip="输入页码后回车或点击跳转" KeyDown="PageJumpBox_KeyDown" PreviewTextInput="PageJumpBox_PreviewTextInput" Style="{StaticResource ModernTextBoxStyle}" />
                                 <TextBlock Text="/" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0" FontSize="12" />
@@ -74,7 +74,7 @@
                             </StackPanel>
                         </Border>
                         <!-- 章节胶囊 -->
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="3" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" Margin="8,0,0,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="PrevChapterButton" Style="{StaticResource GhostButtonStyle}" Padding="10,6" Click="PrevChapter_Click" ToolTip="上一章">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -94,13 +94,13 @@
                 <!-- 第二行：模式 + 适应 + 速度 -->
                 <DockPanel Grid.Row="2" LastChildFill="False">
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="3" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <ToggleButton x:Name="ScrollModeButton" Style="{StaticResource ReaderModeToggleStyle}" Content="滚动" Padding="14,0" MinWidth="56" Click="ModeToggle_Click" />
                                 <ToggleButton x:Name="PageModeButton" Style="{StaticResource ReaderModeToggleStyle}" Content="翻页" Margin="3,0,0,0" IsChecked="True" Padding="14,0" MinWidth="56" Click="ModeToggle_Click" />
                             </StackPanel>
                         </Border>
-                        <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="10" Padding="9,5" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusMd}" Padding="9,5" Margin="10,0,0,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="/ → 隐藏顶部" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <Border Width="1" Height="12" Background="{DynamicResource DividerBrush}" Margin="8,0" VerticalAlignment="Center" />
@@ -110,7 +110,7 @@
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="3" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="FitHeightButton" Style="{StaticResource GhostButtonStyle}" Content="适应高度" Padding="10,5" Click="FitHeight_Click" />
                                 <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}" Content="适应宽度" Margin="3,0,0,0" Padding="10,5" Click="FitWidth_Click" />
@@ -118,7 +118,7 @@
                                 <Button x:Name="ActualSizeButton" Style="{StaticResource GhostButtonStyle}" Content="实际大小" Margin="3,0,0,0" Padding="10,5" Click="ActualSize_Click" />
                             </StackPanel>
                         </Border>
-                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="10,5" Margin="8,0,0,0" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="滚动速度" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <Slider x:Name="ScrollSpeedSlider" Width="96" Minimum="0.3" Maximum="3.0" TickFrequency="0.1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="8,0,0,0" ValueChanged="ScrollSpeedSlider_ValueChanged" ToolTip="仅滚动模式生效" />
@@ -131,7 +131,7 @@
         </Border>
 
         <!-- 阅读区 -->
-        <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="18" Padding="8">
+        <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="8">
             <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Hidden"
                           HorizontalScrollBarVisibility="Hidden"
                           ScrollChanged="Scroller_ScrollChanged"
@@ -142,3 +142,4 @@
         </Border>
     </Grid>
 </UserControl>
+

@@ -260,7 +260,7 @@
     <Style x:Key="SidebarCategoryPillStyle" TargetType="RadioButton"
            BasedOn="{StaticResource NavigationChipRadioStyle}" />
 
-    <!-- 工具栏内的分段 Tab 使用胶囊形，但选中/悬停颜色与所有 Chip 一致。 -->
+    <!-- 分段 Tab 使用圆角矩形，选中/悬停颜色与所有 Chip 一致。 -->
     <Style x:Key="SegmentedTabStyle" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
         <Setter Property="FontSize" Value="12.5" />
@@ -277,7 +277,7 @@
                 <ControlTemplate TargetType="RadioButton">
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="999"
+                            CornerRadius="{StaticResource RadiusSm}"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />

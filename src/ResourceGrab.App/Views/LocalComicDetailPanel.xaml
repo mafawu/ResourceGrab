@@ -26,7 +26,7 @@
                       Padding="18,0,18,18">
             <StackPanel>
                 <!-- 封面 -->
-                <Border Height="220" CornerRadius="18"
+                <Border Height="220" CornerRadius="{DynamicResource RadiusXl}"
                         Background="{DynamicResource HoverBgBrush}"
                         BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
                     <Image x:Name="CoverImage" Stretch="Uniform" Margin="8" />
@@ -62,7 +62,7 @@
                 </StackPanel>
 
                 <!-- 统计区（仿 Green DetailPanel） -->
-                <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="10" Padding="12,10" Margin="0,14,0,0" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusMd}" Padding="12,10" Margin="0,14,0,0" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" HorizontalAlignment="Center"><TextBlock x:Name="StatChapterText" Text="--" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="章节" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0"/></StackPanel>
                         <StackPanel Grid.Column="1" HorizontalAlignment="Center"><TextBlock x:Name="StatImageText" Text="--" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="图片" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0"/></StackPanel>
@@ -109,7 +109,7 @@
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,8">
+                            <Border Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusSm}" Padding="10,8" Margin="0,0,0,8">
                                 <StackPanel>
                                     <DockPanel LastChildFill="False">
                                         <TextBlock Text="{Binding AuthorLine}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" DockPanel.Dock="Left" />
@@ -159,3 +159,4 @@
         </ScrollViewer>
     </Grid>
 </UserControl>
+
