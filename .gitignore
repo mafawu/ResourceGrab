@@ -1,6 +1,8 @@
 # Build outputs
 [Bb]in/
 [Oo]bj/
+BIN/
+bin/
 publish/
 release/
 
@@ -12,3 +14,4 @@ release/
 
 # Runtime data written next to exe
 config/
+/docs

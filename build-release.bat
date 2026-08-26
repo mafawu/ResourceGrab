@@ -31,7 +31,7 @@ if errorlevel 1 (
 
 echo.
 echo [成功] 编译完成，0 错误！
-echo 输出目录: src\ResourceGrab.App\bin\Release\
+echo 输出目录: BIN\Release\
 echo.
 pause
 endlocal

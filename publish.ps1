@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$output = Join-Path $root "publish"
+$output = Join-Path $root "bin\release"
 
 Write-Host "发布 $Runtime ($Configuration) -> $output"
 

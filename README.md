@@ -54,7 +54,7 @@ dotnet build ResourceGrab.slnx -c Release
 .\publish.ps1
 ```
 
-框架依赖包约 27MB，目标电脑需安装 .NET 10 Desktop Runtime：
+框架依赖包约 27MB（输出到 `BIN\release\`），目标电脑需安装 .NET 10 Desktop Runtime：
 
 ```powershell
 winget install Microsoft.DotNet.DesktopRuntime.10
@@ -63,7 +63,7 @@ winget install Microsoft.DotNet.DesktopRuntime.10
 免安装的自包含版（约 160MB）：
 
 ```powershell
-dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o BIN\release
 ```
 
 ## 快速上手
