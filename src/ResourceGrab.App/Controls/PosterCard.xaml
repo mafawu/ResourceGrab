@@ -1,0 +1,78 @@
+<UserControl x:Class="ResourceGrab.App.Controls.PosterCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:common="clr-namespace:ResourceGrab.App.Common"
+             Width="170" Margin="0,0,10,14">
+    <Grid x:Name="Root" Cursor="Hand"
+          MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave"
+          MouseLeftButtonUp="Root_Click">
+        <Border x:Name="CardBorder" CornerRadius="12"
+                Background="{DynamicResource HoverBgBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                ClipToBounds="True">
+            <StackPanel>
+                <!-- 封面区：宽高比 0.7 -->
+                <Grid x:Name="CoverHost">
+                    <Border Background="{DynamicResource HoverBgBrush}" MinHeight="120">
+                        <TextBlock x:Name="FallbackText" Text=""
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontSize="14" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextDisabledBrush}" />
+                    </Border>
+                    <Image x:Name="CoverImage" Stretch="UniformToFill" />
+
+                    <!-- 左上角标槽 -->
+                    <ContentControl x:Name="TopLeftBadge" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                    Margin="8,8,0,0" />
+                    <!-- 右上角标槽 -->
+                    <ContentControl x:Name="TopRightBadge" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Margin="0,8,8,0" />
+                    <!-- 左下角标槽 -->
+                    <ContentControl x:Name="BottomLeftBadge" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                    Margin="8,0,0,8" />
+                    <!-- 右下角标槽 -->
+                    <ContentControl x:Name="BottomRightBadge" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                    Margin="0,0,8,8" />
+
+                    <!-- 进度条（可选） -->
+                    <Border x:Name="ProgressTrack" VerticalAlignment="Bottom"
+                            Height="3" Background="#40000000" Visibility="Collapsed">
+                        <Border x:Name="ProgressFill" Height="3"
+                                Background="{DynamicResource PrimaryBrush}" HorizontalAlignment="Left" Width="0" />
+                    </Border>
+
+                    <!-- hover 遮罩 -->
+                    <Border x:Name="HoverOverlay" Background="#80000000"
+                            Visibility="Collapsed" IsHitTestVisible="False">
+                        <TextBlock x:Name="HoverLabel" Text="查看详情"
+                                   FontSize="12" FontWeight="SemiBold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+
+                <!-- 信息区 -->
+                <Border x:Name="InfoHost" Padding="10,8,10,10">
+                    <StackPanel>
+                        <TextBlock x:Name="TitleText" Text=""
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   TextWrapping="Wrap" MaxHeight="34"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="SubtitleText" Text=""
+                                   FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                   Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                   Visibility="Collapsed" />
+                        <StackPanel x:Name="MetaRow" Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock x:Name="MetaLeftText" Text="" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" />
+                            <TextBlock x:Name="MetaRightText" Text="" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Margin="6,0,0,0" />
+                        </StackPanel>
+                        <WrapPanel x:Name="TagHost" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

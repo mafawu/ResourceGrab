@@ -17,6 +17,8 @@ using ResourceGrab.Core.Sources.Jm;
 using ResourceGrab.Core.Sources.Baozimh;
 using ResourceGrab.Core.Sources.Wnacg;
 using ResourceGrab.Core.Sources.VideoSources;
+using ResourceGrab.Core.Services.VideoScrape;
+using ResourceGrab.Core.Services.VideoScrape.Sources;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ResourceGrab.App;
@@ -53,8 +55,8 @@ public partial class App : Application
     /// </summary>
     protected void RunStartup(StartupEventArgs e)
     {
-        AppDomain.CurrentDomain.UnhandledException += (s, e) => { try { var ex = e.ExceptionObject as Exception; System.IO.File.AppendAllText(System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop), "jm_crash.log"), "[" + DateTime.Now + "] AppDomain " + ex + "\r\n"); } catch { } };
-        DispatcherUnhandledException += (s, e) => { try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop), "jm_crash.log"), "[" + DateTime.Now + "] Dispatcher " + e.Exception + "\r\n"); } catch { } e.Handled = true; System.Windows.MessageBox.Show("发生未处理异常：" + e.Exception.Message + "\r\n\r\n已记录到桌面 jm_crash.log", "崩溃", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error); };
+        AppDomain.CurrentDomain.UnhandledException += (s, e) => { try { var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, DataDirName, "logs"); System.IO.Directory.CreateDirectory(logDir); var ex = e.ExceptionObject as Exception; System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "crash-" + DateTime.Now.ToString("yyyyMMdd") + ".log"), "[" + DateTime.Now + "] AppDomain.UnhandledException\r\n" + ex + "\r\n\r\n"); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "jm_crash.log"), "[" + DateTime.Now + "] AppDomain.UnhandledException\r\n" + ex + "\r\n\r\n"); } catch { } };
+        DispatcherUnhandledException += (s, e) => { try { var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, DataDirName, "logs"); System.IO.Directory.CreateDirectory(logDir); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "crash-" + DateTime.Now.ToString("yyyyMMdd") + ".log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n"); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "jm_crash.log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n"); } catch { } e.Handled = true; System.Windows.MessageBox.Show("发生未处理异常：" + e.Exception.Message, "崩溃", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error); };
         AppPaths.DataDirName = DataDirName;
 
         // 把旧版 %APPDATA% 数据迁移到程序同目录数据文件夹
@@ -90,10 +92,15 @@ public partial class App : Application
             AppPaths.OnlinePageCountCachePath));
         services.AddSingleton<VideoLibraryService>(sp => new VideoLibraryService(
             AppPaths.VideoLibraryPath, AppPaths.VideoFoldersPath, sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<VideoActorMerger>();
+        services.AddSingleton<IVideoActorSource, MinnanoSource>();
+        services.AddSingleton<IVideoActorSource, WikipediaActorSource>();
+        services.AddSingleton<IVideoActorSource, GFriendsSource>();
         services.AddSingleton<VideoScrapeService>(sp => new VideoScrapeService(
             sp.GetRequiredService<VideoLibraryService>(),
             sp.GetRequiredService<ConfigService>(),
             sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<VideoScrapeTaskQueue>(sp => new VideoScrapeTaskQueue(4, sp.GetRequiredService<ILogger>()));
         services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => new MissAvSource(
             CreateMissAvHttpClient(sp.GetRequiredService<ConfigService>()),
             sp.GetRequiredService<ILogger>()));
@@ -172,6 +179,3 @@ public partial class App : Application
         }
     }
 }
-
-
-

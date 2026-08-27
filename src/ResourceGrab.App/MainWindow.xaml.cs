@@ -298,6 +298,15 @@ public partial class MainWindow : Window
                 ShowVideoWithNav("search"); break;
             case "video.local":
                 ShowVideoWithNav("local"); break;
+            case "video.tasks":
+                ShowVideoWithNav("tasks"); break;
+            case "video.recommend":
+                ShowVideoWithNav("recommend"); break;
+            case "video.actors":
+                ShowVideoWithNav("actors"); break;
+                RightPanelHost.Visibility = Visibility.Collapsed;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
             case "novel.index":
                 OpenNovelLocal(); break;
         }
@@ -332,6 +341,13 @@ public partial class MainWindow : Window
     {
         OpenVideoView();
         _videoView?.SwitchNav(nav);
+        // 刮削任务和推荐页不需要右侧筛选面板
+        if (nav is "tasks" or "recommend")
+        {
+            RightPanelHost.Visibility = Visibility.Collapsed;
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+        }
     }
 
     // ====================== Route Registration ======================

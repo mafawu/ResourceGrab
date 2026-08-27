@@ -15,3 +15,4 @@ release/
 # Runtime data written next to exe
 config/
 /docs
+/tests

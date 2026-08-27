@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 
 using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Services.VideoScrape;
 
 namespace ResourceGrab.Core.Models;
 
@@ -57,4 +58,5 @@ public sealed class VideoScrapeSettings
     public string JavDbBaseUrl { get; set; } = "https://javdb.com";
     public string JavDbCookie { get; set; } = "";
     [JsonPropertyName("airav")] public bool AiravEnabled { get; set; } = true;
+    [JsonPropertyName("advanced")] public VideoScrapeAdvancedSettings? Advanced { get; set; }
 }

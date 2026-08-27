@@ -1,7 +1,10 @@
 using System.Text.Json;
 using ResourceGrab.Core.Logging;
 using ResourceGrab.Core.Models;
+using System.Threading;
+using ResourceGrab.Core.Utils;
 
+using ResourceGrab.Core.Services.VideoScrape;
 namespace ResourceGrab.Core.Services;
 
 /// <summary>视频库多维查询条件。</summary>
@@ -59,8 +62,11 @@ public class VideoLibraryService
     private readonly string _filePath;
     private readonly string _legacyFilePath;
     private List<VideoItem> _items;
+    private readonly object _lock = new();
+    private int _dataVersion;
     private readonly List<string> _rootFolders;
     private readonly ILogger? _logger;
+    private readonly ScrapeReportService? _reportService;
 
     public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger = null)
     {
@@ -68,13 +74,16 @@ public class VideoLibraryService
         _legacyFilePath = legacyFilePath;
         _logger = logger;
         _items = LoadWithMigration();
+        _dataVersion = 1;
         _rootFolders = LoadRootFolders();
+        _reportService = new ScrapeReportService(logger);
         if (_rootFolders.Count == 0 && File.Exists(_legacyFilePath))
             SeedRootsFromLegacy();
         _logger?.Info($"[VideoLibrary] 已加载 {_items.Count} 条记录 ({Path.GetFileName(_filePath)})");
     }
 
     public IReadOnlyList<VideoItem> Items => _items;
+    public int DataVersion => _dataVersion;
 
     public IReadOnlyList<string> RootFolders => _rootFolders;
 
@@ -99,6 +108,7 @@ public class VideoLibraryService
         if (added.Count > 0)
         {
             _items.AddRange(added);
+            RestoreMetadataFromCache(added);
             Save();
         }
         _logger?.Info($"[VideoLibrary] 添加文件夹 {folderPath}: 新增 {added.Count} 条");
@@ -118,6 +128,8 @@ public class VideoLibraryService
     public List<VideoItem> Rescan(string folderPath)
     {
         var fresh = ScanVideoFiles(folderPath);
+        List<VideoItem> snapshot;
+        lock (_lock) { snapshot = _items.ToList(); }
         var old = new Dictionary<string, VideoItem>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in _items)
         {
@@ -128,7 +140,7 @@ public class VideoLibraryService
         // 排除路径仍匹配的旧记录（那些走正常合并），只把真正消失的记录当移动候选。
         var freshKeys = fresh.Select(i => StateKey(i.FilePath, i.FileSizeBytes)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var movedPool = new Dictionary<(string FileName, long FileSizeBytes), VideoItem>();
-        foreach (var i in _items)
+        foreach (var i in snapshot)
         {
             if (freshKeys.Contains(StateKey(i.FilePath, i.FileSizeBytes))) continue;
             var key = (i.FileName ?? "", i.FileSizeBytes);
@@ -173,8 +185,10 @@ public class VideoLibraryService
         var freshPaths = fresh.Select(i => i.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var otherItems = _items.Where(i => !freshPaths.Contains(i.FilePath) && !replacedOldPaths.Contains(i.FilePath)).ToList();
         var removedCount = otherItems.Count;
-        _items.Clear();
-        _items.AddRange(fresh.Concat(otherItems));
+        lock (_lock) {
+            _items.Clear();
+            _items.AddRange(fresh.Concat(otherItems));
+        }
         Save();
         _logger?.Info($"[VideoLibrary] 重扫 {folderPath}: 扫到 {fresh.Count}, 库外保留 {removedCount}");
         return fresh.Where(i => i.ScrapeStatus == ScrapeStatus.Pending).ToList();
@@ -244,6 +258,7 @@ public class VideoLibraryService
         if (idx < 0) return;
         if (string.IsNullOrEmpty(item.Id)) item.Id = _items[idx].Id;
         _items[idx] = item;
+        Interlocked.Increment(ref _dataVersion);
         Save();
     }
 
@@ -251,6 +266,7 @@ public class VideoLibraryService
     {
         var count = _items.RemoveAll(i => i.Id == id);
         if (count > 0) _logger?.Info($"[VideoLibrary] 移除记录 {id}");
+        Interlocked.Increment(ref _dataVersion);
         Save();
     }
 
@@ -259,6 +275,7 @@ public class VideoLibraryService
         var idSet = ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (idSet.Count == 0) return 0;
         var count = _items.RemoveAll(i => idSet.Contains(i.Id));
+        Interlocked.Increment(ref _dataVersion);
         Save();
         _logger?.Info($"[VideoLibrary] 批量移除记录 {count} 条");
         return count;
@@ -394,12 +411,12 @@ public class VideoLibraryService
         };
     }
 
-    public Dictionary<string, int> GetTagCounts() => CountValues(_items.SelectMany(AllTags));
-    public Dictionary<string, int> GetActorCounts() => CountValues(_items.SelectMany(i => i.Actors));
+    public Dictionary<string, int> GetTagCounts() => CountValues(_items.ToList().SelectMany(AllTags));
+    public Dictionary<string, int> GetActorCounts() => CountValues(_items.ToList().SelectMany(i => i.Actors));
     public List<string> GetAllActors() => GetActorCounts().Keys.ToList();
-    public Dictionary<string, int> GetSeriesCounts() => CountValues(_items.Select(i => i.Series));
+    public Dictionary<string, int> GetSeriesCounts() => CountValues(_items.ToList().Select(i => i.Series));
     public List<string> GetAllSeries() => GetSeriesCounts().Keys.ToList();
-    public Dictionary<string, int> GetStudioCounts() => CountValues(_items.Select(StudioName));
+    public Dictionary<string, int> GetStudioCounts() => CountValues(_items.ToList().Select(StudioName));
 
     private static Dictionary<string, int> CountValues(IEnumerable<string?> values)
     {
@@ -422,8 +439,25 @@ public class VideoLibraryService
         {
             foreach (var path in Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories))
             {
+                // 跳过隐藏文件与系统目录（Thumbs.db、@eaDir 等）
+                var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (segments.Any(s => s.StartsWith('.') || s.Equals("@eaDir", StringComparison.OrdinalIgnoreCase)
+                    || s.Equals("#recycle", StringComparison.OrdinalIgnoreCase)
+                    || s.Equals("__MACOSX", StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
                 if (!VideoExtensions.Contains(Path.GetExtension(path).ToLowerInvariant())) continue;
+
+                // 先跳过明显过小的文件（字幕轨道、空文件等），再做文件头魔数校验。
                 var info = new FileInfo(path);
+                if (info.Length < VideoFileValidator.MinFileSizeBytes) continue;
+                if (!VideoFileValidator.IsValidVideoFile(path)) continue;
+
+                // 文件名与父目录均无法识别出有效番号时，视为非正片（推广/试看/附属文件），跳过。
+                var numberResult = VideoNumberParser.Parse(path);
+                if (numberResult.Number.Length == 0 && numberResult.Confidence <= 0)
+                    continue;
+
                 result.Add(new VideoItem
                 {
                     FileName = Path.GetFileNameWithoutExtension(path),
@@ -481,6 +515,33 @@ public class VideoLibraryService
         {
             _logger?.Warn($"[VideoLibrary] 加载视频根目录失败: {ex.Message}");
             return [];
+        }
+    }
+
+
+    /// <summary>从路径缓存恢复刮削元数据（删除 video-library.json 后重新添加文件时调用）。</summary>
+    private void RestoreMetadataFromCache(List<VideoItem> items)
+    {
+        if (_reportService is null) return;
+        foreach (var item in items)
+        {
+            var cached = _reportService.GetMetadataByNumber(item.Number);
+            if (cached is null) continue;
+            var fs = cached.FieldSources;
+            if (fs.TryGetValue("title", out var t) && !string.IsNullOrEmpty(t)) item.Title = t;
+            if (fs.TryGetValue("originalTitle", out var ot) && !string.IsNullOrEmpty(ot)) item.OriginalTitle = ot;
+            if (fs.TryGetValue("description", out var desc) && !string.IsNullOrEmpty(desc)) item.Description = desc;
+            if (fs.TryGetValue("actors", out var actors) && !string.IsNullOrEmpty(actors)) item.Actors = actors.Split(',').Where(s => !string.IsNullOrEmpty(s)).ToList();
+            if (fs.TryGetValue("tags", out var tags) && !string.IsNullOrEmpty(tags)) item.Tags = tags.Split(',').Where(s => !string.IsNullOrEmpty(s)).ToList();
+            if (fs.TryGetValue("series", out var series) && !string.IsNullOrEmpty(series)) item.Series = series;
+            if (fs.TryGetValue("studio", out var studio) && !string.IsNullOrEmpty(studio)) item.Studio = studio;
+            if (fs.TryGetValue("score", out var scoreStr) && double.TryParse(scoreStr, out var score)) item.Score = score;
+            if (fs.TryGetValue("releaseDate", out var rd) && !string.IsNullOrEmpty(rd) && DateTime.TryParse(rd, out var dt)) item.ReleaseDate = dt;
+            if (fs.TryGetValue("number", out var num) && !string.IsNullOrEmpty(num)) item.Number = num;
+            if (fs.TryGetValue("coverPath", out var cp) && !string.IsNullOrEmpty(cp)) item.CoverPath = cp;
+            if (fs.TryGetValue("posterPath", out var pp) && !string.IsNullOrEmpty(pp)) item.PosterPath = pp;
+            item.ScrapeStatus = ScrapeStatus.Success;
+            _logger?.Info($"[VideoLibrary] 从缓存恢复元数据: {item.Number} ({item.FilePath})");
         }
     }
 
@@ -586,4 +647,49 @@ public class VideoLibraryService
             _logger?.Error("[VideoLibrary] 保存视频库失败", ex);
         }
     }
-}
+
+    // ===== 侧栏计数磁盘缓存 =====
+
+    private sealed class SidebarCountsCache
+    {
+        public int DataVersion { get; set; }
+        public Dictionary<string, int> TagCounts { get; set; } = new();
+        public Dictionary<string, int> ActorCounts { get; set; } = new();
+        public Dictionary<string, int> SeriesCounts { get; set; } = new();
+        public Dictionary<string, int> StudioCounts { get; set; } = new();
+    }
+
+    public void SaveSidebarCounts(
+        Dictionary<string, int> tags, Dictionary<string, int> actors,
+        Dictionary<string, int> series, Dictionary<string, int> studios)
+    {
+        try
+        {
+            var cache = new SidebarCountsCache
+            {
+                DataVersion = _dataVersion,
+                TagCounts = tags,
+                ActorCounts = actors,
+                SeriesCounts = series,
+                StudioCounts = studios,
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(cache, new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+            Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.VideoSidebarCountsPath)!);
+            File.WriteAllText(AppPaths.VideoSidebarCountsPath, json);
+        }
+        catch { }
+    }
+
+    public (int version, Dictionary<string, int> tags, Dictionary<string, int> actors,
+            Dictionary<string, int> series, Dictionary<string, int> studios)? LoadSidebarCounts()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.VideoSidebarCountsPath)) return null;
+            var json = File.ReadAllText(AppPaths.VideoSidebarCountsPath);
+            var cache = System.Text.Json.JsonSerializer.Deserialize<SidebarCountsCache>(json);
+            if (cache is null || cache.DataVersion != _dataVersion) return null;
+            return (cache.DataVersion, cache.TagCounts, cache.ActorCounts, cache.SeriesCounts, cache.StudioCounts);
+        }
+        catch { return null; }
+    }}

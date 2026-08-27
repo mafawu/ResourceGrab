@@ -9,6 +9,7 @@ using ResourceGrab.App.ViewModels;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Http;
 using ResourceGrab.Core.Models;
+using ResourceGrab.Core.Logging;
 using ResourceGrab.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,7 @@ public partial class LocalView : CardGridViewBase
     private readonly LocalLibraryService _localLibrary;
     private readonly SourceManager _sourceManager;
     private readonly ComicUserDataService? _userData;
+    private readonly ILogger? _logger;
     private string _filterSourceId = "";
 
     private bool _hasLoaded;
@@ -57,6 +59,7 @@ public partial class LocalView : CardGridViewBase
         _localLibrary = App.Services.GetRequiredService<LocalLibraryService>();
         _sourceManager = App.Services.GetRequiredService<SourceManager>();
         _userData = App.Services.GetService(typeof(ComicUserDataService)) as ComicUserDataService;
+        _logger = App.Services.GetService(typeof(ILogger)) as ILogger;
         SourceFilterBox.Items.Add(new ComboBoxItem { Content = "全部", Tag = "", IsSelected = true });
         foreach (var src in _sourceManager.Sources)
         {
@@ -93,6 +96,7 @@ public partial class LocalView : CardGridViewBase
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            _logger?.Info($"[LocalView] 配置目录数: {dirs.Count}");
             if (dirs.Count == 0)
             {
                 _allComics = new List<LocalComic>();
@@ -157,7 +161,7 @@ public partial class LocalView : CardGridViewBase
             _page = 1;
             LocalItems.ItemsSource = null;
             ShowState(State.Empty);
-            ToastService.ShowError(ex);
+            try { ToastService.ShowError(ex); } catch { }
         }
         finally
         {
@@ -316,6 +320,7 @@ public partial class LocalView : CardGridViewBase
         }
         _loading = true;
         ShowState(State.Loading);
+        _logger?.Info($"[LocalView] LoadAsync 开始, incremental={incremental}");
         try
         {
             var dirs = _config.Current.LocalDirs
@@ -324,6 +329,7 @@ public partial class LocalView : CardGridViewBase
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            _logger?.Info($"[LocalView] 配置目录数: {dirs.Count}");
             if (dirs.Count == 0)
             {
                 _allComics = new List<LocalComic>();
@@ -356,6 +362,7 @@ public partial class LocalView : CardGridViewBase
                     .OrderByDescending(c => c.ModifiedAt)
                     .ToList();
             });
+            _logger?.Info($"[LocalView] 扫描完成, 漫画数: {comics.Count}");
             var backfilled = await Task.Run(() => _localLibrary.BackfillExtractedNames(comics));
             await Task.Run(() => _localLibrary.SaveCache(cachePath, cacheRoots));
             _cacheRoots = cacheRoots;
@@ -373,7 +380,7 @@ public partial class LocalView : CardGridViewBase
             _page = 1;
             LocalItems.ItemsSource = null;
             ShowState(State.Empty);
-            ToastService.ShowError(ex);
+            try { ToastService.ShowError(ex); } catch { }
         }
         finally
         {
@@ -384,6 +391,8 @@ public partial class LocalView : CardGridViewBase
     /// <summary>对缺少中文名的漫画调用翻译接口（需在 config.json 配置 titleTranslate），结果写回缓存与 album.json。</summary>
     private async Task TranslateMissingNamesAsync()
     {
+        try
+        {
         var options = _config.Current.TitleTranslate;
         if (!options.Enabled || string.IsNullOrWhiteSpace(options.ApiKey))
         {
@@ -410,6 +419,8 @@ public partial class LocalView : CardGridViewBase
 
         // 重新绑定卡片，展示新翻译的中文名
         RenderPage();
+        }
+        catch { }
     }
 
     /// <summary>渲染当前页卡片（替换 ItemsSource 触发一次刷新，避免逐条通知）。</summary>
@@ -708,8 +719,4 @@ public partial class LocalView : CardGridViewBase
         LocalItems.Visibility = state == State.Result ? Visibility.Visible : Visibility.Collapsed;
     }
 }
-
-
-
-
 

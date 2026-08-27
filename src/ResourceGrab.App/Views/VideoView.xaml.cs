@@ -13,6 +13,7 @@ using ResourceGrab.Core.Utils;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Sources;
 using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Services.VideoScrape;
 using ResourceGrab.Core.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
@@ -23,6 +24,7 @@ public partial class VideoView : CardGridViewBase
 {
     private readonly VideoLibraryService _library;
     private readonly VideoScrapeService _scrapeService;
+    private VideoScrapeTaskQueue? _taskQueue;
     private readonly ILogger _logger;
     private List<VideoItem> _filtered = [];
     private VideoItem? _currentItem;
@@ -39,11 +41,18 @@ public partial class VideoView : CardGridViewBase
     private Style _chipTextStyle = null!;
     private Style _chipCountStyle = null!;
     private string _currentNav = "search";
+    private bool _scrapeRunning;
     private string _onlineSearchText = "";
     private int _onlinePage = 1;
     private CancellationTokenSource? _onlineSearchCts;
     private int _onlineSearchVersion;
     private VideoSearchPanel? _searchPanel;
+    private int _sidebarDataVersion = -1;
+    private Action? _actorClose;
+    private Dictionary<string, int> _cachedTagCounts = new();
+    private Dictionary<string, int> _cachedActorCounts = new();
+    private Dictionary<string, int> _cachedSeriesCounts = new();
+    private Dictionary<string, int> _cachedStudioCounts = new();
     private IVideoSource? OnlineSource => App.Services.GetServices<IVideoSource>()
         .FirstOrDefault(s => s.Info.Id == "missav");
 
@@ -56,6 +65,8 @@ public partial class VideoView : CardGridViewBase
         _chipBorderStyle = (Style)FindResource("VideoChipStyle");
         _chipTextStyle = (Style)FindResource("VideoChipTextStyle");
         _chipCountStyle = (Style)FindResource("VideoChipCountStyle");
+        _taskQueue = App.Services.GetService(typeof(VideoScrapeTaskQueue)) as VideoScrapeTaskQueue;
+        _ = Task.Run(() => _taskQueue?.StartProcessingAsync(ProcessQueueTaskAsync, CancellationToken.None));
         Loaded += (_, _) => Refresh();
         Unloaded += (_, _) => { _enrichCts?.Cancel(); _scrapeCts?.Cancel(); };
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
@@ -68,6 +79,7 @@ public partial class VideoView : CardGridViewBase
         _searchPanel = panel;
         _searchPanel.FilterChanged += OnFilterChanged;
         _searchPanel.SearchTextChanged += OnSearchTextChanged;
+        ActorListPage.ActorSelected = actor => ShowActor(actor, () => SwitchNav("actors"));
     }
 
     private void OnFilterChanged(VideoSearchPanel.VideoFilterState state)
@@ -98,8 +110,22 @@ public partial class VideoView : CardGridViewBase
         SearchPage.Visibility = nav == "search" ? Visibility.Visible : Visibility.Collapsed;
         RecommendPage.Visibility = nav == "recommend" ? Visibility.Visible : Visibility.Collapsed;
         LocalPage.Visibility = nav == "local" ? Visibility.Visible : Visibility.Collapsed;
+        TaskPage.Visibility = nav == "tasks" ? Visibility.Visible : Visibility.Collapsed;
+        TaskBar.Visibility = Visibility.Collapsed;
+        ActorPage.Visibility = Visibility.Collapsed;
 
         if (nav == "local") Refresh();
+        if (nav == "actors") ActorListPage.Refresh();
+    }
+
+    private void ShowActor(string actor, Action onClose)
+    {
+        _actorClose = onClose;
+        ActorPage.CloseRequested = () => { ActorPage.Visibility = Visibility.Collapsed; _actorClose?.Invoke(); };
+        ActorPage.OnLocalWorkSelected = item => { ActorPage.Visibility = Visibility.Collapsed; _currentItem = item; ApplyAndRender(); };
+        SearchPage.Visibility = RecommendPage.Visibility = LocalPage.Visibility = TaskPage.Visibility = ActorListPage.Visibility = Visibility.Collapsed;
+        ActorPage.Visibility = Visibility.Visible;
+        ActorPage.LoadAsync(actor);
     }
 
     private bool IsReady => _library is not null && _scrapeService is not null;
@@ -110,28 +136,44 @@ public partial class VideoView : CardGridViewBase
         ApplyAndRender();
     }
 
+    private CancellationTokenSource? _renderCts;
+
     private void ApplyAndRender()
     {
         if (!IsReady) return;
+        // 取消上一次未完成的渲染
+        _renderCts?.Cancel();
+        var ct = new CancellationTokenSource();
+        _renderCts = ct;
         var options = BuildQueryOptions();
-        _filtered = _library.Query(options).ToList();
-        var fresh = _currentItem is null ? null : _all().FirstOrDefault(i => i.Id == _currentItem.Id);
-        if (_currentItem is not null && fresh is null)
+        var currentItem = _currentItem;
+        try
         {
-            _currentItem = null;
-        }
-        else if (_currentItem is not null)
-        {
-            _currentItem = fresh;
-        }
+            using (RecursionGuard.Enter("ApplyAndRender"))
+            {
 
-        if (_currentItem is not null)
+        // 在后台线程执行查询和排序
+        _ = Task.Run(() =>
         {
-            RenderDetail(_currentItem);
+            var filtered = _library.Query(options).ToList();
+            if (ct.IsCancellationRequested) return;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            {
+                if (ct.IsCancellationRequested) return;
+                _filtered = filtered;
+                var fresh = currentItem is null ? null : _all().FirstOrDefault(i => i.Id == currentItem.Id);
+                if (currentItem is not null && fresh is null) _currentItem = null;
+                else if (currentItem is not null) _currentItem = fresh;
+
+                if (_currentItem is not null) RenderDetail(_currentItem);
+                else RenderList();
+            }));
+        }, ct.Token);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            RenderList();
+            _logger.Error("[VideoView] ApplyAndRender 异常（疑似无限递归，已拦截）", ex);
         }
     }
 
@@ -158,24 +200,49 @@ public partial class VideoView : CardGridViewBase
 
     private void SyncPanelCounts()
     {
-        _searchPanel?.SetCounts(
-            _library.GetTagCounts(),
-            _library.GetActorCounts(),
-            _library.GetSeriesCounts(),
-            _library.GetStudioCounts());
+        var version = _library.DataVersion;
+        if (version == _sidebarDataVersion) { _filterState = _searchPanel?.BuildState(); return; }
+        _sidebarDataVersion = version;
+
+        // 尝试从磁盘缓存加载
+        var cached = _library.LoadSidebarCounts();
+        if (cached is { } c)
+        {
+            _cachedTagCounts = c.tags;
+            _cachedActorCounts = c.actors;
+            _cachedSeriesCounts = c.series;
+            _cachedStudioCounts = c.studios;
+        }
+        else
+        {
+            // 缓存未命中，重新计算并保存
+            _cachedTagCounts = _library.GetTagCounts();
+            _cachedActorCounts = _library.GetActorCounts();
+            _cachedSeriesCounts = _library.GetSeriesCounts();
+            _cachedStudioCounts = _library.GetStudioCounts();
+            _library.SaveSidebarCounts(_cachedTagCounts, _cachedActorCounts, _cachedSeriesCounts, _cachedStudioCounts);
+        }
+        _searchPanel?.SetCounts(_cachedTagCounts, _cachedActorCounts, _cachedSeriesCounts, _cachedStudioCounts);
+        _filterState = _searchPanel?.BuildState();
     }
 
     private void RenderSidebar()
     {
-        // 侧栏渲染由 VideoSearchPanel 接管；这里只同步计数数据。
-        SyncPanelCounts();
-        _filterState = _searchPanel?.BuildState();
+        // 侧栏计数计算较重，延迟到 UI 空闲时执行，不阻塞列表渲染
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+        {
+            SyncPanelCounts();
+        }));
     }
 
     private void RenderList()
     {
         BackButton.Visibility = Visibility.Collapsed;
         DetailScroll.Visibility = Visibility.Collapsed;
+        try
+        {
+            using (RecursionGuard.Enter("RenderList"))
+            {
         VideoItems.Visibility = _filtered.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyPanel.Visibility = _filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _library.Items.Count > 0 ? "没有符合筛选条件的视频" : "还没有视频文件";
@@ -190,7 +257,14 @@ public partial class VideoView : CardGridViewBase
         VideoItems.ItemsSource = pageItems;
         VideoItems.ScrollToTop();
         RenderPaging();
-        KickEnrichment(_filtered);
+        KickEnrichment(pageItems);
+        KickEnrichment(pageItems);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("[VideoView] RenderList 异常（疑似无限递归，已拦截）", ex);
+        }
     }
 
     private void VideoCard_Loaded(object sender, RoutedEventArgs e)
@@ -246,7 +320,7 @@ public partial class VideoView : CardGridViewBase
         var poster = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }.FirstOrDefault(File.Exists);
         ImageLoader.SetSource(DetailPoster, poster);
         ActorChips.Children.Clear();
-        foreach (var actor in item.Actors.Take(12)) ActorChips.Children.Add(MakeDetailChip(actor, () => FilterByActor(actor)));
+        foreach (var actor in item.Actors.Take(12)) ActorChips.Children.Add(MakeDetailChip(actor, () => ShowActor(actor, () => ApplyAndRender())));
         TagChips.Children.Clear();
         foreach (var tag in item.Tags.Concat(item.UserTags).Take(24)) TagChips.Children.Add(MakeDetailChip($"#{tag}", () => FilterByTag(tag)));
 
@@ -266,11 +340,15 @@ public partial class VideoView : CardGridViewBase
         RenderRating(item);
         RenderPreviews(item);
         RenderFileDetails(item);
+        ScrapeReportPanel.LoadReport(item);
         RenderRecommends(item);
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e) { _currentItem = null; ApplyAndRender(); TitleText.Text = "本地视频"; }
-
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        _currentItem = null; ApplyAndRender(); TitleText.Text = "本地视频";
+        ScrapeReportPanel.HideReport();
+    }
     private Border MakeDetailChip(string text, Action onClick)
     {
         var border = new Border
@@ -382,7 +460,8 @@ public partial class VideoView : CardGridViewBase
         SeriesRecommendHeader.Visibility = sameSeries.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var rec in sameSeries)
         {
-            var card = new VideoFileCard { Item = rec, CardWidth = 150 };
+            var card = new VideoPosterCard();
+            card.Bind(rec);
             card.DetailRequested += detail => Dispatcher.Invoke(() => { _currentItem = detail; ApplyAndRender(); });
             SeriesRecommends.Children.Add(card);
         }
@@ -392,7 +471,8 @@ public partial class VideoView : CardGridViewBase
         ActorRecommendHeader.Visibility = sameActors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var rec in sameActors)
         {
-            var card = new VideoFileCard { Item = rec, CardWidth = 150 };
+            var card = new VideoPosterCard();
+            card.Bind(rec);
             card.DetailRequested += detail => Dispatcher.Invoke(() => { _currentItem = detail; ApplyAndRender(); });
             ActorRecommends.Children.Add(card);
         }
@@ -405,7 +485,8 @@ public partial class VideoView : CardGridViewBase
         RelatedRecommendHeader.Visibility = relatedLocal.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var rec in relatedLocal.Cast<VideoItem>())
         {
-            var card = new VideoFileCard { Item = rec, CardWidth = 150 };
+            var card = new VideoPosterCard();
+            card.Bind(rec);
             card.DetailRequested += detail => Dispatcher.Invoke(() => { _currentItem = detail; ApplyAndRender(); });
             RelatedRecommends.Children.Add(card);
         }
@@ -570,7 +651,7 @@ public partial class VideoView : CardGridViewBase
     {
         OnlineLoadingState.Visibility = Visibility.Collapsed;
         ResultCardsPanel.Children.Clear();
-        foreach (var item in result.Items.Take(60))
+        foreach (var item in result.Items.Take(30))
         {
             var border = new Border
             {
@@ -583,12 +664,7 @@ public partial class VideoView : CardGridViewBase
             if (!string.IsNullOrEmpty(item.CoverUrl))
             {
                 var img = new Image { Height = 96, Stretch = Stretch.UniformToFill, Margin = new Thickness(6,6,6,4) };
-                img.Loaded += async (_, _) =>
-                {
-                    try { using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                          var b = await c.GetByteArrayAsync(item.CoverUrl);
-                          img.Source = System.Windows.Media.Imaging.BitmapFrame.Create(new MemoryStream(b)); } catch { }
-                };
+                    img.Loaded += (_, _) => Common.ImageLoader.SetSource(img, item.CoverUrl);
                 stack.Children.Add(img);
             }
             stack.Children.Add(new TextBlock { Text = item.Title, FontSize = 12, TextWrapping = TextWrapping.Wrap,
@@ -623,6 +699,10 @@ public partial class VideoView : CardGridViewBase
         var pending = items.Where(i => !_enrichQueued.Contains(i.FilePath) && i.FileExists && (i.DurationSeconds <= 0 || string.IsNullOrEmpty(i.Resolution) || string.IsNullOrEmpty(i.ThumbnailPath))).ToList();
         if (pending.Count == 0) return;
         foreach (var item in pending) _enrichQueued.Add(item.FilePath);
+        try
+        {
+            using (RecursionGuard.Enter("KickEnrichment"))
+            {
         _enrichCts?.Cancel();
         _enrichCts = new CancellationTokenSource();
         var ct = _enrichCts.Token;
@@ -645,10 +725,16 @@ public partial class VideoView : CardGridViewBase
                     item.ThumbnailPath = await VideoThumbnailService.GenerateAsync(item.FilePath, ct: ct);
                 }
                 _library.Update(item);
-                Dispatcher.Invoke(ApplyAndRender);
+                Dispatcher.BeginInvoke(new Action(() => ApplyAndRender()));
             }
         }, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("[VideoView] KickEnrichment 异常（疑似无限递归，已拦截）", ex);
     }
+        }
 
     private void OnThumbnailSaved(string path) => Dispatcher.Invoke(() =>
     {
@@ -741,12 +827,13 @@ public partial class VideoView : CardGridViewBase
         _scrapeCts?.Cancel();
         _scrapeCts = new CancellationTokenSource();
         var ct = _scrapeCts.Token;
-        TaskBar.Visibility = Visibility.Visible;
+        _scrapeRunning = true;
         StopButton.IsEnabled = true;
         TaskTitle.Text = autoStarted ? "自动刮削中" : title;
         ViewNoMatchButton.Visibility = Visibility.Collapsed;
         RetryFailedButton.Visibility = Visibility.Collapsed;
         TaskLogList.ItemsSource = null;
+        foreach (var id in idList) { var vItem = _library.GetById(id); _taskQueue?.Enqueue(vItem?.Number ?? id); }
         _ = Task.Run(async () =>
         {
             try
@@ -776,11 +863,19 @@ public partial class VideoView : CardGridViewBase
             {
                 Dispatcher.Invoke(() =>
                 {
+                    _scrapeRunning = false;
                     TaskTitle.Text = "已完成";
                     StopButton.IsEnabled = false;
                 });
             }
         }, ct);
+    }
+
+
+    private async Task ProcessQueueTaskAsync(VideoScrapeTask task, CancellationToken ct)
+    {
+        // TaskBar 的 ScrapeAsync 已批量处理，此处仅等其完成后更新状态
+        await Task.CompletedTask;
     }
 
     private void ToggleLogs_Click(object sender, RoutedEventArgs e)
@@ -932,5 +1027,3 @@ public partial class VideoView : CardGridViewBase
     }
 
 }
-
-

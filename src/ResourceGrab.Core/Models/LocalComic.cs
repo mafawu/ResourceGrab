@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace ResourceGrab.Core.Models;
 
@@ -30,26 +30,26 @@ public class AlbumMetadata
 public class LocalComic
 {
     /// <summary>所属内容源 id（如 "wnacg"）；空表示禁漫。旧版禁漫下载无此字段，扫描时回退为禁漫。</summary>
-    public string SourceId { get; init; } = "";
+    public string SourceId { get; set; } = "";
 
-    public long? AlbumId { get; init; }
-    public string Name { get; init; } = "";
+    public long? AlbumId { get; set; }
+    public string Name { get; set; } = "";
     /// <summary>中文名：优先来自元数据，否则扫描时提取/翻译，用于搜索与展示。</summary>
     public string NameCn { get; set; } = "";
-    public string Path { get; init; } = "";
-    public string CoverPath { get; init; } = "";
-    public List<string> Tags { get; init; } = new();
-    public List<string> Author { get; init; } = new();
-    public int ChapterCount { get; init; }
-    public long ImageCount { get; init; }
-    public DateTime ModifiedAt { get; init; }
+    public string Path { get; set; } = "";
+    public string CoverPath { get; set; } = "";
+    public List<string> Tags { get; set; } = new();
+    public List<string> Author { get; set; } = new();
+    public int ChapterCount { get; set; }
+    public long ImageCount { get; set; }
+    public DateTime ModifiedAt { get; set; }
 
     /// <summary>元数据文件（album.json / 元数据.json）最后修改时间，用于增量扫描判断元数据是否变化。</summary>
-    public DateTime? MetadataStamp { get; init; }
-    public bool HasMetadata { get; init; }
-    public string TotalViews { get; init; } = "";
-    public string Likes { get; init; } = "";
-    public string CommentTotal { get; init; } = "";
+    public DateTime? MetadataStamp { get; set; }
+    public bool HasMetadata { get; set; }
+    public string TotalViews { get; set; } = "";
+    public string Likes { get; set; } = "";
+    public string CommentTotal { get; set; } = "";
     // ====================== 用户数据（阅读进度 / 评分 / 备注）======================
 
     /// <summary>已读图片数（跨章节累计），由阅读器在保存进度时更新。</summary>
@@ -83,6 +83,22 @@ public class LocalComic
     /// <summary>用户备注。</summary>
     [JsonPropertyName("notes")]
     public string Notes { get; set; } = "";
+
+    /// <summary>修复 System.Text.Json 反序列化可能产生的 null 集合（missing 字段跳过属性初始化器）。</summary>
+    public void Normalize()
+    {
+        SourceId ??= "";
+        Name ??= "";
+        NameCn ??= "";
+        Path ??= "";
+        CoverPath ??= "";
+        Tags ??= new();
+        Author ??= new();
+        TotalViews ??= "";
+        Likes ??= "";
+        CommentTotal ??= "";
+        Notes ??= "";
+    }
 }
 
 /// <summary>本地漫画库磁盘缓存：按根目录分组保存扫描结果，供增量扫描复用。</summary>

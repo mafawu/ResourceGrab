@@ -10,6 +10,7 @@ using ResourceGrab.App.Themes;
 using ResourceGrab.App.Views;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Models;
+using ResourceGrab.Core.Services.VideoScrape;
 using ResourceGrab.Core.Services;
 
 namespace ResourceGrab.App.Dialogs;
@@ -92,6 +93,15 @@ public partial class SettingsDialog : Window
         JavBusUrlBox.Text = scraping.JavBusBaseUrl;
         JavDbUrlBox.Text = scraping.JavDbBaseUrl;
         JavBusCookieBox.Text = scraping.JavBusCookie;
+
+        // 高级刮削设置
+        ScrapeTimeoutBox.Text = scraping.TimeoutSeconds.ToString();
+        ScrapeRetryBox.Text = scraping.Retry.ToString();
+        ScrapeConcurrencyBox.Text = scraping.Concurrency.ToString();
+        ScrapeIntervalBox.Text = scraping.RequestIntervalMs.ToString();
+        CacheEnabledBox.IsChecked = true;
+        PopulateSourceToggles(scraping);
+        PopulateContentRoutes(scraping);
 
         var general = config.General ?? new GeneralSettings();
         SelectComboByTag(LanguageBox, general.InterfaceLanguage);
@@ -287,6 +297,14 @@ public partial class SettingsDialog : Window
         scraping.JavDbBaseUrl = string.IsNullOrWhiteSpace(JavDbUrlBox.Text) ? "https://javdb.com" : JavDbUrlBox.Text.Trim();
         scraping.JavBusCookie = JavBusCookieBox.Text.Trim();
 
+        // 高级刮削设置保存
+        if (int.TryParse(ScrapeTimeoutBox.Text, out var timeout)) scraping.TimeoutSeconds = Math.Clamp(timeout, 3, 120);
+        if (int.TryParse(ScrapeRetryBox.Text, out var retry)) scraping.Retry = Math.Clamp(retry, 0, 10);
+        if (int.TryParse(ScrapeConcurrencyBox.Text, out var concurrency)) scraping.Concurrency = Math.Clamp(concurrency, 1, 16);
+        if (int.TryParse(ScrapeIntervalBox.Text, out var interval)) scraping.RequestIntervalMs = Math.Clamp(interval, 0, 10000);
+        SaveSourceToggles(scraping);
+        SaveContentRoutes(scraping);
+
         config.General ??= new GeneralSettings();
         if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string uiLanguage })
         {
@@ -388,6 +406,7 @@ public partial class SettingsDialog : Window
             clearedFiles.AddIfNotNull(TryDeleteInsideAppData(AppPaths.LocalLibraryCachePath));
             clearedFiles.AddIfNotNull(TryDeleteInsideAppData(AppPaths.OnlinePageCountCachePath));
             clearedFiles.AddIfNotNull(TryDeleteInsideAppData(AppPaths.VideoArtworkDir));
+            clearedFiles.AddIfNotNull(TryDeleteInsideDir(AppPaths.VideoSourceCacheDir));
 
             var freed = GetCacheSizeBytes() >= sizeBefore
                 ? sizeBefore - GetCacheSizeBytes()
@@ -465,6 +484,79 @@ public partial class SettingsDialog : Window
         ErrorText.Text = message;
         ErrorText.Visibility = Visibility.Visible;
     }
+    // ===== 高级刮削设置辅助方法 =====
+
+    private readonly Dictionary<string, CheckBox> _sourceCheckBoxes = new(StringComparer.OrdinalIgnoreCase);
+
+    private void PopulateSourceToggles(VideoScrapeSettings scraping)
+    {
+        SourceToggleGrid.Children.Clear();
+        _sourceCheckBoxes.Clear();
+        var advanced = scraping.Advanced ?? new VideoScrapeAdvancedSettings();
+        var allSourceIds = new[] {
+            ("javbus", "JavBus"), ("javdb", "JavDB"), ("airav", "AirAv"), ("dmm", "DMM"),
+            ("iqqtv", "IQQTV"), ("avsox", "Avsox"), ("freejavbt", "FreeJavBT"),
+            ("fc2ppvdb", "FC2PPVDB"), ("fc2", "FC2"), ("fc2club", "FC2Club"),
+            ("mgstage", "MGStage"), ("theporndb", "ThePornDB"), ("getchu", "Getchu"),
+            ("official", "Official"), ("prestige", "Prestige"), ("r18dev", "R18Dev"),
+            ("xcity", "XCity"), ("giga", "GIGA"), ("kin8", "Kin8"),
+            ("dahlia", "Dahlia"), ("faleno", "Faleno"), ("minnano", "Minnano"),
+            ("gfriends", "GFriends"), ("wikipedia", "Wikipedia")
+        };
+        var row = 0; var col = 0;
+        foreach (var (id, name) in allSourceIds)
+        {
+            var enabled = advanced.IsSourceEnabled(id);
+            var cb = new CheckBox { Content = name, IsChecked = enabled, Margin = new Thickness(0, 4, 16, 4), FontSize = 12 };
+            Grid.SetRow(cb, row); Grid.SetColumn(cb, col);
+            SourceToggleGrid.Children.Add(cb);
+            _sourceCheckBoxes[id] = cb;
+            col++; if (col >= 4) { col = 0; row++; }
+        }
+    }
+
+    private void SaveSourceToggles(VideoScrapeSettings scraping)
+    {
+        var advanced = scraping.Advanced ?? new VideoScrapeAdvancedSettings();
+        foreach (var (id, cb) in _sourceCheckBoxes)
+        {
+            if (advanced.SourceConfigs.TryGetValue(id, out var cfg))
+                cfg.Enabled = cb.IsChecked == true;
+            else
+                advanced.SourceConfigs[id] = new VideoSourceConfig { Enabled = cb.IsChecked == true };
+        }
+        scraping.Advanced = advanced;
+    }
+
+    private void PopulateContentRoutes(VideoScrapeSettings scraping)
+    {
+        ContentRoutePanel.Children.Clear();
+        var advanced = scraping.Advanced ?? new VideoScrapeAdvancedSettings();
+        var kindNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Censored"] = "有码", ["Uncensored"] = "无码", ["Fc2"] = "FC2",
+            ["Chinese"] = "中文", ["Amateur"] = "素人", ["Western"] = "欧美", ["Hentai"] = "里番"
+        };
+        foreach (var route in advanced.ContentRoutes)
+        {
+            var kindName = kindNames.TryGetValue(route.Kind.ToString(), out var cn) ? cn : route.Kind.ToString();
+            var sources = string.Join(" → ", route.Sources);
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            row.Children.Add(new TextBlock { Text = $"{kindName}:", FontSize = 12, FontWeight = FontWeights.SemiBold, Width = 50, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = sources, FontSize = 12, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryBrush"), VerticalAlignment = VerticalAlignment.Center });
+            ContentRoutePanel.Children.Add(row);
+        }
+    }
+
+    private void SaveContentRoutes(VideoScrapeSettings scraping) { /* 路由当前为只读展示，后续可扩展 */ }
+
+
+
+    private static string? TryDeleteInsideDir(string dirPath)
+    {
+        if (!Directory.Exists(dirPath)) return null;
+        try { Directory.Delete(dirPath, recursive: true); return dirPath; } catch { return null; }
+    }
 }
 
 file static class ListExtensions
@@ -473,4 +565,5 @@ file static class ListExtensions
     {
         if (value is not null) list.Add(value);
     }
+
 }

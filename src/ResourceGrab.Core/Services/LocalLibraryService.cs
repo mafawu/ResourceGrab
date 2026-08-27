@@ -218,6 +218,10 @@ public class LocalLibraryService
                 return empty;
             }
             var cache = JsonSerializer.Deserialize<LocalLibraryCache>(File.ReadAllText(path));
+            if (cache?.Roots is not null)
+                foreach (var comics in cache.Roots.Values)
+                    foreach (var comic in comics)
+                        comic.Normalize();
             return cache?.Roots is null
                 ? empty
                 : new Dictionary<string, List<LocalComic>>(cache.Roots, StringComparer.OrdinalIgnoreCase);
@@ -773,7 +777,6 @@ public class LocalLibraryService
     public static string KeyFor(string sourceId, string comicId) => $"{sourceId}:{comicId}";
     private static bool IsTempDownloadDir(string name) => name.StartsWith(".下载中-", StringComparison.Ordinal);
 }
-
 
 
 

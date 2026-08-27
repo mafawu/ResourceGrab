@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Logging;
+using ResourceGrab.Core.Services.VideoScrape;
 using AngleSharp.Html.Parser;
 
 namespace ResourceGrab.Core.Services;
@@ -131,6 +132,7 @@ public sealed class JavBusScraper : IVideoScraper
         if (string.IsNullOrEmpty(detailUrl)) return null;
         var html = await _http.GetStringAsync(detailUrl, ct);
         var root = parser.ParseDocument(html);
+        if (root is null) return null;
         string Text(string selector)
         {
             var node = root.QuerySelector(selector);
@@ -418,6 +420,7 @@ public sealed class VideoScrapeService : IDisposable
     private readonly JavDbScraper _javDb;
     private readonly AiravScraper _airav;
     private readonly ILogger? _logger;
+    private readonly ScrapeReportService? _reportService;
     public event Action<VideoItem>? ItemChanged;
     public void Dispose() => _http.Dispose();
 
@@ -429,6 +432,7 @@ public sealed class VideoScrapeService : IDisposable
         _scraper = new JavBusScraper(_http, settings.JavBusBaseUrl ?? "");
         _javDb = new JavDbScraper(_http, settings.JavDbBaseUrl ?? "");
         _airav = new AiravScraper(_http);
+        _reportService = new ScrapeReportService(logger);
     }
 
     public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger)
@@ -436,6 +440,7 @@ public sealed class VideoScrapeService : IDisposable
         _library = library;
         _configService = configService;
         _logger = logger;
+        _reportService = new ScrapeReportService(logger);
         var initial = Settings;
         _http = new VideoScrapeHttpClient(initial);
         _scraper = new JavBusScraper(_http, initial.JavBusBaseUrl);
@@ -538,6 +543,7 @@ public sealed class VideoScrapeService : IDisposable
                     progress.Completed++; progress.SuccessCount++;
                     progress.Log($"{item.Number}: 命中 {meta.Source}");
                     _logger?.Info($"[Scrape] {item.Number} 成功 source={meta.Source} actors={meta.Actors.Count} tags={meta.Tags.Count}");
+                    SaveFieldSourcesReport(item, meta);
                 }
             }
             catch (OperationCanceledException) { throw; }
@@ -640,6 +646,45 @@ public sealed class VideoScrapeService : IDisposable
             item.SourceUrls.TryAdd(pair.Key, pair.Value);
     }
 
+
+    private void SaveFieldSourcesReport(VideoItem item, VideoScrapeMetadata meta)
+    {
+        if (_reportService is null || string.IsNullOrEmpty(item.Id)) return;
+        try
+        {
+            var fieldSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var sourceId = meta.Source;
+            if (!string.IsNullOrEmpty(meta.Title)) fieldSources["title"] = sourceId;
+            if (!string.IsNullOrEmpty(meta.OriginalTitle)) fieldSources["originalTitle"] = sourceId;
+            if (!string.IsNullOrEmpty(meta.Description)) fieldSources["description"] = sourceId;
+            if (meta.Actors.Count > 0) fieldSources["actors"] = sourceId;
+            if (meta.Tags.Count > 0) fieldSources["tags"] = sourceId;
+            if (!string.IsNullOrEmpty(meta.CoverUrl)) fieldSources["coverUrl"] = sourceId;
+            if (meta.Score > 0) fieldSources["score"] = sourceId;
+            if (!string.IsNullOrEmpty(meta.Series)) fieldSources["series"] = sourceId;
+            if (!string.IsNullOrEmpty(meta.Studio)) fieldSources["studio"] = sourceId;
+            if (meta.ReleaseDate.HasValue) fieldSources["releaseDate"] = sourceId;
+
+            var attempts = new List<VideoSourceAttempt>
+            {
+                new(sourceId, null, VideoSourceOutcome.Success, null, 0, DateTimeOffset.UtcNow)
+            };
+
+            var aggregate = new VideoScrapeAggregate
+            {
+                Number = item.Number,
+                Metadata = meta,
+                FieldSources = fieldSources,
+                Attempts = attempts,
+            };
+            _reportService.SaveReport(item.Id, aggregate);
+                _reportService.SaveMetadataByNumber(item.Number, item);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[Scrape] {item.Number} 保存刮削报告失败: {ex.Message}");
+        }
+    }
     private static string Pick(string scraped, string current) => string.IsNullOrWhiteSpace(scraped) ? current : scraped.Trim();
 
     private async Task DownloadImagesAsync(VideoItem item, VideoScrapeMetadata meta, CancellationToken ct)
@@ -748,6 +793,7 @@ public sealed class JavDbScraper : IVideoScraper
         var detailUrl = detailPath.StartsWith("http") ? detailPath : _baseUrl + detailPath;
         var html = await _http.GetStringAsync(detailUrl, ct);
         var root = parser.ParseDocument(html);
+        if (root is null) return null;
 
         string Text(string selector)
         {
@@ -818,7 +864,7 @@ public sealed class JavDbScraper : IVideoScraper
         metadata.HasMagnet = true;
         metadata.HasChineseSubtitle =
             root.QuerySelector(".tag-can-play.cnsub, .tag-cnsub") is not null
-            || root.TextContent.Contains("含中字", StringComparison.OrdinalIgnoreCase);
+            || (root.TextContent ?? "").Contains("含中字", StringComparison.OrdinalIgnoreCase);
 
         foreach (var a in root.QuerySelectorAll("a.tile-item[href*=\"c0.jdbstatic.com/samples\"], a.tile-item"))
         {

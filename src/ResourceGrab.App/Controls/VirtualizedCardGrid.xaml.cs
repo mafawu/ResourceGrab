@@ -4,11 +4,14 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using ResourceGrab.Core.Logging;
+using ResourceGrab.App.Common;
 
 namespace ResourceGrab.App.Controls;
 
 public partial class VirtualizedCardGrid : UserControl
 {
+        private static ILogger? Logger => App.Services?.GetService(typeof(ILogger)) as ILogger;
     public static readonly DependencyProperty ItemsSourceProperty = DependencyProperty.Register(
         nameof(ItemsSource), typeof(IEnumerable), typeof(VirtualizedCardGrid),
         new PropertyMetadata(null, OnItemsSourceChanged));
@@ -137,7 +140,17 @@ public partial class VirtualizedCardGrid : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             _rebuildScheduled = false;
-            RebuildRows();
+            try
+            {
+                using (RecursionGuard.Enter("RebuildRows"))
+                {
+                    RebuildRows();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.Error("[VirtualizedCardGrid] RebuildRows 异常（疑似无限递归，已拦截）", ex);
+            }
         });
     }
 

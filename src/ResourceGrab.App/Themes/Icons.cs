@@ -47,5 +47,6 @@ public static class Icons
     public static Geometry ChevronDown => G("M 6 10 L 12 16 L 18 10");
     public static Geometry History => G("M 12 4 A 8 8 0 1 1 4.5 8.5 M 12 8 L 12 12 L 15.5 14");
     public static Geometry TaskProgress => G("M 4 6 L 20 6 M 4 12 L 14 12 M 4 18 L 17 18 M 17.5 15.5 L 19.5 17.5 L 22 13");
+    public static Geometry User => G("M12 12 m-4 0 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M5 21 a7 7 0 0 1 14 0");
     public static Geometry FolderPlus => G("M 3 7 L 10 7 L 12 9 L 21 9 L 21 19 L 3 19 Z M 3 7 L 3 5.5 L 10 5.5 L 12 7.5 L 21 7.5 M 12 12 L 12 16 M 10 14 L 14 14");
 }

@@ -1,0 +1,29 @@
+<UserControl x:Class="ResourceGrab.App.Views.ActorProfileView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Button x:Name="BackButton" Content="← 返回" HorizontalAlignment="Left"
+                Style="{StaticResource LibraryActionButtonStyle}" Margin="0,0,0,10" />
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="960" Margin="0,0,12,0">
+                <Image x:Name="Avatar" Width="120" Height="120" Stretch="UniformToFill"
+                       Margin="0,0,0,10" Visibility="Collapsed" />
+                <TextBlock x:Name="NameText" FontSize="20" FontWeight="Bold" />
+                <WrapPanel x:Name="AliasWrap" Margin="0,6,0,0" />
+                <TextBlock x:Name="InfoText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" Margin="0,8,0,0" />
+                <TextBlock Text="本地作品" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                <WrapPanel x:Name="WorksWrap" />
+                <TextBlock Text="在线资料" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                <TextBlock x:Name="OnlineText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" />
+                <WrapPanel x:Name="SourceWrap" Margin="0,8,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

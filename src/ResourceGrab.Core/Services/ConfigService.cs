@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ResourceGrab.Core.Models;
+using ResourceGrab.Core.Services.VideoScrape;
 
 namespace ResourceGrab.Core.Services;
 
@@ -63,6 +64,7 @@ public class ConfigService
             config.TitleTranslate ??= new TitleTranslateOptions();
             config.ReaderScrollSpeed = NormalizeScrollSpeed(config.ReaderScrollSpeed);
             config.VideoScraping ??= new VideoScrapeSettings();
+            config.VideoScraping.Advanced ??= new VideoScrapeAdvancedSettings();
             config.Manga ??= new MangaSettings();
             config.VideoPlayback = NormalizeVideoPlayback(config.VideoPlayback);
             config.General = NormalizeGeneral(config.General, config.DownloadDir);
@@ -134,6 +136,7 @@ public class ConfigService
                 JavDbBaseUrl = scraping.JavDbBaseUrl,
                 JavDbCookie = scraping.JavDbCookie,
                 AiravEnabled = scraping.AiravEnabled,
+                Advanced = scraping.Advanced,
             },
             TitleTranslate = new TitleTranslateOptions
             {

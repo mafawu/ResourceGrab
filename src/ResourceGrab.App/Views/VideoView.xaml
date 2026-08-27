@@ -1,4 +1,4 @@
-<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.VideoView"
+﻿<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.VideoView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
@@ -145,13 +145,13 @@
                 </Grid>
 
                 <!-- 推荐页（占位） -->
-                <StackPanel x:Name="RecommendPage" Visibility="Collapsed"
-                            VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="推荐功能开发中" FontSize="16" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextSecondaryBrush}" />
-                </StackPanel>
+                <views:VideoRecommendView x:Name="RecommendPage" Visibility="Collapsed" />
 
                 <!-- 本地页：左侧卡片 + 右侧筛选边栏 -->
+                <!-- 刮削任务页 -->
+                <views:VideoTaskDashboard x:Name="TaskPage" Visibility="Collapsed" />
+                <views:ActorListView x:Name="ActorListPage" Visibility="Collapsed" />
+                <views:ActorProfileView x:Name="ActorPage" Visibility="Collapsed" />
                 <Grid x:Name="LocalPage" Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -310,6 +310,7 @@
                                 <WrapPanel x:Name="ActorRecommends" />
                                 <TextBlock x:Name="RelatedRecommendHeader" Text="相关推荐" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
                                 <WrapPanel x:Name="RelatedRecommends" />
+                                <controls:ScrapeReportPanel x:Name="ScrapeReportPanel" Margin="0,16,0,0" />
                                 <TextBlock x:Name="ReviewHeader" Text="短评" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
                                 <StackPanel x:Name="ReviewHost" />
                             </StackPanel>
