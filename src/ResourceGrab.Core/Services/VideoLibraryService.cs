@@ -64,11 +64,18 @@ public class VideoLibraryService
     private List<VideoItem> _items;
     private readonly object _lock = new();
     private int _dataVersion;
+    private bool _pendingSave;
+    private DateTime _lastThrottledSaveAt = DateTime.MinValue;
     private readonly List<string> _rootFolders;
     private readonly ILogger? _logger;
     private readonly ScrapeReportService? _reportService;
 
     public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger = null)
+        : this(filePath, legacyFilePath, logger, null)
+    {
+    }
+
+    public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger, ScrapeReportService? reportService)
     {
         _filePath = filePath;
         _legacyFilePath = legacyFilePath;
@@ -76,7 +83,7 @@ public class VideoLibraryService
         _items = LoadWithMigration();
         _dataVersion = 1;
         _rootFolders = LoadRootFolders();
-        _reportService = new ScrapeReportService(logger);
+        _reportService = reportService ?? new ScrapeReportService(logger);
         if (_rootFolders.Count == 0 && File.Exists(_legacyFilePath))
             SeedRootsFromLegacy();
         _logger?.Info($"[VideoLibrary] 已加载 {_items.Count} 条记录 ({Path.GetFileName(_filePath)})");
@@ -251,37 +258,75 @@ public class VideoLibraryService
         target.SourceUrls = source.SourceUrls;
     }
 
-    public void Update(VideoItem item)
+    public void Update(VideoItem item) => Update(item, deferSave: false);
+
+    /// <summary>deferSave=true 时延迟去抖保存，供刮削等批量写入方避免每条整文件重写；批末调用 Flush() 落盘。</summary>
+    public void Update(VideoItem item, bool deferSave)
     {
-        var idx = _items.FindIndex(i => (!string.IsNullOrEmpty(item.Id) && i.Id == item.Id)
-                 || (!string.IsNullOrEmpty(item.FilePath) && string.Equals(i.FilePath, item.FilePath, StringComparison.OrdinalIgnoreCase)));
-        if (idx < 0) return;
-        if (string.IsNullOrEmpty(item.Id)) item.Id = _items[idx].Id;
-        _items[idx] = item;
-        Interlocked.Increment(ref _dataVersion);
-        Save();
+        lock (_lock)
+        {
+            var idx = _items.FindIndex(i => (!string.IsNullOrEmpty(item.Id) && i.Id == item.Id)
+                     || (!string.IsNullOrEmpty(item.FilePath) && string.Equals(i.FilePath, item.FilePath, StringComparison.OrdinalIgnoreCase)));
+            if (idx < 0) return;
+            if (string.IsNullOrEmpty(item.Id)) item.Id = _items[idx].Id;
+            _items[idx] = item;
+            Interlocked.Increment(ref _dataVersion);
+            if (deferSave) SaveThrottledLocked();
+            else SaveCore(_items);
+        }
+    }
+
+    /// <summary>批量写入方批末调用；若有未落盘的延迟保存则立即写盘。</summary>
+    public void Flush()
+    {
+        lock (_lock)
+        {
+            if (!_pendingSave) return;
+            _pendingSave = false;
+            SaveCore(_items);
+        }
+    }
+
+    /// <summary>仅在 _lock 内调用；批内最多约 1.5 秒写一次盘。</summary>
+    private void SaveThrottledLocked()
+    {
+        _pendingSave = true;
+        if (DateTime.UtcNow - _lastThrottledSaveAt < TimeSpan.FromMilliseconds(1500)) return;
+        _lastThrottledSaveAt = DateTime.UtcNow;
+        _pendingSave = false;
+        SaveCore(_items);
     }
 
     public void Remove(string id)
     {
-        var count = _items.RemoveAll(i => i.Id == id);
-        if (count > 0) _logger?.Info($"[VideoLibrary] 移除记录 {id}");
-        Interlocked.Increment(ref _dataVersion);
+        lock (_lock)
+        {
+            var count = _items.RemoveAll(i => i.Id == id);
+            if (count > 0) _logger?.Info($"[VideoLibrary] 移除记录 {id}");
+            Interlocked.Increment(ref _dataVersion);
+        }
         Save();
     }
 
     public int RemoveMany(IEnumerable<string> ids)
     {
-        var idSet = ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (idSet.Count == 0) return 0;
-        var count = _items.RemoveAll(i => idSet.Contains(i.Id));
-        Interlocked.Increment(ref _dataVersion);
+        int count;
+        lock (_lock)
+        {
+            var idSet = ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (idSet.Count == 0) return 0;
+            count = _items.RemoveAll(i => idSet.Contains(i.Id));
+            Interlocked.Increment(ref _dataVersion);
+        }
         Save();
         _logger?.Info($"[VideoLibrary] 批量移除记录 {count} 条");
         return count;
     }
 
-    public VideoItem? GetById(string id) => _items.FirstOrDefault(i => i.Id == id);
+    public VideoItem? GetById(string id)
+    {
+        lock (_lock) return _items.FirstOrDefault(i => i.Id == id);
+    }
 
     public bool ToggleFavorite(string itemId)
     {
@@ -635,16 +680,19 @@ public class VideoLibraryService
 
     private void SaveCore(List<VideoItem> items)
     {
-        try
+        lock (_lock)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
-            var temp = _filePath + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(items, JsonOptions));
-            File.Move(temp, _filePath, true);
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("[VideoLibrary] 保存视频库失败", ex);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+                var temp = _filePath + ".tmp";
+                File.WriteAllText(temp, JsonSerializer.Serialize(items, JsonOptions));
+                File.Move(temp, _filePath, true);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("[VideoLibrary] 保存视频库失败", ex);
+            }
         }
     }
 

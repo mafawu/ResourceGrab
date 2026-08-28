@@ -32,16 +32,20 @@ public partial class VideoTaskDashboard : UserControl
         // 尝试获取任务队列
         try { _taskQueue = App.Services.GetRequiredService<VideoScrapeTaskQueue>(); } catch { }
 
-        // 启动定时刷新
+        // 队列事件即时刷新；计时器仅兜底刷新运行耗时。
+        if (_taskQueue != null) _taskQueue.ProgressChanged += OnQueueProgressChanged;
         _refreshTimer = new System.Threading.Timer(_ => Dispatcher.BeginInvoke(Refresh), null,
             TimeSpan.Zero, TimeSpan.FromMilliseconds(800));
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged;
         _refreshTimer?.Dispose();
         _refreshTimer = null;
     }
+
+    private void OnQueueProgressChanged(VideoTaskProgress _) => Dispatcher.BeginInvoke(Refresh);
 
     private void Refresh()
     {
@@ -73,19 +77,22 @@ public partial class VideoTaskDashboard : UserControl
         EmptyState.Visibility = allTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TaskListPanel.Visibility = allTasks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Rebuild task list only if count changed
-        if (TaskListPanel.Children.Count != allTasks.Count)
+        // 行与任务按 Id 严格对应：集合变化才整列重建，否则原地更新。
+        var ordered = allTasks.OrderByDescending(t => t.CreatedAt).ToList();
+        var currentIds = TaskListPanel.Children.OfType<FrameworkElement>()
+            .Select(e => e.Tag as string ?? "")
+            .ToList();
+        var targetIds = ordered.Select(t => t.Id).ToList();
+        if (!currentIds.SequenceEqual(targetIds))
         {
             TaskListPanel.Children.Clear();
-            foreach (var task in allTasks.OrderByDescending(t => t.CreatedAt))
+            foreach (var task in ordered)
             {
                 TaskListPanel.Children.Add(BuildTaskRow(task));
             }
         }
         else
         {
-            // Update existing rows
-            var ordered = allTasks.OrderByDescending(t => t.CreatedAt).ToList();
             for (var i = 0; i < ordered.Count && i < TaskListPanel.Children.Count; i++)
             {
                 UpdateTaskRow((FrameworkElement)TaskListPanel.Children[i], ordered[i]);
@@ -149,13 +156,22 @@ public partial class VideoTaskDashboard : UserControl
         infoPanel.Children.Add(numberText);
         infoPanel.Children.Add(metaPanel);
 
-        // 操作按钮
+        // 操作按钮：handler 只在 BuildTaskRow 挂一次，动作按 Tag 里绑定的任务动态决定，
+        // 避免 UpdateTaskRow 每次刷新重复订阅。
         var actionButton = new Button
         {
             Style = (Style)FindResource("GhostButtonStyle"),
             FontSize = 11, Padding = new Thickness(8, 3, 8, 3),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
+        };
+        actionButton.Click += (_, _) =>
+        {
+            if (actionButton.Tag is not VideoScrapeTask t) return;
+            if (t.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry or VideoTaskStatus.Running)
+                _taskQueue?.Cancel(t.Id);
+            else if (t.Status == VideoTaskStatus.Failed)
+                RetryTask(t);
         };
 
         Grid.SetColumn(statusDot, 0);
@@ -166,6 +182,31 @@ public partial class VideoTaskDashboard : UserControl
         row1.Children.Add(actionButton);
 
         outerStack.Children.Add(row1);
+
+        // 第二行：批内进度与计数
+        var progressRow = new Grid { Margin = new Thickness(20, 8, 0, 0) };
+        progressRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        progressRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        progressRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var progressBar = new ProgressBar
+        {
+            Height = 4,
+            Minimum = 0,
+            Maximum = 100,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var progressText = new TextBlock
+        {
+            FontSize = 11,
+            Foreground = (Brush)FindResource("TextSecondaryBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(progressBar, 0);
+        Grid.SetColumn(progressText, 2);
+        progressRow.Children.Add(progressBar);
+        progressRow.Children.Add(progressText);
+        outerStack.Children.Add(progressRow);
 
         // 第二行：错误信息或源尝试详情（可选）
         var detailText = new TextBlock
@@ -191,7 +232,8 @@ public partial class VideoTaskDashboard : UserControl
         if (outerStack.Children.Count < 1) return;
 
         var row1 = outerStack.Children[0] as Grid;
-        var detailText = outerStack.Children.Count > 1 ? outerStack.Children[1] as TextBlock : null;
+        var progressRow = outerStack.Children.Count > 1 ? outerStack.Children[1] as Grid : null;
+        var detailText = outerStack.Children.Count > 2 ? outerStack.Children[2] as TextBlock : null;
         if (row1 is null) return;
 
         var statusDot = row1.Children[0] as Border;
@@ -254,6 +296,22 @@ public partial class VideoTaskDashboard : UserControl
             timeText.Foreground = (Brush)FindResource("TextSecondaryBrush");
         }
 
+        // 批内进度
+        if (progressRow != null && progressRow.Children.Count >= 2)
+        {
+            if (progressRow.Children[0] is ProgressBar progressBar)
+            {
+                progressBar.Visibility = task.Total > 0 ? Visibility.Visible : Visibility.Collapsed;
+                progressBar.Value = task.Total > 0 ? task.Completed * 100.0 / task.Total : 0;
+            }
+            if (progressRow.Children[1] is TextBlock progressText)
+            {
+                progressText.Text = task.Total > 0
+                    ? $"{task.Completed}/{task.Total} · 成功{task.SuccessCount} 未匹配{task.NoMatchCount} 失败{task.FailedCount} 跳过{task.SkippedCount}"
+                    : "等待执行";
+            }
+        }
+
         // 详情行：错误信息或源尝试
         if (detailText is not null)
         {
@@ -272,13 +330,20 @@ public partial class VideoTaskDashboard : UserControl
                 detailText.Foreground = (Brush)FindResource("TextSecondaryBrush");
                 detailText.Visibility = Visibility.Visible;
             }
+            else if (task.Logs.Count > 0)
+            {
+                detailText.Text = string.Join("  ·  ", task.Logs.Take(3));
+                detailText.Foreground = (Brush)FindResource("TextSecondaryBrush");
+                detailText.Visibility = Visibility.Visible;
+            }
             else
             {
                 detailText.Visibility = Visibility.Collapsed;
             }
         }
 
-        // 操作按钮
+        // 操作按钮：文字/可见性随状态变化，动作读 Tag 中的任务。
+        actionButton.Tag = task;
         actionButton.Content = task.Status switch
         {
             VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry or VideoTaskStatus.Running => "取消",
@@ -288,16 +353,16 @@ public partial class VideoTaskDashboard : UserControl
         actionButton.Visibility = task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry
             or VideoTaskStatus.Running or VideoTaskStatus.Failed
             ? Visibility.Visible : Visibility.Collapsed;
-
-        // 避免重复注册
-        actionButton.Click -= OnTaskAction;
-        if (task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry or VideoTaskStatus.Running)
-            actionButton.Click += (_, _) => _taskQueue?.Cancel(task.Id);
-        else if (task.Status == VideoTaskStatus.Failed)
-            actionButton.Click += (_, _) => _taskQueue?.Enqueue(task.Number, task.Type, task.VideoItemId);
     }
 
-    private void OnTaskAction(object sender, RoutedEventArgs e) { }
+    private void RetryTask(VideoScrapeTask task)
+    {
+        if (_taskQueue is null) return;
+        if (task.ItemIds is { Count: > 0 } ids)
+            _taskQueue.EnqueueBatchTask(ids, task.Type, task.Number);
+        else
+            _taskQueue.Enqueue(task.Number, task.Type, task.VideoItemId);
+    }
     private void RetryFailed_Click(object sender, RoutedEventArgs e)
     {
         if (_taskQueue is null) return;
@@ -305,9 +370,7 @@ public partial class VideoTaskDashboard : UserControl
             .Where(t => t.Status == VideoTaskStatus.Failed)
             .ToList();
         foreach (var task in failed)
-        {
-            _taskQueue.Enqueue(task.Number, task.Type, task.VideoItemId);
-        }
+            RetryTask(task);
         ToastService.Show($"已重新入队 {failed.Count} 个失败任务", ToastKind.Info);
     }
 

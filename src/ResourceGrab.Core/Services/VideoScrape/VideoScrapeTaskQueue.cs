@@ -6,12 +6,13 @@ namespace ResourceGrab.Core.Services.VideoScrape;
 
 // ---------------------------------------------------------------------------
 // M5: 视频刮削任务队列
-// 支持取消、重试、优先级排序、进度事件、批量刮削
+// 支持取消（含运行中）、重试、优先级排序、进度事件、批量刮削
 // ---------------------------------------------------------------------------
 
 public sealed class VideoScrapeTaskQueue : IDisposable
 {
     private readonly ConcurrentDictionary<string, VideoScrapeTask> _tasks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Channel<VideoScrapeTask> _channel;
     private readonly ILogger? _logger;
     private readonly int _maxConcurrency;
@@ -36,16 +37,21 @@ public sealed class VideoScrapeTaskQueue : IDisposable
         });
     }
 
+    /// <summary>已完结任务在字典中的保留上限（超出后裁掉最旧的，只保留最近 100 条）。</summary>
+    private const int MaxFinishedTasks = 100;
+
     /// <summary>入队单个任务。</summary>
     public string Enqueue(string number, VideoTaskType type = VideoTaskType.ScrapeVideo,
         string? videoItemId = null, int priority = 0)
     {
+        PruneFinishedTasks();
         var task = new VideoScrapeTask
         {
             Id = Guid.NewGuid().ToString("N")[..12],
             Type = type,
             Number = number,
             VideoItemId = videoItemId,
+            Total = 1,
             Priority = priority
         };
         _tasks[task.Id] = task;
@@ -57,12 +63,14 @@ public sealed class VideoScrapeTaskQueue : IDisposable
     /// <summary>批量入队为单个任务（ScrapeAsync 一次性处理全部）。</summary>
     public string EnqueueBatchTask(List<string> ids, VideoTaskType type = VideoTaskType.ScrapeVideo, string? title = null, int priority = 0)
     {
+        PruneFinishedTasks();
         var task = new VideoScrapeTask
         {
             Id = Guid.NewGuid().ToString("N")[..12],
             Type = type,
             Number = title ?? $"{ids.Count} 个",
             ItemIds = ids,
+            Total = ids.Count,
             Priority = priority
         };
         _tasks[task.Id] = task;
@@ -83,10 +91,12 @@ public sealed class VideoScrapeTaskQueue : IDisposable
         return ids;
     }
 
-    /// <summary>取消指定任务。</summary>
+    /// <summary>取消指定任务，运行中的任务通过共享 CancellationToken 中断。</summary>
     public bool Cancel(string taskId)
     {
-        if (_tasks.TryGetValue(taskId, out var task) && task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry)
+        if (!_tasks.TryGetValue(taskId, out var task)) return false;
+
+        if (task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry)
         {
             task.Status = VideoTaskStatus.Cancelled;
             task.CompletedAt = DateTimeOffset.UtcNow;
@@ -94,20 +104,44 @@ public sealed class VideoScrapeTaskQueue : IDisposable
             PublishProgress();
             return true;
         }
+
+        if (task.Status == VideoTaskStatus.Running && _taskCts.TryGetValue(taskId, out var cts))
+        {
+            cts.Cancel();
+            _logger?.Info($"[TaskQueue] 取消运行中任务: {taskId} {task.Number}");
+            PublishProgress();
+            return true;
+        }
+
         return false;
     }
 
-    /// <summary>取消所有任务。</summary>
+    /// <summary>取消所有任务；只中断当前任务，不停止后续队列消费。</summary>
     public void CancelAll()
     {
-        _globalCts?.Cancel();
-        foreach (var task in _tasks.Values.Where(t => t.Status is VideoTaskStatus.Pending or VideoTaskStatus.Running))
+        foreach (var cts in _taskCts.Values) cts.Cancel();
+        foreach (var task in _tasks.Values.Where(t => t.Status is VideoTaskStatus.Pending or VideoTaskStatus.Running or VideoTaskStatus.WaitingRetry))
         {
             task.Status = VideoTaskStatus.Cancelled;
             task.CompletedAt = DateTimeOffset.UtcNow;
         }
         _logger?.Info("[TaskQueue] 全部取消");
         PublishProgress();
+    }
+
+    /// <summary>裁掉最旧的已完结任务，防止 _tasks 字典随长期运行无限膨胀。</summary>
+    private void PruneFinishedTasks()
+    {
+        if (_tasks.Count <= MaxFinishedTasks * 2) return;
+        var staleIds = _tasks.Values
+            .Where(t => t.Status is VideoTaskStatus.Completed or VideoTaskStatus.Failed or VideoTaskStatus.Cancelled or VideoTaskStatus.Skipped)
+            .OrderByDescending(t => t.CompletedAt ?? t.CreatedAt)
+            .Skip(MaxFinishedTasks)
+            .Select(t => t.Id)
+            .ToList();
+        foreach (var id in staleIds) _tasks.TryRemove(id, out _);
+        if (staleIds.Count > 0)
+            _logger?.Info($"[TaskQueue] 清理 {staleIds.Count} 条已完结历史任务");
     }
 
     /// <summary>获取任务状态。</summary>
@@ -129,6 +163,8 @@ public sealed class VideoScrapeTaskQueue : IDisposable
                 if (_globalCts.Token.IsCancellationRequested) break;
 
                 await _concurrencyGate.WaitAsync(_globalCts.Token);
+                var taskCts = CancellationTokenSource.CreateLinkedTokenSource(_globalCts.Token);
+                _taskCts[task.Id] = taskCts;
                 _ = Task.Run(async () =>
                 {
                     try
@@ -138,7 +174,10 @@ public sealed class VideoScrapeTaskQueue : IDisposable
                         Interlocked.Increment(ref _runningCount);
                         PublishProgress();
 
-                        await processAsync(task, _globalCts.Token);
+                        if (taskCts.IsCancellationRequested)
+                            throw new OperationCanceledException(taskCts.Token);
+
+                        await processAsync(task, taskCts.Token);
 
                         if (task.Status == VideoTaskStatus.Running)
                         {
@@ -176,11 +215,13 @@ public sealed class VideoScrapeTaskQueue : IDisposable
                     }
                     finally
                     {
+                        _taskCts.TryRemove(task.Id, out _);
+                        taskCts.Dispose();
                         Interlocked.Decrement(ref _runningCount);
                         _concurrencyGate.Release();
                         PublishProgress();
                     }
-                }, _globalCts.Token);
+                }, CancellationToken.None);
             }
         }, _globalCts.Token);
 
@@ -209,10 +250,14 @@ public sealed class VideoScrapeTaskQueue : IDisposable
         };
     }
 
+    /// <summary>执行器回填进度后通知 UI 刷新。</summary>
+    public void NotifyTaskProgress() => PublishProgress();
+
     private void PublishProgress() => ProgressChanged?.Invoke(GetProgress());
 
     public void Dispose()
     {
+        foreach (var cts in _taskCts.Values) cts.Cancel();
         _globalCts?.Cancel();
         _globalCts?.Dispose();
         _concurrencyGate.Dispose();

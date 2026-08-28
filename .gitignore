@@ -16,3 +16,8 @@ release/
 config/
 /docs
 /tests
+
+# Local tooling state and reference copies
+.ref/
+.workbuddy/
+.zcode/

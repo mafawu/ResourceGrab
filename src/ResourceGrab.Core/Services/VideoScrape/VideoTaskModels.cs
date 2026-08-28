@@ -44,6 +44,17 @@ public sealed class VideoScrapeTask
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public List<string>? ItemIds { get; set; }
+
+    /// <summary>批次任务的总条目数；单任务固定为 1。</summary>
+    public int Total { get; set; }
+
+    /// <summary>执行器实时回填的批内进度。</summary>
+    public int Completed { get; set; }
+    public int SuccessCount { get; set; }
+    public int NoMatchCount { get; set; }
+    public int FailedCount { get; set; }
+    public int SkippedCount { get; set; }
+    public List<string> Logs { get; set; } = [];
 }
 
 public sealed class VideoScrapeFollowUp

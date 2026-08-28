@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
@@ -11,18 +12,31 @@ namespace ResourceGrab.Core.Services;
 
 public sealed class VideoScrapeProgress(int total)
 {
+    private readonly object _lock = new();
     public int Total { get; set; } = total;
-    public int Completed { get; set; }
-    public int SuccessCount { get; set; }
-    public int NoMatchCount { get; set; }
-    public int FailedCount { get; set; }
+    public int Completed { get; private set; }
+    public int SuccessCount { get; private set; }
+    public int NoMatchCount { get; private set; }
+    public int FailedCount { get; private set; }
+    public int SkippedCount { get; private set; }
     public List<string> Logs { get; } = [];
     public event Action<VideoScrapeProgress>? Changed;
     public void Publish() => Changed?.Invoke(this);
+
+    // 条级并行下多个 worker 同时计数，全部经锁串行化。
+    public void RecordSuccess() { lock (_lock) { Completed++; SuccessCount++; } }
+    public void RecordNoMatch() { lock (_lock) { Completed++; NoMatchCount++; } }
+    public void RecordFailed() { lock (_lock) { Completed++; FailedCount++; } }
+    public void RecordSkipped() { lock (_lock) { Completed++; SkippedCount++; } }
+    public void AddSkipped(int count) { lock (_lock) { Completed += count; SkippedCount += count; } }
+
     public void Log(string message)
     {
-        Logs.Insert(0, $"{DateTime.Now:T} {message}");
-        if (Logs.Count > 20) Logs.RemoveAt(Logs.Count - 1);
+        lock (_lock)
+        {
+            Logs.Insert(0, $"{DateTime.Now:T} {message}");
+            if (Logs.Count > 20) Logs.RemoveAt(Logs.Count - 1);
+        }
         Publish();
     }
 }
@@ -32,10 +46,13 @@ public sealed class VideoScrapeHttpClient : IDisposable
     private readonly HttpClient _client;
 
     internal HttpClient Client => _client;
-    private readonly SemaphoreSlim _gate = new(2, 2);
+    private readonly SemaphoreSlim _gate;
     private readonly int _concurrency;
     private readonly int _intervalMs;
-    private DateTime _nextRequestAt = DateTime.MinValue;
+    private readonly string? _proxy;
+    private readonly string _javBusCookie = "";
+    // 三个源各自独立限流，互不占用车道。
+    private readonly ConcurrentDictionary<string, DateTime> _nextRequestByHost = new();
 
     public VideoScrapeHttpClient(VideoScrapeSettings settings)
     {
@@ -50,25 +67,30 @@ public sealed class VideoScrapeHttpClient : IDisposable
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
         _client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         _client.DefaultRequestHeaders.AcceptLanguage.TryParseAdd("zh-CN,zh;q=0.9,en-US;q=0.8,ja;q=0.7");
-        _client.DefaultRequestHeaders.Referrer = new Uri("https://www.javbus.com/");
-        if (!string.IsNullOrWhiteSpace(settings.JavBusCookie))
-            _client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", settings.JavBusCookie);
+        // JavBus 的 Referrer/Cookie 只能发给 JavBus，放在默认头上会泄漏给其他源。
+        _javBusCookie = settings.JavBusCookie ?? "";
+        _proxy = string.IsNullOrWhiteSpace(settings.Proxy) ? null : settings.Proxy;
         _concurrency = Math.Clamp(settings.Concurrency, 1, 8);
         _gate = new SemaphoreSlim(_concurrency, _concurrency);
         _intervalMs = Math.Clamp(settings.RequestIntervalMs, 0, 10_000);
     }
+
+    internal string? Proxy => _proxy;
 
     public async Task<string> GetStringAsync(string url, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
         {
-            await DelayAsync(ct);
+            await DelayAsync(GetHost(url), ct);
             for (var attempt = 0; ; attempt++)
             {
                 try
                 {
-                    return await _client.GetStringAsync(url, ct);
+                    using var request = CreateRequest(url);
+                    using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsStringAsync(ct);
                 }
                 catch when (attempt < 2)
                 {
@@ -84,23 +106,48 @@ public sealed class VideoScrapeHttpClient : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            await DelayAsync(ct);
+            await DelayAsync(GetHost(url), ct);
             for (var attempt = 0; ; attempt++)
             {
-                try { return await _client.GetByteArrayAsync(url, ct); }
+                try
+                {
+                    using var request = CreateRequest(url);
+                    using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsByteArrayAsync(ct);
+                }
                 catch when (attempt < 2) { await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct); }
             }
         }
         finally { _gate.Release(); }
-
     }
 
-    private async Task DelayAsync(CancellationToken ct)
+    private HttpRequestMessage CreateRequest(string url)
     {
-        var waitAt = DateTime.UtcNow;
-        var remaining = _nextRequestAt - DateTime.UtcNow;
-        if (remaining > TimeSpan.Zero) await Task.Delay(remaining, ct);
-        _nextRequestAt = waitAt.AddMilliseconds(_intervalMs);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (url.Contains("javbus", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Headers.Referrer = new Uri("https://www.javbus.com/");
+            if (_javBusCookie.Length > 0)
+                request.Headers.TryAddWithoutValidation("Cookie", _javBusCookie);
+        }
+        return request;
+    }
+
+    private static string GetHost(string url)
+    {
+        try { return new Uri(url).Host; }
+        catch { return ""; }
+    }
+
+    private async Task DelayAsync(string host, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var next = _nextRequestByHost.AddOrUpdate(host,
+            now.AddMilliseconds(_intervalMs),
+            (_, prev) => prev > now ? prev.AddMilliseconds(_intervalMs) : now.AddMilliseconds(_intervalMs));
+        var wait = next - DateTime.UtcNow;
+        if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
     }
 
     public void Dispose() => _client.Dispose();
@@ -123,7 +170,7 @@ public sealed class JavBusScraper : IVideoScraper
 
     public async Task<VideoScrapeMetadata?> SearchAsync(string number, CancellationToken ct)
     {
-        var searchHtml = await _http.GetStringAsync($"{_baseUrl}/search/{Uri.EscapeDataString(number)}&type=1", ct);
+        var searchHtml = await _http.GetStringAsync($"{_baseUrl}/search/{Uri.EscapeDataString(number)}?type=1", ct);
         var parser = new HtmlParser();
         var doc = parser.ParseDocument(searchHtml);
         var first = doc.QuerySelector("a.movie-box");
@@ -222,7 +269,7 @@ public sealed class AiravScraper : IVideoScraper
     private readonly VideoScrapeHttpClient _http;
     private readonly string _baseUrl;
     private readonly string _origin;
-    private bool _preferCurl;
+    private volatile bool _preferCurl;
     public string Id => "airav";
     public string DisplayName { get; set; } = "AirAv";
 
@@ -264,18 +311,16 @@ public sealed class AiravScraper : IVideoScraper
             return await _http.GetStringAsync(url, ct);
         }
         catch (OperationCanceledException) { throw; }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Forbidden)
+        // 只有明确被拦截（403/429/503）才降级 curl；其他错误如实抛出，避免掩盖真实失败原因。
+        catch (HttpRequestException ex) when (
+            ex.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable)
         {
             _preferCurl = true;
             return await GetWithCurlAsync(url, ct);
         }
-        catch (Exception)
-        {
-            return await GetWithCurlAsync(url, ct);
-        }
     }
 
-    private static async Task<string> GetWithCurlAsync(string url, CancellationToken ct)
+    private async Task<string> GetWithCurlAsync(string url, CancellationToken ct)
     {
         try
         {
@@ -299,6 +344,11 @@ public sealed class AiravScraper : IVideoScraper
             psi.ArgumentList.Add("--retry");
             psi.ArgumentList.Add("3");
             psi.ArgumentList.Add("--retry-all-errors");
+            if (_http.Proxy is { } proxy)
+            {
+                psi.ArgumentList.Add("-x");
+                psi.ArgumentList.Add(proxy);
+            }
             psi.ArgumentList.Add("-A");
             psi.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
             psi.ArgumentList.Add("-H");
@@ -421,6 +471,9 @@ public sealed class VideoScrapeService : IDisposable
     private readonly AiravScraper _airav;
     private readonly ILogger? _logger;
     private readonly ScrapeReportService? _reportService;
+    private readonly DiskJsonSnapshotCache _cache;
+    /// <summary>来源快照缓存有效期：批内重试/重跑不再联网。</summary>
+    private static readonly TimeSpan SnapshotTtl = TimeSpan.FromDays(7);
     public event Action<VideoItem>? ItemChanged;
     public void Dispose() => _http.Dispose();
 
@@ -428,6 +481,7 @@ public sealed class VideoScrapeService : IDisposable
     {
         _library = library;
         _logger = logger;
+        _cache = new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, logger);
         _http = new VideoScrapeHttpClient(settings);
         _scraper = new JavBusScraper(_http, settings.JavBusBaseUrl ?? "");
         _javDb = new JavDbScraper(_http, settings.JavDbBaseUrl ?? "");
@@ -436,11 +490,17 @@ public sealed class VideoScrapeService : IDisposable
     }
 
     public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger)
+        : this(library, configService, logger, null)
+    {
+    }
+
+    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger, ScrapeReportService? reportService)
     {
         _library = library;
         _configService = configService;
         _logger = logger;
-        _reportService = new ScrapeReportService(logger);
+        _reportService = reportService ?? new ScrapeReportService(logger);
+        _cache = new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, logger);
         var initial = Settings;
         _http = new VideoScrapeHttpClient(initial);
         _scraper = new JavBusScraper(_http, initial.JavBusBaseUrl);
@@ -450,114 +510,184 @@ public sealed class VideoScrapeService : IDisposable
 
     private VideoScrapeSettings Settings => _configService?.Current.VideoScraping ?? new VideoScrapeSettings();
 
-    public async Task ScrapeAsync(IEnumerable<string> ids, Action<VideoScrapeProgress>? progressCallback, CancellationToken ct)
+    public async Task ScrapeAsync(IEnumerable<string> ids, Action<VideoScrapeProgress>? progressCallback, CancellationToken ct,
+        bool skipSucceeded = false)
     {
         var items = ids.Select(_library.GetById).Where(i => i != null).Cast<VideoItem>().ToList();
-        var progress = new VideoScrapeProgress(items.Count);
+        var alreadyDone = 0;
+        if (skipSucceeded)
+        {
+            alreadyDone = items.RemoveAll(i => i.ScrapeStatus == Models.ScrapeStatus.Success);
+            if (alreadyDone > 0)
+                _logger?.Info($"[Scrape] 跳过 {alreadyDone} 条已成功条目");
+        }
+        var progress = new VideoScrapeProgress(items.Count + alreadyDone);
         if (progressCallback != null) progress.Changed += progressCallback;
+        if (alreadyDone > 0)
+        {
+            progress.AddSkipped(alreadyDone);
+            progress.Log($"跳过 {alreadyDone} 条已成功条目");
+        }
         progress.Publish();
 
-        foreach (var item in items)
+        // 只有批量模式才允许走快照缓存与跳过逻辑；显式单条/重刮削强制联网拿最新数据。
+        var useCache = skipSucceeded;
+        var degree = Math.Clamp(Settings.Concurrency, 1, 4);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            if (item.Number.Length == 0)
+            var options = new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = ct };
+            await Parallel.ForEachAsync(items, options, async (item, token) => await ScrapeItemAsync(item, progress, useCache, token));
+        }
+        finally
+        {
+            _library.Flush();
+        }
+    }
+
+    private async Task ScrapeItemAsync(VideoItem item, VideoScrapeProgress progress, bool useCache, CancellationToken ct)
+    {
+        if (item.Number.Length == 0)
+        {
+            var reparsed = VideoNumberParser.Parse(item.FilePath, _logger);
+            if (reparsed.Number.Length > 0)
             {
-                var reparsed = VideoNumberParser.Parse(item.FilePath, _logger);
-                if (reparsed.Number.Length > 0)
+                item.Number = reparsed.Number;
+                item.Part = reparsed.Part;
+                _library.Update(item, deferSave: true);
+                progress.Log($"{item.FileName}: 重新解析番号 {item.Number}");
+                _logger?.Info($"[Scrape] {item.FileName} 番号为空，已重新解析为 {item.Number}");
+            }
+        }
+        if (item.Number.Length == 0)
+        {
+            item.ScrapeStatus = Models.ScrapeStatus.Skipped;
+            progress.RecordSkipped();
+            progress.Log($"{item.FileName}: 未识别番号");
+            _logger?.Warn($"[Scrape] 跳过 {item.FileName}: 未识别番号 (path={item.FilePath})");
+            _library.Update(item, deferSave: true);
+            ItemChanged?.Invoke(item);
+            progress.Publish();
+            return;
+        }
+        var attempts = new ConcurrentQueue<VideoSourceAttempt>();
+        try
+        {
+            async Task<VideoScrapeMetadata?> FetchAsync(IVideoScraper scraper, string sourceId, CancellationToken token)
+            {
+                if (useCache)
                 {
-                    item.Number = reparsed.Number;
-                    item.Part = reparsed.Part;
-                    _library.Update(item);
-                    progress.Log($"{item.FileName}: 重新解析番号 {item.Number}");
-                    _logger?.Info($"[Scrape] {item.FileName} 番号为空，已重新解析为 {item.Number}");
+                    try
+                    {
+                        var snapshot = await _cache.GetAsync(item.Number, sourceId);
+                        if (snapshot is not null && DateTimeOffset.UtcNow - snapshot.FetchedAt < SnapshotTtl)
+                        {
+                            attempts.Enqueue(new VideoSourceAttempt(sourceId, null, VideoSourceOutcome.CacheHit, "快照缓存命中", 0, DateTimeOffset.UtcNow));
+                            _logger?.Info($"[Scrape] {item.Number} {sourceId} 命中快照缓存");
+                            return snapshot.Metadata;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Warn($"[Scrape] {item.Number} {sourceId} 读取快照缓存失败: {ex.Message}");
+                    }
                 }
-            }
-            if (item.Number.Length == 0)
-            {
-                item.ScrapeStatus = Models.ScrapeStatus.Skipped;
-                progress.Completed++; progress.FailedCount++;
-                progress.Log($"{item.FileName}: 未识别番号");
-                _logger?.Warn($"[Scrape] 跳过 {item.FileName}: 未识别番号 (path={item.FilePath})");
-                continue;
-            }
-            try
-            {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var meta = await _scraper.SearchAsync(item.Number, ct);
-                _logger?.Info($"[Scrape] {item.Number} 搜索耗时 {sw.ElapsedMilliseconds}ms 命中={meta is not null}");
-
-                // 第二源：JavDB 补充中文标题、评分、短评、剧照（失败不影响主数据）
-                if (meta is not null)
+                try
                 {
-                    try
+                    var result = await scraper.SearchAsync(item.Number, token);
+                    attempts.Enqueue(result is null
+                        ? new VideoSourceAttempt(sourceId, null, VideoSourceOutcome.NoMatch, "未找到匹配条目", (int)sw.ElapsedMilliseconds, DateTimeOffset.UtcNow)
+                        : new VideoSourceAttempt(sourceId, null, VideoSourceOutcome.Success, null, (int)sw.ElapsedMilliseconds, DateTimeOffset.UtcNow));
+                    if (result is not null)
                     {
-                        var dbMeta = await _javDb.SearchAsync(item.Number, ct);
-                        if (dbMeta is not null)
+                        await _cache.SetAsync(new VideoSourceSnapshot
                         {
-                            MergeJavDb(item.Number, meta, dbMeta);
-                            _logger?.Info($"[Scrape] {item.Number} JavDB 补充: 评分={dbMeta.Score} 中文标题={!LooksJapanese(dbMeta.Title)} 短评={dbMeta.Reviews.Count}");
-                        }
+                            Number = item.Number,
+                            SourceId = sourceId,
+                            SchemaVersion = "v1",
+                            Metadata = result,
+                        });
                     }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception dbEx)
-                    {
-                        _logger?.Warn($"[Scrape] {item.Number} JavDB 获取失败: {dbEx.Message}");
-                    }
+                    _logger?.Info($"[Scrape] {item.Number} {sourceId} 耗时 {sw.ElapsedMilliseconds}ms 命中={result is not null}");
+                    return result;
                 }
-
-                // JavDB 很多条目没有中文译名；两个源当前也都不提供简介。
-                // AirAv 的 /cn 页面能补这两项，失败时保留 JavBus/JavDB 主数据。
-                if (Settings.AiravEnabled && meta is not null && (LooksJapanese(meta.Title) || meta.Description.Length == 0))
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
                 {
-                    try
-                    {
-                        var airavMeta = await _airav.SearchAsync(item.Number, ct);
-                        if (airavMeta is not null)
-                        {
-                            MergeAirav(meta, airavMeta);
-                            _logger?.Info($"[Scrape] {item.Number} AirAv 补充: 中文标题={!LooksJapanese(meta.Title)} 简介={meta.Description.Length > 0}");
-                        }
-                    }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception airavEx)
-                    {
-                        _logger?.Warn($"[Scrape] {item.Number} AirAv 获取失败: {airavEx.Message}");
-                    }
+                    attempts.Enqueue(new VideoSourceAttempt(sourceId, null, VideoSourceOutcome.HttpError, ex.Message, (int)sw.ElapsedMilliseconds, DateTimeOffset.UtcNow));
+                    _logger?.Warn($"[Scrape] {item.Number} {sourceId} 获取失败: {ex.Message}");
+                    return null;
                 }
+            }
 
-                if (meta is null)
+            // 主源与 JavDB 完全独立，并行抓取；AirAv 依赖合并结果，保持条件串行。
+            // 主源失败不再直接判定整条失败，JavDB/AirAv 仍可补全。
+            var busTask = FetchAsync(_scraper, "javbus", ct);
+            var dbTask = FetchAsync(_javDb, "javdb", ct);
+            await Task.WhenAll(busTask, dbTask);
+            var meta = busTask.Result;
+            var dbMeta = dbTask.Result;
+            if (dbMeta is not null)
+            {
+                if (meta is not null) MergeJavDb(item.Number, meta, dbMeta);
+                else meta = dbMeta;
+            }
+
+            if (Settings.AiravEnabled && (meta is null || LooksJapanese(meta.Title) || meta.Description.Length == 0))
+            {
+                var airavMeta = await FetchAsync(_airav, "airav", ct);
+                if (airavMeta is not null)
                 {
-                    item.ScrapeStatus = Models.ScrapeStatus.NoMatch;
-                    item.ScrapedAt = DateTime.UtcNow;
-                    progress.Completed++; progress.NoMatchCount++;
-                    progress.Log($"{item.Number}: 未匹配");
+                    if (meta is not null) MergeAirav(meta, airavMeta);
+                    else meta = airavMeta;
+                }
+            }
+
+            if (meta is null)
+            {
+                var hasErrors = attempts.Any(a => a.Outcome is VideoSourceOutcome.HttpError or VideoSourceOutcome.Blocked or VideoSourceOutcome.ParseError);
+                item.ScrapeStatus = hasErrors ? Models.ScrapeStatus.Failed : Models.ScrapeStatus.NoMatch;
+                item.ScrapedAt = DateTime.UtcNow;
+                if (hasErrors)
+                {
+                    progress.RecordFailed();
+                    progress.Log($"{item.Number}: 所有来源均失败");
                 }
                 else
                 {
-                    ApplyMetadata(item, meta);
-                    await DownloadImagesAsync(item, meta, ct);
-                if (Settings.WriteNfo) WriteNfo(item);
-                    item.ScrapeStatus = Models.ScrapeStatus.Success;
-                    item.ScrapeSource = meta.Source;
-                    item.ScrapedAt = DateTime.UtcNow;
-                    progress.Completed++; progress.SuccessCount++;
-                    progress.Log($"{item.Number}: 命中 {meta.Source}");
-                    _logger?.Info($"[Scrape] {item.Number} 成功 source={meta.Source} actors={meta.Actors.Count} tags={meta.Tags.Count}");
-                    SaveFieldSourcesReport(item, meta);
+                    progress.RecordNoMatch();
+                    progress.Log($"{item.Number}: 未匹配");
                 }
+                // 失败/未匹配同样落报告，报告面板才看得到失败原因。
+                SaveFailureReport(item, attempts);
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
+            else
             {
-                item.ScrapeStatus = Models.ScrapeStatus.Failed;
-                progress.Completed++; progress.FailedCount++;
-                progress.Log($"{item.Number}: {ex.Message}");
-                _logger?.Error($"[Scrape] {item.Number} 刮削失败", ex);
+                ApplyMetadata(item, meta);
+                await DownloadImagesAsync(item, meta, ct);
+                if (Settings.WriteNfo) WriteNfo(item);
+                item.ScrapeStatus = Models.ScrapeStatus.Success;
+                item.ScrapeSource = meta.Source;
+                item.ScrapedAt = DateTime.UtcNow;
+                progress.RecordSuccess();
+                var hits = string.Join("+", attempts.Where(a => a.Outcome is VideoSourceOutcome.Success or VideoSourceOutcome.CacheHit).Select(a => a.SourceId).Distinct());
+                progress.Log($"{item.Number}: 命中 {(hits.Length > 0 ? hits : meta.Source)}");
+                _logger?.Info($"[Scrape] {item.Number} 成功 source={meta.Source} actors={meta.Actors.Count} tags={meta.Tags.Count}");
+                SaveFieldSourcesReport(item, meta, attempts);
             }
-            _library.Update(item);
-            ItemChanged?.Invoke(item);
-            progress.Publish();
         }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            item.ScrapeStatus = Models.ScrapeStatus.Failed;
+            progress.RecordFailed();
+            progress.Log($"{item.Number}: {ex.Message}");
+            _logger?.Error($"[Scrape] {item.Number} 刮削失败", ex);
+            SaveFailureReport(item, attempts);
+        }
+        _library.Update(item, deferSave: true);
+        ItemChanged?.Invoke(item);
+        progress.Publish();
     }
 
     /// <summary>用 JavDB 数据补齐 JavBus 缺失的字段；不覆盖已有值。</summary>
@@ -647,7 +777,7 @@ public sealed class VideoScrapeService : IDisposable
     }
 
 
-    private void SaveFieldSourcesReport(VideoItem item, VideoScrapeMetadata meta)
+    private void SaveFieldSourcesReport(VideoItem item, VideoScrapeMetadata meta, IReadOnlyCollection<VideoSourceAttempt> attempts)
     {
         if (_reportService is null || string.IsNullOrEmpty(item.Id)) return;
         try
@@ -665,17 +795,16 @@ public sealed class VideoScrapeService : IDisposable
             if (!string.IsNullOrEmpty(meta.Studio)) fieldSources["studio"] = sourceId;
             if (meta.ReleaseDate.HasValue) fieldSources["releaseDate"] = sourceId;
 
-            var attempts = new List<VideoSourceAttempt>
-            {
-                new(sourceId, null, VideoSourceOutcome.Success, null, 0, DateTimeOffset.UtcNow)
-            };
+            var contributors = attempts.Where(a => a.Outcome is VideoSourceOutcome.Success or VideoSourceOutcome.CacheHit)
+                .Select(a => a.SourceId).Distinct().ToList();
+            if (contributors.Count > 0) sourceId = string.Join("+", contributors);
 
             var aggregate = new VideoScrapeAggregate
             {
                 Number = item.Number,
                 Metadata = meta,
                 FieldSources = fieldSources,
-                Attempts = attempts,
+                Attempts = attempts.ToList(),
             };
             _reportService.SaveReport(item.Id, aggregate);
                 _reportService.SaveMetadataByNumber(item.Number, item);
@@ -685,6 +814,25 @@ public sealed class VideoScrapeService : IDisposable
             _logger?.Warn($"[Scrape] {item.Number} 保存刮削报告失败: {ex.Message}");
         }
     }
+    /// <summary>失败/未匹配时仅落来源尝试记录，供报告面板展示失败原因。</summary>
+    private void SaveFailureReport(VideoItem item, IReadOnlyCollection<VideoSourceAttempt> attempts)
+    {
+        if (_reportService is null || string.IsNullOrEmpty(item.Id)) return;
+        try
+        {
+            _reportService.SaveReport(item.Id, new VideoScrapeAggregate
+            {
+                Number = item.Number,
+                Metadata = new VideoScrapeMetadata { Source = "none" },
+                Attempts = attempts.ToList(),
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[Scrape] {item.Number} 保存失败报告异常: {ex.Message}");
+        }
+    }
+
     private static string Pick(string scraped, string current) => string.IsNullOrWhiteSpace(scraped) ? current : scraped.Trim();
 
     private async Task DownloadImagesAsync(VideoItem item, VideoScrapeMetadata meta, CancellationToken ct)
@@ -705,27 +853,36 @@ public sealed class VideoScrapeService : IDisposable
         }
 
         var existing = new HashSet<string>(item.PreviewImages, StringComparer.OrdinalIgnoreCase);
-        var downloadedCount = 0;
-        foreach (var url in meta.PreviewSourceUrls.Count > 0 ? meta.PreviewSourceUrls : meta.PreviewImageUrls)
+        var candidates = (meta.PreviewSourceUrls.Count > 0 ? meta.PreviewSourceUrls : meta.PreviewImageUrls)
+            .Where(url => !existing.Contains(url))
+            .Take(Math.Max(0, 10 - item.PreviewImages.Count))
+            .ToList();
+        if (candidates.Count == 0) return;
+
+        // 剧照并行下载；按序号预分配文件名，完成后按顺序回填。
+        var downloaded = new string?[candidates.Count];
+        var options = new ParallelOptions { MaxDegreeOfParallelism = 3, CancellationToken = ct };
+        await Parallel.ForEachAsync(Enumerable.Range(0, candidates.Count), options, async (i, token) =>
         {
-            if (existing.Contains(url)) continue;
-            if (downloadedCount >= Math.Max(0, 10 - item.PreviewImages.Count)) break;
             try
             {
-                using var response = await _http.Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await _http.Client.GetAsync(candidates[i], HttpCompletionOption.ResponseHeadersRead, token);
                 response.EnsureSuccessStatusCode();
-                await using var source = await response.Content.ReadAsStreamAsync(ct);
-                var outputPath = Path.Combine(dir, $"{SanitizeFileName(item.Number)}-preview-{downloadedCount + 1:D2}.jpg");
+                await using var source = await response.Content.ReadAsStreamAsync(token);
+                var outputPath = Path.Combine(dir, $"{SanitizeFileName(item.Number)}-preview-{i + 1:D2}.jpg");
                 await using var output = File.Create(outputPath);
-                await source.CopyToAsync(output, ct);
-                if (!item.PreviewImages.Contains(outputPath)) item.PreviewImages.Add(outputPath);
-                downloadedCount++;
+                await source.CopyToAsync(output, token);
+                downloaded[i] = outputPath;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 _logger?.Warn($"[Scrape] {item.Number} 剧照下载失败: {ex.Message}");
             }
+        });
+        foreach (var path in downloaded)
+        {
+            if (path is not null && !item.PreviewImages.Contains(path)) item.PreviewImages.Add(path);
         }
     }
 

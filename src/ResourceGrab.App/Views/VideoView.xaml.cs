@@ -30,7 +30,8 @@ public partial class VideoView : CardGridViewBase
     private VideoItem? _currentItem;
     private string _searchText = "";
     private CancellationTokenSource? _enrichCts;
-    private CancellationTokenSource? _scrapeCts;
+    private string _activeTaskId = "";
+    private VideoTaskStatus _lastTaskStatus;
     private readonly HashSet<string> _enrichQueued = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _selectionMode;
@@ -41,7 +42,6 @@ public partial class VideoView : CardGridViewBase
     private Style _chipTextStyle = null!;
     private Style _chipCountStyle = null!;
     private string _currentNav = "search";
-    private bool _scrapeRunning;
     private string _onlineSearchText = "";
     private int _onlinePage = 1;
     private CancellationTokenSource? _onlineSearchCts;
@@ -66,11 +66,16 @@ public partial class VideoView : CardGridViewBase
         _chipTextStyle = (Style)FindResource("VideoChipTextStyle");
         _chipCountStyle = (Style)FindResource("VideoChipCountStyle");
         _taskQueue = App.Services.GetService(typeof(VideoScrapeTaskQueue)) as VideoScrapeTaskQueue;
-        _ = Task.Run(() => _taskQueue?.StartProcessingAsync(ProcessQueueTaskAsync, CancellationToken.None));
-        Loaded += (_, _) => Refresh();
-        Unloaded += (_, _) => { _enrichCts?.Cancel(); _scrapeCts?.Cancel(); };
+        Loaded += OnLoaded;
+        Unloaded += (_, _) => { _enrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_taskQueue != null) _taskQueue.ProgressChanged += OnQueueProgressChanged;
+        Refresh();
     }
 
     public void SetSearchPanel(VideoSearchPanel panel)
@@ -111,12 +116,17 @@ public partial class VideoView : CardGridViewBase
         RecommendPage.Visibility = nav == "recommend" ? Visibility.Visible : Visibility.Collapsed;
         LocalPage.Visibility = nav == "local" ? Visibility.Visible : Visibility.Collapsed;
         TaskPage.Visibility = nav == "tasks" ? Visibility.Visible : Visibility.Collapsed;
-        TaskBar.Visibility = Visibility.Collapsed;
+        // 有进行中的刮削任务时保留底部进度条，避免切页后进度不可见。
+        if (!HasActiveScrapeTask) TaskBar.Visibility = Visibility.Collapsed;
         ActorPage.Visibility = Visibility.Collapsed;
 
         if (nav == "local") Refresh();
         if (nav == "actors") ActorListPage.Refresh();
     }
+
+    private bool HasActiveScrapeTask =>
+        _taskQueue?.GetTask(_activeTaskId) is { } task
+        && task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry or VideoTaskStatus.Running;
 
     private void ShowActor(string actor, Action onClose)
     {
@@ -257,7 +267,6 @@ public partial class VideoView : CardGridViewBase
         VideoItems.ItemsSource = pageItems;
         VideoItems.ScrollToTop();
         RenderPaging();
-        KickEnrichment(pageItems);
         KickEnrichment(pageItems);
             }
         }
@@ -822,66 +831,69 @@ public partial class VideoView : CardGridViewBase
     private void StartScrape(IEnumerable<string> ids, bool autoStarted, string title = "刮削中")
     {
         var idList = ids.ToList();
-        if (idList.Count == 0) return;
-        _logger.Info($"[VideoView] 启动刮削任务: {idList.Count} 条 ({title})");
-        _scrapeCts?.Cancel();
-        _scrapeCts = new CancellationTokenSource();
-        var ct = _scrapeCts.Token;
-        _scrapeRunning = true;
-        StopButton.IsEnabled = true;
-        TaskTitle.Text = autoStarted ? "自动刮削中" : title;
-        ViewNoMatchButton.Visibility = Visibility.Collapsed;
-        RetryFailedButton.Visibility = Visibility.Collapsed;
-        TaskLogList.ItemsSource = null;
-        foreach (var id in idList) { var vItem = _library.GetById(id); _taskQueue?.Enqueue(vItem?.Number ?? id); }
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _scrapeService.ScrapeAsync(idList, progress =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        TaskProgress.Value = progress.Total == 0 ? 100 : progress.Completed * 100.0 / progress.Total;
-                        TaskSummary.Text = $"{progress.Completed}/{progress.Total} 成功{progress.SuccessCount} 未匹配{progress.NoMatchCount} 失败{progress.FailedCount}";
-                        TaskLogList.ItemsSource = progress.Logs.ToArray();
-                        ViewNoMatchButton.Visibility = progress.NoMatchCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-                        RetryFailedButton.Visibility = progress.FailedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-                    });
-                }, ct);
-            }
-            catch (OperationCanceledException)
-            {
-                Dispatcher.Invoke(() => ToastService.Show("刮削已停止", ToastKind.Info));
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("[VideoView] 刮削任务异常", ex);
-                Dispatcher.Invoke(() => ToastService.ShowError(ex, "刮削失败："));
-            }
-            finally
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    _scrapeRunning = false;
-                    TaskTitle.Text = "已完成";
-                    StopButton.IsEnabled = false;
-                });
-            }
-        }, ct);
+        if (idList.Count == 0 || _taskQueue is null) return;
+        _logger.Info($"[VideoView] 入队刮削任务: {idList.Count} 条 ({title})");
+        _activeTaskId = _taskQueue.EnqueueBatchTask(idList, VideoTaskType.ScrapeVideo, autoStarted ? "自动刮削中" : title);
+        ShowTaskBar();
+        UpdateTaskBarFromQueue();
     }
 
-
-    private async Task ProcessQueueTaskAsync(VideoScrapeTask task, CancellationToken ct)
+    private void ShowTaskBar()
     {
-        // TaskBar 的 ScrapeAsync 已批量处理，此处仅等其完成后更新状态
-        await Task.CompletedTask;
+        TaskBar.Visibility = Visibility.Visible;
+        StopButton.IsEnabled = true;
+        TaskLogList.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnQueueProgressChanged(VideoTaskProgress _)
+        => Dispatcher.BeginInvoke(new Action(UpdateTaskBarFromQueue));
+
+    private void UpdateTaskBarFromQueue()
+    {
+        if (_taskQueue is null || _activeTaskId.Length == 0)
+        {
+            TaskBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var task = _taskQueue.GetTask(_activeTaskId);
+        if (task is null)
+        {
+            TaskBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        TaskTitle.Text = task.Status switch
+        {
+            VideoTaskStatus.Running => "刮削中",
+            VideoTaskStatus.WaitingRetry => "重试中",
+            VideoTaskStatus.Completed => "已完成",
+            VideoTaskStatus.Failed => "刮削失败",
+            VideoTaskStatus.Cancelled => "已取消",
+            _ => "等待中",
+        };
+        var becameFinished = task.Status is VideoTaskStatus.Completed or VideoTaskStatus.Failed or VideoTaskStatus.Cancelled
+            && _lastTaskStatus is not (VideoTaskStatus.Completed or VideoTaskStatus.Failed or VideoTaskStatus.Cancelled);
+        _lastTaskStatus = task.Status;
+        // 刮削批次结束时自动刷新列表，让新元数据/状态徽章立即生效。
+        if (becameFinished) Refresh();
+        TaskProgress.Value = task.Total > 0 ? task.Completed * 100.0 / task.Total : 0;
+        TaskSummary.Text = $"{task.Completed}/{task.Total} 成功{task.SuccessCount} 未匹配{task.NoMatchCount} 失败{task.FailedCount} 跳过{task.SkippedCount}";
+        TaskLogList.ItemsSource = task.Logs.ToArray();
+        ViewNoMatchButton.Visibility = task.NoMatchCount > 0 && task.Status is VideoTaskStatus.Completed or VideoTaskStatus.Failed or VideoTaskStatus.Cancelled
+            ? Visibility.Visible : Visibility.Collapsed;
+        RetryFailedButton.Visibility = task.FailedCount > 0 && task.Status is VideoTaskStatus.Completed or VideoTaskStatus.Failed or VideoTaskStatus.Cancelled
+            ? Visibility.Visible : Visibility.Collapsed;
+        StopButton.IsEnabled = task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry or VideoTaskStatus.Running;
     }
 
     private void ToggleLogs_Click(object sender, RoutedEventArgs e)
         => TaskLogList.Visibility = TaskLogList.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
 
-    private void StopScrape_Click(object sender, RoutedEventArgs e) => _scrapeCts?.Cancel();
+    private void StopScrape_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeTaskId.Length > 0) _taskQueue?.Cancel(_activeTaskId);
+    }
 
     private void ToggleSelection_Click(object sender, RoutedEventArgs e)
     {
@@ -929,8 +941,6 @@ public partial class VideoView : CardGridViewBase
     private void ChangePage(object sender, RoutedEventArgs e)
     {
         if (sender == PrevPageButton && _page > 1) _page--;
-        else if (sender == NextPageButton) _page++;
-        else if (sender == PrevPageButton) _page--;
         else if (sender == NextPageButton) _page++;
         else _page = _pageCount;
         ApplyAndRender();
@@ -1013,7 +1023,16 @@ public partial class VideoView : CardGridViewBase
                     .ToList());
             ToastService.Show("重新扫描完成", ToastKind.Success);
             Refresh();
-            if (pendingIds.Count > 0) StartScrape(pendingIds, autoStarted: true);
+            if (pendingIds.Count == 0) return;
+            var autoScrape = App.Services.GetRequiredService<ConfigService>().Current.VideoScraping?.AutoScrapeNewFiles ?? true;
+            if (autoScrape)
+            {
+                StartScrape(pendingIds, autoStarted: true);
+            }
+            else
+            {
+                ToastService.Show($"发现 {pendingIds.Count} 个新文件（自动刮削已关闭）", ToastKind.Info);
+            }
         }
         catch (Exception ex)
         {

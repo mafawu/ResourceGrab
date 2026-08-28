@@ -15,6 +15,7 @@ public sealed class ScrapeReportService
 
     private readonly string _filePath;
     private readonly ILogger? _logger;
+    private readonly object _sync = new();
     private VideoScrapeMetadataStore? _store;
 
     public ScrapeReportService(ILogger? logger = null)
@@ -52,6 +53,14 @@ public sealed class ScrapeReportService
     /// <summary>获取指定 VideoItem 的刮削报告。</summary>
     public VideoScrapeReport? GetReport(string videoItemId)
     {
+        lock (_sync)
+        {
+            return GetReportCore(videoItemId);
+        }
+    }
+
+    private VideoScrapeReport? GetReportCore(string videoItemId)
+    {
         var store = EnsureLoaded();
         return store.Items.TryGetValue(videoItemId, out var report) ? report : null;
     }
@@ -59,30 +68,39 @@ public sealed class ScrapeReportService
     /// <summary>保存刮削聚合结果。</summary>
     public void SaveReport(string videoItemId, VideoScrapeAggregate aggregate)
     {
-        var store = EnsureLoaded();
-        var report = new VideoScrapeReport
+        lock (_sync)
         {
-            FieldSources = aggregate.FieldSources,
-            Attempts = aggregate.Attempts,
-            LastAggregateAt = DateTimeOffset.UtcNow,
-        };
-        store.Items[videoItemId] = report;
-        Persist(store);
+            var store = EnsureLoaded();
+            var report = new VideoScrapeReport
+            {
+                FieldSources = aggregate.FieldSources,
+                Attempts = aggregate.Attempts,
+                LastAggregateAt = DateTimeOffset.UtcNow,
+            };
+            store.Items[videoItemId] = report;
+            Persist(store);
+        }
     }
 
     /// <summary>移除指定 VideoItem 的报告。</summary>
     public void RemoveReport(string videoItemId)
     {
-        var store = EnsureLoaded();
-        if (store.Items.Remove(videoItemId))
-            Persist(store);
+        lock (_sync)
+        {
+            var store = EnsureLoaded();
+            if (store.Items.Remove(videoItemId))
+                Persist(store);
+        }
     }
 
     /// <summary>获取所有报告的总条数。</summary>
     public int GetReportCount()
     {
-        var store = EnsureLoaded();
-        return store.Items.Count;
+        lock (_sync)
+        {
+            var store = EnsureLoaded();
+            return store.Items.Count;
+        }
     }
 
     /// <summary>获取缓存目录的总大小（字节）。返回 -1 表示目录不存在。</summary>
@@ -164,63 +182,44 @@ public sealed class ScrapeReportService
     /// <summary>按文件路径保存刮削元数据（VideoItem 的核心字段）。</summary>
     /// <summary>按番号保存刮削元数据。</summary>
     public void SaveMetadataByNumber(string number, VideoItem item)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     {
         if (string.IsNullOrEmpty(number)) return;
-        var store = EnsurePathStoreLoaded();
-        var report = new VideoScrapeReport
+        lock (_sync)
         {
-            FieldSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            var store = EnsurePathStoreLoaded();
+            var report = new VideoScrapeReport
             {
-                ["title"] = item.Title ?? "",
-                ["originalTitle"] = item.OriginalTitle ?? "",
-                ["description"] = item.Description ?? "",
-                ["actors"] = string.Join(",", item.Actors ?? []),
-                ["tags"] = string.Join(",", item.Tags ?? []),
-                ["series"] = item.Series ?? "",
-                ["studio"] = item.Studio ?? "",
-                ["score"] = item.Score.ToString(),
-                ["releaseDate"] = item.ReleaseDate?.ToString("yyyy-MM-dd") ?? "",
-                ["number"] = item.Number ?? "",
-                ["coverPath"] = item.CoverPath ?? "",
-                ["posterPath"] = item.PosterPath ?? "",
-            },
-            LastAggregateAt = DateTimeOffset.UtcNow,
-        };
-        store.Items[number] = report;
-        PersistPathStore(store);
+                FieldSources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["title"] = item.Title ?? "",
+                    ["originalTitle"] = item.OriginalTitle ?? "",
+                    ["description"] = item.Description ?? "",
+                    ["actors"] = string.Join(",", item.Actors ?? []),
+                    ["tags"] = string.Join(",", item.Tags ?? []),
+                    ["series"] = item.Series ?? "",
+                    ["studio"] = item.Studio ?? "",
+                    ["score"] = item.Score.ToString(),
+                    ["releaseDate"] = item.ReleaseDate?.ToString("yyyy-MM-dd") ?? "",
+                    ["number"] = item.Number ?? "",
+                    ["coverPath"] = item.CoverPath ?? "",
+                    ["posterPath"] = item.PosterPath ?? "",
+                },
+                LastAggregateAt = DateTimeOffset.UtcNow,
+            };
+            store.Items[number] = report;
+            PersistPathStore(store);
+        }
     }
 
     /// <summary>按文件路径查找已缓存的刮削元数据，返回 null 表示无缓存。</summary>
     /// <summary>按番号查找已缓存的刮削元数据。</summary>
     public VideoScrapeReport? GetMetadataByNumber(string number)
     {
-        var store = EnsurePathStoreLoaded();
-        return store.Items.TryGetValue(number, out var report) ? report : null;
+        lock (_sync)
+        {
+            var store = EnsurePathStoreLoaded();
+            return store.Items.TryGetValue(number, out var report) ? report : null;
+        }
     }
 
     private void PersistPathStore(VideoScrapeMetadataStore store)

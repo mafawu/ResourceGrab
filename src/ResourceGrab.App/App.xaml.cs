@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Threading;
 using System.Text;
 using System.Windows;
 using ResourceGrab.App.Services;
@@ -91,21 +92,38 @@ public partial class App : Application
         services.AddSingleton<OnlinePageCountCacheService>(sp => new OnlinePageCountCacheService(
             AppPaths.OnlinePageCountCachePath));
         services.AddSingleton<VideoLibraryService>(sp => new VideoLibraryService(
-            AppPaths.VideoLibraryPath, AppPaths.VideoFoldersPath, sp.GetRequiredService<ILogger>()));
+            AppPaths.VideoLibraryPath, AppPaths.VideoFoldersPath, sp.GetRequiredService<ILogger>(),
+            sp.GetRequiredService<ScrapeReportService>()));
         services.AddSingleton<VideoActorMerger>();
         services.AddSingleton<IVideoActorSource, MinnanoSource>();
         services.AddSingleton<IVideoActorSource, WikipediaActorSource>();
         services.AddSingleton<IVideoActorSource, GFriendsSource>();
+        services.AddSingleton<ScrapeReportService>();
         services.AddSingleton<VideoScrapeService>(sp => new VideoScrapeService(
             sp.GetRequiredService<VideoLibraryService>(),
             sp.GetRequiredService<ConfigService>(),
+            sp.GetRequiredService<ILogger>(),
+            sp.GetRequiredService<ScrapeReportService>()));
+        services.AddSingleton<VideoScrapeTaskQueue>(sp => new VideoScrapeTaskQueue(
+            Math.Clamp((sp.GetRequiredService<ConfigService>().Current.VideoScraping ?? new VideoScrapeSettings()).Concurrency, 1, 8),
             sp.GetRequiredService<ILogger>()));
-        services.AddSingleton<VideoScrapeTaskQueue>(sp => new VideoScrapeTaskQueue(4, sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<VideoScrapeTaskExecutor>();
         services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => new MissAvSource(
             CreateMissAvHttpClient(sp.GetRequiredService<ConfigService>()),
             sp.GetRequiredService<ILogger>()));
         services.AddSingleton<DownloadPanelViewModel>();
         Services = services.BuildServiceProvider();
+
+        try
+        {
+            var scrapeQueue = Services.GetRequiredService<VideoScrapeTaskQueue>();
+            var scrapeExecutor = Services.GetRequiredService<VideoScrapeTaskExecutor>();
+            _ = scrapeQueue.StartProcessingAsync((task, ct) => scrapeExecutor.ExecuteAsync(task, ct), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Services.GetService<ILogger>()?.Error("[App] 视频刮削任务队列启动失败", ex);
+        }
 
     static HttpClient CreateMissAvHttpClient(ConfigService config)
     {

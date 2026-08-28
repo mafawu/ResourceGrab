@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private NovelSearchPanel? _novelSearchPanel;
     private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
+    private ScrapeToolsView? _scrapeToolsView;
 
     /// <summary>章节详情页缓存：按最近访问 LRU 淘汰，限制常驻内存。</summary>
     private const int MaxCachedChapterViews = 6;
@@ -294,6 +295,8 @@ public partial class MainWindow : Window
                 NavigateToLocal(); break;
             case "manga.favorites":
                 NavigateToFavorites(); break;
+            case "manga.scrape":
+                NavigateToScrapeTools(); break;
             case "video.online":
                 ShowVideoWithNav("search"); break;
             case "video.local":
@@ -304,9 +307,6 @@ public partial class MainWindow : Window
                 ShowVideoWithNav("recommend"); break;
             case "video.actors":
                 ShowVideoWithNav("actors"); break;
-                RightPanelHost.Visibility = Visibility.Collapsed;
-                _rightPanelVisible = false;
-                ApplyRightPanelVisibility();
             case "novel.index":
                 OpenNovelLocal(); break;
         }
@@ -336,6 +336,14 @@ public partial class MainWindow : Window
         LeftNavHost.Visibility = Visibility.Visible; CollapseRightPanel();
         _favoriteView ??= new FavoriteView(); PageHost.Content = _favoriteView; _favoriteView.OnShown();
     }
+    private void NavigateToScrapeTools()
+    {
+        LeftNavHost.Visibility = Visibility.Visible;
+        CollapseRightPanel();
+        _scrapeToolsView ??= new ScrapeToolsView();
+        _scrapeToolsView.OnShown();
+        SetPage(_scrapeToolsView);
+    }
 
     private void ShowVideoWithNav(string nav)
     {
@@ -348,6 +356,12 @@ public partial class MainWindow : Window
             _rightPanelVisible = false;
             ApplyRightPanelVisibility();
         }
+    }
+    /// <summary>从刮削工具页跳转到视频演员工具（跨媒体类型）。</summary>
+    public void OpenVideoActorsTool()
+    {
+        OpenVideoView();
+        _videoView?.SwitchNav("actors");
     }
 
     // ====================== Route Registration ======================

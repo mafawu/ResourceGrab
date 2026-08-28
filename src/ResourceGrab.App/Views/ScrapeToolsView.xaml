@@ -1,0 +1,268 @@
+<UserControl x:Class="ResourceGrab.App.Views.ScrapeToolsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             Background="Transparent">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24,28,32" MaxWidth="980">
+            <!-- 标题 -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,18" VerticalAlignment="Center">
+                <Border Width="34" Height="34" CornerRadius="10" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" />
+                            <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Path Data="{StaticResource IconSetting}" Stroke="White" StrokeThickness="1.7"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Stretch="Uniform" Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="刮削工具" FontSize="{StaticResource FontSizePageTitle}" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Text="从在线来源抓取漫画元数据、扫描本地库并补齐信息"
+                               FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel>
+                <!-- ============ 卡片 1：刮削工具 ============ -->
+                <Border Style="{StaticResource CardPanelStyle}" Padding="18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <!-- 卡片头 -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
+                            <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PrimarySubtleBrush}"
+                                    VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.6"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="刮削工具" FontSize="{StaticResource FontSizeCardTitle}" FontWeight="SemiBold" />
+                                <TextBlock Text="批量扫描本地库，或按链接 / ID 抓取单本漫画详情"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 扫描本地库 -->
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="扫描本地库" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" />
+                                <TextBlock Text="扫描已配置的本地目录，重建索引并自动补齐漫画名称"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button x:Name="StartScrapeButton" Grid.Column="1" Style="{StaticResource LibraryPrimaryButtonStyle}"
+                                    MinWidth="120" Click="StartScrape_Click" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path x:Name="StartScrapeIcon" Data="{StaticResource IconPlay}" Stroke="White" StrokeThickness="1.8"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="13" Height="13" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="StartScrapeLabel" Text="开始扫描" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="White" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <ProgressBar x:Name="ScrapeProgress" Height="4" Margin="0,12,0,0"
+                                     Visibility="Collapsed" IsIndeterminate="True" Foreground="{DynamicResource PrimaryBrush}"
+                                     Background="{DynamicResource DividerBrush}" />
+
+                        <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,14" />
+
+                        <!-- 单本刮削 -->
+                        <TextBlock Text="单本刮削" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox x:Name="SingleSourceBox" Grid.Column="0" Style="{StaticResource SortPillComboBoxStyle}"
+                                      MinWidth="120" VerticalAlignment="Center" ToolTip="选择漫画来源" />
+
+                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                <TextBlock Text="漫画链接或 ID（自动识别来源编号）"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,5" />
+                                <TextBox x:Name="SingleUrlBox" Style="{StaticResource ModernTextBoxStyle}"
+                                         Height="38" VerticalContentAlignment="Center"
+                                         KeyDown="SingleUrlBox_KeyDown" />
+                            </StackPanel>
+
+                            <Button x:Name="SingleScrapeButton" Grid.Column="2" Style="{StaticResource LibraryActionButtonStyle}"
+                                    MinWidth="96" VerticalAlignment="Bottom" Click="SingleScrape_Click" Margin="8,0,0,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path x:Name="SingleScrapeIcon" Data="{StaticResource IconSearch}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="SingleScrapeLabel" Text="刮削" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ 卡片 2：本地库工具 ============ -->
+                <Border Style="{StaticResource CardPanelStyle}" Padding="18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
+                            <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PrimarySubtleBrush}" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconLocal}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.6"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="本地库工具" FontSize="{StaticResource FontSizeCardTitle}" FontWeight="SemiBold" />
+                                <TextBlock Text="管理已下载漫画的目录与索引"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="管理本地目录" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" />
+                                <TextBlock Text="添加 / 移除扫描漫画的本地文件夹"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button x:Name="ManageDirsButton" Grid.Column="1" Style="{StaticResource LibraryActionButtonStyle}"
+                                    MinWidth="110" VerticalAlignment="Center" Click="ManageDirs_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconFolderOpen}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="管理目录" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,14" />
+
+                        <CheckBox x:Name="BackfillNamesBox" Content="扫描时自动补齐漫画名称（从文件夹名提取）"
+                                  FontSize="{StaticResource FontSizeBody}" VerticalAlignment="Center"
+                                  IsChecked="True" Margin="0,0,0,2" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ 卡片 3：来源设置工具 ============ -->
+                <Border Style="{StaticResource CardPanelStyle}" Padding="18" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
+                            <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PrimarySubtleBrush}" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconSetting}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.6"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="来源设置工具" FontSize="{StaticResource FontSizeCardTitle}" FontWeight="SemiBold" />
+                                <TextBlock Text="检查登录状态、配置来源选项"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="来源" FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox x:Name="SettingsSourceBox" Grid.Column="1" Style="{StaticResource SortPillComboBoxStyle}"
+                                      MinWidth="140" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Cookie 有效性检查" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" />
+                                <TextBlock Text="验证当前来源登录会话是否有效"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button x:Name="CheckCookieButton" Grid.Column="1" Style="{StaticResource LibraryActionButtonStyle}"
+                                    MinWidth="110" VerticalAlignment="Center" Click="CheckCookie_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconCheck}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="检查登录" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,14" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="设置来源网址" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" />
+                                <TextBlock Text="配置代理 / 镜像域名等来源选项"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button x:Name="OpenSettingsButton" Grid.Column="1" Style="{StaticResource LibraryActionButtonStyle}"
+                                    MinWidth="110" VerticalAlignment="Center" Click="OpenSettings_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconSetting}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="打开设置" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ============ 卡片 4：演员工具 ============ -->
+                <Border Style="{StaticResource CardPanelStyle}" Padding="18">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,14">
+                            <Border Width="30" Height="30" CornerRadius="9" Background="{DynamicResource PrimarySubtleBrush}" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconUser}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.6"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Stretch="Uniform" Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="演员工具" FontSize="{StaticResource FontSizeCardTitle}" FontWeight="SemiBold" />
+                                <TextBlock Text="补全视频资源的演员与元数据"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="补全演员信息" FontSize="{StaticResource FontSizeEmphasis}" FontWeight="SemiBold" />
+                                <TextBlock Text="跳转到视频刮削任务的演员工具"
+                                           FontSize="{StaticResource FontSizeCaption}" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button x:Name="ActorsButton" Grid.Column="1" Style="{StaticResource LibraryActionButtonStyle}"
+                                    MinWidth="110" VerticalAlignment="Center" Click="Actors_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconUser}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="打开演员工具" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -79,10 +79,36 @@ public partial class VideoFileCard : UserControl
         ResolutionBadge.Visibility = string.IsNullOrEmpty(item.Resolution) ? Visibility.Collapsed : Visibility.Visible;
         WatchedBar.Visibility = item.WatchProgress <= 0 ? Visibility.Visible : Visibility.Collapsed;
         FavoriteHeart.Text = item.IsFavorite ? "♥" : "♡";
+        RenderScrapeBadge(item);
         var cover = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }.FirstOrDefault(File.Exists);
         PlaceholderIcon.Visibility = cover is null ? Visibility.Visible : Visibility.Collapsed;
         ImageLoader.SetSource(CoverImage, cover);
         ToolTip = item.FilePath;
+    }
+
+    /// <summary>刮削状态徽章：只在非框选模式显示，避免与选择徽章重叠。</summary>
+    private void RenderScrapeBadge(VideoItem item)
+    {
+        if (SelectionMode)
+        {
+            ScrapeBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var (brushKey, label) = item.ScrapeStatus switch
+        {
+            ScrapeStatus.Success => ("SuccessBrush", "已刮削"),
+            ScrapeStatus.NoMatch => ("WarningBrush", "未匹配"),
+            ScrapeStatus.Failed => ("DangerBrush", "失败"),
+            _ => ("", ""),
+        };
+        if (brushKey.Length == 0)
+        {
+            ScrapeBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+        ScrapeBadge.Background = (Brush)Application.Current.FindResource(brushKey);
+        ScrapeBadgeText.Text = label;
+        ScrapeBadge.Visibility = Visibility.Visible;
     }
 
     private static void OnSelectionModeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -90,6 +116,7 @@ public partial class VideoFileCard : UserControl
         var card = (VideoFileCard)d;
         card.SelectionBadge.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
         if (!(bool)e.NewValue) card.SetCurrentValue(IsSelectedProperty, false);
+        if (card.Item is not null) card.RenderScrapeBadge(card.Item);
     }
 
     private static void OnIsSelectedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

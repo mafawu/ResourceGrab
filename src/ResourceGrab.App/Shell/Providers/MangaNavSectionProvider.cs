@@ -33,6 +33,7 @@ public sealed class MangaNavSectionProvider : INavSectionProvider
         [
             new("发现", discovery),
             new("我的", mine),
+            new("工具", new List<NavItem> { new("manga.scrape", "刮削工具", Icons.Setting) }),
         ];
     }
 }
