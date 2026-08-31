@@ -29,7 +29,8 @@ public partial class VideoRecommendView : UserControl
 
     private void Refresh()
     {
-        var items = _library.Items;
+        // 按番号折叠：同文件夹的推广视频曾被刮成同一番号，库里同番号条目很多，所有行都要先去重
+        var items = VideoLibraryService.CollapseByNumber(_library.Items);
         if (items.Count == 0)
         {
             EmptyState.Visibility = Visibility.Visible;
@@ -55,7 +56,7 @@ public partial class VideoRecommendView : UserControl
         else
             TopRatedPanel.Children.Clear();
 
-        // 热门系列 — 每系列一行海报卡片
+        // 热门系列 — 每系列一行海报卡片（items 已按番号折叠，系列内不再有同番号重复）
         SeriesPanel.Children.Clear();
         var seriesGroups = items
             .Where(i => !string.IsNullOrEmpty(i.Series))
@@ -75,8 +76,26 @@ public partial class VideoRecommendView : UserControl
             SeriesPanel.Children.Add(header);
 
             var scroll = PosterGridHelper.CreateVideoPosterRow(group.Take(10).ToList());
+            scroll.PreviewMouseWheel += Row_MouseWheel;
             SeriesPanel.Children.Add(scroll);
         }
+    }
+
+    /// <summary>
+    /// 鼠标悬在横向海报行上时，滚轮直接横向浏览该行（向下滚 = 向右看）；
+    /// 行已滚到头（或行内无横向内容）时不拦截，页面正常竖向滚动。
+    /// 鼠标在其他区域不经过此处理器，默认竖向滚动。
+    /// </summary>
+    private void Row_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer row) return;
+        var target = row.HorizontalOffset + e.Delta;
+        var atStart = row.HorizontalOffset <= 0.5;
+        var atEnd = row.HorizontalOffset >= row.ScrollableWidth - 0.5;
+        if (row.ScrollableWidth <= 0.5 || (e.Delta > 0 && atStart) || (e.Delta < 0 && atEnd))
+            return; // 不标记 Handled，滚轮继续冒泡给外层页面竖向滚动
+        e.Handled = true;
+        row.ScrollToHorizontalOffset(target);
     }
 
     private void RenderPosterRow(StackPanel panel, List<VideoItem> items)

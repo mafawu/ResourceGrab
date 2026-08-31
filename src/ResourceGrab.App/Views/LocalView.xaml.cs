@@ -450,6 +450,28 @@ public partial class LocalView : CardGridViewBase
 
     private void NextPage_Click(object sender, RoutedEventArgs e) => GoToPage(_page + 1);
 
+    private void JumpPageBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter)
+        {
+            e.Handled = true;
+            JumpToPage();
+        }
+    }
+
+    private void JumpPage_Click(object sender, RoutedEventArgs e) => JumpToPage();
+
+    private void JumpToPage()
+    {
+        if (!int.TryParse(JumpPageBox.Text.Trim(), out var page))
+        {
+            JumpPageBox.Clear();
+            return;
+        }
+        GoToPage(Math.Clamp(page, 1, Math.Max(1, _pageCount)));
+        JumpPageBox.Clear();
+    }
+
     private void GoToPage(int page)
     {
         if (page < 1 || page > _pageCount || page == _page)

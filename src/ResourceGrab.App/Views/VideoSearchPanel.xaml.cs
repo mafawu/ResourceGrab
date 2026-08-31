@@ -11,14 +11,22 @@ public partial class VideoSearchPanel : UserControl
 {
     private readonly Dictionary<string, int> _tagStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedActors = new(StringComparer.OrdinalIgnoreCase);
-    private string _selectedSeries = "";
-    private string _selectedStudio = "";
+    private readonly HashSet<string> _excludedActors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedSeries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _excludedSeries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedStudio = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _excludedStudio = new(StringComparer.OrdinalIgnoreCase);
     private CensorType? _censorType;
-    private string _resolution = "";
-    private DurationRange? _duration;
-    private ScrapeStatus? _scrapeStatus;
+    private readonly HashSet<string> _selectedResolutions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _excludedResolutions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<DurationRange> _selectedDurations = new();
+    private readonly HashSet<DurationRange> _excludedDurations = new();
+    private readonly HashSet<ScrapeStatus> _selectedStatuses = new();
+    private readonly HashSet<ScrapeStatus> _excludedStatuses = new();
     private bool _favoritesOnly;
+    private bool _excludeFavorites;
     private bool _watchedOnly;
+    private bool _excludeWatched;
 
     public event Action<VideoFilterState>? FilterChanged;
     public event Action<string>? SearchTextChanged;
@@ -38,14 +46,22 @@ public partial class VideoSearchPanel : UserControl
         IReadOnlySet<string> IncludedTags,
         IReadOnlySet<string> ExcludedTags,
         IReadOnlySet<string> Actors,
-        string Series,
-        string Studio,
+        IReadOnlySet<string> Series,
+        IReadOnlySet<string> Studio,
         CensorType? CensorType,
-        string Resolution,
-        DurationRange? Duration,
-        ScrapeStatus? ScrapeStatus,
+        IReadOnlySet<string> Resolution,
+        IReadOnlySet<DurationRange> Duration,
+        IReadOnlySet<ScrapeStatus> ScrapeStatus,
         bool FavoritesOnly,
-        bool WatchedOnly);
+        bool WatchedOnly,
+        IReadOnlySet<string>? ExcludedActors = null,
+        IReadOnlySet<string>? ExcludedSeries = null,
+        IReadOnlySet<string>? ExcludedStudio = null,
+        IReadOnlySet<string>? ExcludedResolution = null,
+        IReadOnlySet<DurationRange>? ExcludedDuration = null,
+        IReadOnlySet<ScrapeStatus>? ExcludedScrapeStatus = null,
+        bool ExcludeFavorites = false,
+        bool ExcludeWatched = false);
 
     // ── 数据填充（由 VideoView 调用）────────────────────────────────
 
@@ -83,10 +99,19 @@ public partial class VideoSearchPanel : UserControl
     {
         _tagStates.Clear();
         _selectedActors.Clear();
-        _selectedSeries = _selectedStudio = _resolution = "";
+        _excludedActors.Clear();
+        _selectedSeries.Clear();
+        _excludedSeries.Clear();
+        _selectedStudio.Clear();
+        _excludedStudio.Clear();
+        _selectedResolutions.Clear();
+        _excludedResolutions.Clear();
+        _selectedDurations.Clear();
+        _excludedDurations.Clear();
+        _selectedStatuses.Clear();
+        _excludedStatuses.Clear();
+        _excludeFavorites = _excludeWatched = false;
         _censorType = null;
-        _duration = null;
-        _scrapeStatus = null;
         _favoritesOnly = false;
         _watchedOnly = false;
         KeywordBox.Text = "";
@@ -105,13 +130,56 @@ public partial class VideoSearchPanel : UserControl
         NotifyChanged();
     }
 
+    /// <summary>把标签加入排除（详情页标签右键调用）；若该标签已在排除中则保持排除。</summary>
+    public void AddTagExclusion(string tag)
+    {
+        _tagStates[tag] = 2;
+        NotifyChanged();
+    }
+
+    /// <summary>把演员加入排除（详情页演员右键调用），同时取消其选中态。</summary>
+    public void AddActorExclusion(string actor)
+    {
+        _excludedActors.Add(actor);
+        _selectedActors.Remove(actor);
+        NotifyChanged();
+    }
+
+    /// <summary>把系列加入排除（详情页系列标题右键调用），同时取消其选中态。</summary>
+    public void AddSeriesExclusion(string series)
+    {
+        _excludedSeries.Add(series);
+        _selectedSeries.Remove(series);
+        NotifyChanged();
+    }
+
+    /// <summary>把片商加入排除，同时取消其选中态。</summary>
+    public void AddStudioExclusion(string studio)
+    {
+        _excludedStudio.Add(studio);
+        _selectedStudio.Remove(studio);
+        NotifyChanged();
+    }
+
     public VideoFilterState BuildState() => new(
         KeywordBox.Text.Trim(),
         ToSet(_tagStates.Where(kv => kv.Value == 1)),
         ToSet(_tagStates.Where(kv => kv.Value == 2)),
         new HashSet<string>(_selectedActors, StringComparer.OrdinalIgnoreCase),
-        _selectedSeries, _selectedStudio, _censorType, _resolution,
-        _duration, _scrapeStatus, _favoritesOnly, _watchedOnly);
+        new HashSet<string>(_selectedSeries, StringComparer.OrdinalIgnoreCase),
+        new HashSet<string>(_selectedStudio, StringComparer.OrdinalIgnoreCase),
+        _censorType,
+        new HashSet<string>(_selectedResolutions, StringComparer.OrdinalIgnoreCase),
+        new HashSet<DurationRange>(_selectedDurations),
+        new HashSet<ScrapeStatus>(_selectedStatuses),
+        _favoritesOnly, _watchedOnly,
+        new HashSet<string>(_excludedActors, StringComparer.OrdinalIgnoreCase),
+        new HashSet<string>(_excludedSeries, StringComparer.OrdinalIgnoreCase),
+        new HashSet<string>(_excludedStudio, StringComparer.OrdinalIgnoreCase),
+        new HashSet<string>(_excludedResolutions, StringComparer.OrdinalIgnoreCase),
+        new HashSet<DurationRange>(_excludedDurations),
+        new HashSet<ScrapeStatus>(_excludedStatuses),
+        _excludeFavorites, _excludeWatched);
 
     public void ApplyState(VideoFilterState state)
     {
@@ -124,12 +192,31 @@ public partial class VideoSearchPanel : UserControl
         }
         _selectedActors.Clear();
         foreach (var actor in state.Actors) _selectedActors.Add(actor);
-        _selectedSeries = state.Series;
-        _selectedStudio = state.Studio;
+        _excludedActors.Clear();
+        foreach (var actor in state.ExcludedActors ?? new HashSet<string>()) _excludedActors.Add(actor);
+        _selectedSeries.Clear();
+        foreach (var s in state.Series) _selectedSeries.Add(s);
+        _selectedStudio.Clear();
+        foreach (var s in state.Studio) _selectedStudio.Add(s);
+        _excludedSeries.Clear();
+        foreach (var s in state.ExcludedSeries ?? new HashSet<string>()) _excludedSeries.Add(s);
+        _excludedStudio.Clear();
+        foreach (var s in state.ExcludedStudio ?? new HashSet<string>()) _excludedStudio.Add(s);
+        _selectedResolutions.Clear();
+        foreach (var r in state.Resolution) _selectedResolutions.Add(r);
+        _excludedResolutions.Clear();
+        foreach (var r in state.ExcludedResolution ?? new HashSet<string>()) _excludedResolutions.Add(r);
+        _selectedDurations.Clear();
+        foreach (var d in state.Duration) _selectedDurations.Add(d);
+        _excludedDurations.Clear();
+        foreach (var d in state.ExcludedDuration ?? new HashSet<DurationRange>()) _excludedDurations.Add(d);
+        _selectedStatuses.Clear();
+        foreach (var s in state.ScrapeStatus) _selectedStatuses.Add(s);
+        _excludedStatuses.Clear();
+        foreach (var s in state.ExcludedScrapeStatus ?? new HashSet<ScrapeStatus>()) _excludedStatuses.Add(s);
+        _excludeFavorites = state.ExcludeFavorites;
+        _excludeWatched = state.ExcludeWatched;
         _censorType = state.CensorType;
-        _resolution = state.Resolution;
-        _duration = state.Duration;
-        _scrapeStatus = state.ScrapeStatus;
         _favoritesOnly = state.FavoritesOnly;
         _watchedOnly = state.WatchedOnly;
         KeywordBox.Text = state.Keyword;
@@ -202,35 +289,47 @@ public partial class VideoSearchPanel : UserControl
         foreach (var (actor, count) in actorCounts.Take(30))
         {
             var selected = _selectedActors.Contains(actor);
-            ActorsHost.Children.Add(MakeChip(actor, selected ? ChipState.Active : ChipState.Off, $"({count})",
-                onClick: () => { if (!_selectedActors.Remove(actor)) _selectedActors.Add(actor); NotifyChanged(); }));
+            var excluded = _excludedActors.Contains(actor);
+            var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+            ActorsHost.Children.Add(MakeChip(actor, state, $"({count})",
+                onClick: () => { _excludedActors.Remove(actor); if (!_selectedActors.Remove(actor)) _selectedActors.Add(actor); NotifyChanged(); },
+                onRightClick: () => { if (!_excludedActors.Remove(actor)) { _selectedActors.Remove(actor); _excludedActors.Add(actor); } NotifyChanged(); }));
         }
         ActorEmptyText.Visibility = actorCounts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         SeriesHost.Children.Clear();
         foreach (var (series, count) in seriesCounts.Take(20))
         {
-            var selected = _selectedSeries.Equals(series, StringComparison.OrdinalIgnoreCase);
-            SeriesHost.Children.Add(MakeChip(series, selected ? ChipState.Active : ChipState.Off, $"({count})",
-                onClick: () => { _selectedSeries = selected ? "" : series; NotifyChanged(); }));
+            var selected = _selectedSeries.Contains(series);
+            var excluded = _excludedSeries.Contains(series);
+            var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+            SeriesHost.Children.Add(MakeChip(series, state, $"({count})",
+                onClick: () => { _excludedSeries.Remove(series); if (!_selectedSeries.Remove(series)) _selectedSeries.Add(series); NotifyChanged(); },
+                onRightClick: () => { if (!_excludedSeries.Remove(series)) { _selectedSeries.Remove(series); _excludedSeries.Add(series); } NotifyChanged(); }));
         }
         SeriesEmptyText.Visibility = seriesCounts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         StudioHost.Children.Clear();
         foreach (var (studio, count) in studioCounts.Take(20))
         {
-            var selected = _selectedStudio.Equals(studio, StringComparison.OrdinalIgnoreCase);
-            StudioHost.Children.Add(MakeChip(studio, selected ? ChipState.Active : ChipState.Off, $"({count})",
-                onClick: () => { _selectedStudio = selected ? "" : studio; NotifyChanged(); }));
+            var selected = _selectedStudio.Contains(studio);
+            var excluded = _excludedStudio.Contains(studio);
+            var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+            StudioHost.Children.Add(MakeChip(studio, state, $"({count})",
+                onClick: () => { _excludedStudio.Remove(studio); if (!_selectedStudio.Remove(studio)) _selectedStudio.Add(studio); NotifyChanged(); },
+                onRightClick: () => { if (!_excludedStudio.Remove(studio)) { _selectedStudio.Remove(studio); _excludedStudio.Add(studio); } NotifyChanged(); }));
         }
         StudioEmptyText.Visibility = studioCounts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         ResolutionHost.Children.Clear();
         foreach (var res in new[] { "4K", "1080p", "720p", "480p" })
         {
-            var selected = _resolution == res;
-            ResolutionHost.Children.Add(MakeChip(res, selected ? ChipState.Active : ChipState.Off,
-                onClick: () => { _resolution = selected ? "" : res; NotifyChanged(); }));
+            var selected = _selectedResolutions.Contains(res);
+            var excluded = _excludedResolutions.Contains(res);
+            var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+            ResolutionHost.Children.Add(MakeChip(res, state,
+                onClick: () => { _excludedResolutions.Remove(res); if (!_selectedResolutions.Remove(res)) _selectedResolutions.Add(res); NotifyChanged(); },
+                onRightClick: () => { if (!_excludedResolutions.Remove(res)) { _selectedResolutions.Remove(res); _excludedResolutions.Add(res); } NotifyChanged(); }));
         }
 
         DurationHost.Children.Clear();
@@ -239,28 +338,41 @@ public partial class VideoSearchPanel : UserControl
         AddDurationChip(DurationRange.Over60Minutes, ">60min");
 
         StatusHost.Children.Clear();
-        StatusHost.Children.Add(MakeChip(_favoritesOnly ? "收藏" : "收藏", _favoritesOnly ? ChipState.Active : ChipState.Off,
-            onClick: () => { _favoritesOnly = !_favoritesOnly; NotifyChanged(); }));
-        StatusHost.Children.Add(MakeChip("已看", _watchedOnly ? ChipState.Active : ChipState.Off,
-            onClick: () => { _watchedOnly = !_watchedOnly; NotifyChanged(); }));
+        AddToggleChip("收藏", _favoritesOnly, _excludeFavorites, v => _favoritesOnly = v, v => _excludeFavorites = v);
+        AddToggleChip("已看", _watchedOnly, _excludeWatched, v => _watchedOnly = v, v => _excludeWatched = v);
         foreach (var status in new[] { ScrapeStatus.Pending, ScrapeStatus.NoMatch, ScrapeStatus.Failed })
         {
-            var selected = _scrapeStatus == status;
+            var selected = _selectedStatuses.Contains(status);
+            var excluded = _excludedStatuses.Contains(status);
+            var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
             StatusHost.Children.Add(MakeChip(status switch
             {
                 ScrapeStatus.Pending => "未刮削",
                 ScrapeStatus.NoMatch => "未匹配",
                 _ => "失败",
-            }, selected ? ChipState.Active : ChipState.Off,
-                onClick: () => { _scrapeStatus = selected ? null : status; NotifyChanged(); }));
+            }, state,
+                onClick: () => { _excludedStatuses.Remove(status); if (!_selectedStatuses.Remove(status)) _selectedStatuses.Add(status); NotifyChanged(); },
+                onRightClick: () => { if (!_excludedStatuses.Remove(status)) { _selectedStatuses.Remove(status); _excludedStatuses.Add(status); } NotifyChanged(); }));
         }
+    }
+
+    /// <summary>收藏/已看这类两态开关：左键=只看（✓），右键=排除（∅，只看相反的一侧）。</summary>
+    private void AddToggleChip(string label, bool active, bool excluded, Action<bool> setActive, Action<bool> setExcluded)
+    {
+        var state = active ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+        StatusHost.Children.Add(MakeChip(label, state,
+            onClick: () => { setActive(!active); if (!active) setExcluded(false); NotifyChanged(); },
+            onRightClick: () => { setExcluded(!excluded); if (!excluded) setActive(false); NotifyChanged(); }));
     }
 
     private void AddDurationChip(DurationRange range, string label)
     {
-        var selected = _duration == range;
-        DurationHost.Children.Add(MakeChip(label, selected ? ChipState.Active : ChipState.Off,
-            onClick: () => { _duration = selected ? null : range; NotifyChanged(); }));
+        var selected = _selectedDurations.Contains(range);
+        var excluded = _excludedDurations.Contains(range);
+        var state = selected ? ChipState.Active : excluded ? ChipState.Exclude : ChipState.Off;
+        DurationHost.Children.Add(MakeChip(label, state,
+            onClick: () => { _excludedDurations.Remove(range); if (!_selectedDurations.Remove(range)) _selectedDurations.Add(range); NotifyChanged(); },
+            onRightClick: () => { if (!_excludedDurations.Remove(range)) { _selectedDurations.Remove(range); _excludedDurations.Add(range); } NotifyChanged(); }));
     }
 
     private void RebuildTags(IReadOnlyDictionary<string, int> counts) => RefreshChips();

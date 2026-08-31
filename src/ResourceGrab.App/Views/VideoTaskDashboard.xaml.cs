@@ -16,13 +16,17 @@ namespace ResourceGrab.App.Views;
 public partial class VideoTaskDashboard : UserControl
 {
     private VideoScrapeTaskQueue? _taskQueue;
+    private VideoSourceHealthService? _health;
     private readonly ILogger? _logger;
     private System.Threading.Timer? _refreshTimer;
+    /// <summary>用户手动收起明细的任务 Id；默认展开。</summary>
+    private readonly HashSet<string> _collapsedRows = new(StringComparer.OrdinalIgnoreCase);
 
     public VideoTaskDashboard()
     {
         InitializeComponent();
         try { _logger = App.Services.GetRequiredService<ILogger>(); } catch { }
+        try { _health = App.Services.GetRequiredService<VideoSourceHealthService>(); } catch { }
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -77,6 +81,8 @@ public partial class VideoTaskDashboard : UserControl
         EmptyState.Visibility = allTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         TaskListPanel.Visibility = allTasks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        RefreshHealth();
+
         // 行与任务按 Id 严格对应：集合变化才整列重建，否则原地更新。
         var ordered = allTasks.OrderByDescending(t => t.CreatedAt).ToList();
         var currentIds = TaskListPanel.Children.OfType<FrameworkElement>()
@@ -98,6 +104,26 @@ public partial class VideoTaskDashboard : UserControl
                 UpdateTaskRow((FrameworkElement)TaskListPanel.Children[i], ordered[i]);
             }
         }
+    }
+
+    /// <summary>来源健康摘要：每源一行"成功/未匹配/被拦/网络错"，Blocked 占比高时提示需要代理或指纹。</summary>
+    private void RefreshHealth()
+    {
+        var snapshot = _health?.GetSnapshot();
+        if (snapshot is null || snapshot.Count == 0)
+        {
+            HealthPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var lines = snapshot.Take(8).Select(s =>
+        {
+            var blockedRatio = s.Total > 0 ? (double)s.Blocked / s.Total : 0;
+            var hint = blockedRatio > 0.5 ? " ⚠ 建议配置代理/TLS指纹" : "";
+            return $"{s.SourceId}: 成功{s.Success} 未匹配{s.NoMatch} 被拦{s.Blocked} 网络错{s.HttpError}{hint}";
+        });
+        HealthText.Text = string.Join("   |   ", lines);
+        HealthPanel.Visibility = Visibility.Visible;
     }
 
     private FrameworkElement BuildTaskRow(VideoScrapeTask task)
@@ -219,6 +245,42 @@ public partial class VideoTaskDashboard : UserControl
         };
         outerStack.Children.Add(detailText);
 
+        // 第三行：批内条目明细开关 + 虚拟化列表（最新在前）
+        var detailToggle = new Button
+        {
+            Style = (Style)FindResource("GhostButtonStyle"),
+            Content = "收起明细 ▴",
+            FontSize = 11,
+            Padding = new Thickness(6, 2, 6, 2),
+            Margin = new Thickness(20, 6, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+        };
+        detailToggle.Click += (_, _) =>
+        {
+            if (border.Tag is not string id) return;
+            if (!_collapsedRows.Add(id))
+            {
+                _collapsedRows.Remove(id);
+            }
+            Refresh();
+        };
+        outerStack.Children.Add(detailToggle);
+
+        var itemsList = new ListBox
+        {
+            MaxHeight = 180,
+            FontSize = 11,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(20, 2, 0, 0),
+            Visibility = Visibility.Collapsed,
+            VerticalContentAlignment = VerticalAlignment.Top,
+        };
+        System.Windows.Automation.AutomationProperties.SetName(itemsList, "TaskItemResults");
+        ScrollViewer.SetVerticalScrollBarVisibility(itemsList, ScrollBarVisibility.Auto);
+        outerStack.Children.Add(itemsList);
+
         border.Child = outerStack;
         border.Tag = task.Id;
 
@@ -234,6 +296,8 @@ public partial class VideoTaskDashboard : UserControl
         var row1 = outerStack.Children[0] as Grid;
         var progressRow = outerStack.Children.Count > 1 ? outerStack.Children[1] as Grid : null;
         var detailText = outerStack.Children.Count > 2 ? outerStack.Children[2] as TextBlock : null;
+        var detailToggle = outerStack.Children.Count > 3 ? outerStack.Children[3] as Button : null;
+        var itemsList = outerStack.Children.Count > 4 ? outerStack.Children[4] as ListBox : null;
         if (row1 is null) return;
 
         var statusDot = row1.Children[0] as Border;
@@ -353,6 +417,49 @@ public partial class VideoTaskDashboard : UserControl
         actionButton.Visibility = task.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry
             or VideoTaskStatus.Running or VideoTaskStatus.Failed
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // 条目明细：批内每条的命中来源/标题/耗时；展开状态记忆在 _collapsedRows。
+        var itemResults = task.ItemResults;
+        if (detailToggle is not null)
+        {
+            var expanded = itemResults.Count > 0 && !_collapsedRows.Contains(task.Id);
+            detailToggle.Visibility = itemResults.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            detailToggle.Content = expanded ? "收起明细 ▴" : "展开明细 ▾";
+        }
+        if (itemsList is ListBox list)
+        {
+            var expanded = itemResults.Count > 0 && !_collapsedRows.Contains(task.Id);
+            list.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            if (expanded)
+            {
+                // 仅当最新一条变化时重建，避免每次刷新重置滚动位置。
+                var newest = itemResults[0];
+                if (!ReferenceEquals(list.Tag, newest))
+                {
+                    list.Tag = newest;
+                    list.ItemsSource = itemResults.Take(200).Select(FormatItemResult).ToList();
+                    if (list.Items.Count > 0) list.ScrollIntoView(list.Items[0]);
+                }
+            }
+            else
+            {
+                list.Tag = null;
+            }
+        }
+    }
+
+    private static string FormatItemResult(VideoTaskItemResult r)
+    {
+        var icon = r.Outcome switch { "成功" => "✓", "未匹配" => "△", "失败" => "✗", _ => "－" };
+        var label = r.Number.Length > 0 ? r.Number : r.FileName;
+        var title = r.Title.Length > 46 ? r.Title[..46] + "…" : r.Title;
+        var body = r.Outcome switch
+        {
+            "成功" => string.Join(" · ", new[] { r.Sources, title, r.Detail, $"{r.ElapsedMs}ms" }.Where(s => !string.IsNullOrEmpty(s))),
+            "跳过" => r.Detail,
+            _ => string.IsNullOrEmpty(r.Detail) ? r.Outcome : $"{r.Outcome}：{r.Detail}",
+        };
+        return $"{r.At.ToLocalTime():HH:mm:ss}  {icon} {label}  {body}";
     }
 
     private void RetryTask(VideoScrapeTask task)

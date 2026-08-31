@@ -202,7 +202,9 @@ public partial class PosterCard : UserControl
         var path = CoverSource;
         FallbackText.Text = CoverFallback;
 
-        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        // 网络图片（在线搜索结果）直接交给 ImageLoader 异步下载；本地路径才做存在性检查
+        var isUrl = path?.StartsWith("http", StringComparison.OrdinalIgnoreCase) == true;
+        if (string.IsNullOrEmpty(path) || (!isUrl && !File.Exists(path)))
         {
             CoverImage.Visibility = Visibility.Collapsed;
             FallbackText.Visibility = Visibility.Visible;

@@ -56,6 +56,26 @@ public sealed class VideoSourceConfig
     [JsonPropertyName("language")] public string? Language { get; set; }
     [JsonPropertyName("apiKey")] public string ApiKey { get; set; } = "";
     [JsonPropertyName("dsn")] public string Dsn { get; set; } = "";
+
+    // —— 阶段0 新增：反爬与代理的 per-source 配置（全部可选，缺省回退全局） ——
+
+    /// <summary>备用镜像域名/基础地址列表（主域名被拦时按序轮换）。</summary>
+    [JsonPropertyName("mirrorUrls")] public List<string> MirrorUrls { get; set; } = [];
+
+    /// <summary>该源专属代理，空则回退全局 VideoScraping.Proxy（不同源可走不同出口）。</summary>
+    [JsonPropertyName("proxyOverride")] public string ProxyOverride { get; set; } = "";
+
+    /// <summary>true 时优先走 curl-impersonate（Chrome TLS 指纹层 L2）。</summary>
+    [JsonPropertyName("preferImpersonate")] public bool PreferImpersonate { get; set; }
+
+    /// <summary>该源专属请求头（Referer/Cookie 等站点约定）。</summary>
+    [JsonPropertyName("extraHeaders")] public Dictionary<string, string> ExtraHeaders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 源性能分级（波次调度）：1=快且稳（首批 2-3 个），2=中等，3=慢或受限。
+    /// 首批命中即停，全部未命中才继续下一批。
+    /// </summary>
+    [JsonPropertyName("tier")] public int Tier { get; set; } = 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +84,9 @@ public sealed class VideoSourceConfig
 
 public sealed class VideoScrapeAdvancedSettings
 {
+    /// <summary>刮削引擎："graph"（图调度多源择优）| "legacy"（老 VideoScrapeService 三源管道）。配置非法时回退 legacy。</summary>
+    [JsonPropertyName("engine")] public string Engine { get; set; } = "graph";
+
     [JsonPropertyName("contentRoutes")] public List<ContentRouteEntry> ContentRoutes { get; set; } = GetDefaultContentRoutes();
     [JsonPropertyName("fieldPriorities")] public List<FieldPriorityEntry> FieldPriorities { get; set; } = GetDefaultFieldPriorities();
     [JsonPropertyName("sourceConfigs")] public Dictionary<string, VideoSourceConfig> SourceConfigs { get; set; } = GetDefaultSourceConfigs();
@@ -95,13 +118,14 @@ public sealed class VideoScrapeAdvancedSettings
 
     private static List<ContentRouteEntry> GetDefaultContentRoutes() =>
     [
-        new() { Kind = VideoContentKind.Censored, Sources = ["dmm", "javdb", "javbus", "official"] },
-        new() { Kind = VideoContentKind.Uncensored, Sources = ["javdb", "javbus", "avsox", "freejavbt"] },
-        new() { Kind = VideoContentKind.Fc2, Sources = ["javdb", "fc2ppvdb", "fc2", "freejavbt"] },
-        new() { Kind = VideoContentKind.Chinese, Sources = ["iqqtv", "javdb", "airav", "freejavbt"] },
-        new() { Kind = VideoContentKind.Amateur, Sources = ["mgstage", "dmm", "javdb", "javbus"] },
-        new() { Kind = VideoContentKind.Western, Sources = ["theporndb", "javdb", "freejavbt"] },
-        new() { Kind = VideoContentKind.Hentai, Sources = ["getchu", "dmm", "javdb"] },
+        // missav 在每条路由首位（Tier 1 首批必含）：覆盖全部内容类型、快、免登录
+        new() { Kind = VideoContentKind.Censored, Sources = ["missav", "javbus", "javdb", "dmm", "official", "javlibrary", "jav321", "dahlia", "faleno", "xcity", "giga"] },
+        new() { Kind = VideoContentKind.Uncensored, Sources = ["missav", "javbus", "javdb", "avsox", "freejavbt", "kin8"] },
+        new() { Kind = VideoContentKind.Fc2, Sources = ["missav", "javdb", "fc2ppvdb", "fc2", "freejavbt", "fc2club"] },
+        new() { Kind = VideoContentKind.Chinese, Sources = ["missav", "iqqtv", "javdb", "airav", "freejavbt"] },
+        new() { Kind = VideoContentKind.Amateur, Sources = ["missav", "mgstage", "dmm", "javdb", "javbus"] },
+        new() { Kind = VideoContentKind.Western, Sources = ["missav", "theporndb", "javdb", "freejavbt"] },
+        new() { Kind = VideoContentKind.Hentai, Sources = ["missav", "getchu", "dmm", "javdb"] },
     ];
 
     private static List<FieldPriorityEntry> GetDefaultFieldPriorities() =>
@@ -119,21 +143,33 @@ public sealed class VideoScrapeAdvancedSettings
     private static Dictionary<string, VideoSourceConfig> GetDefaultSourceConfigs() =>
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["javbus"] = new() { Enabled = true, BaseUrl = "https://www.javbus.com", RateLimitPerSecond = 1 },
-            ["javdb"] = new() { Enabled = true, BaseUrl = "https://javdb.com" },
-            ["airav"] = new() { Enabled = true, UseCurlFallback = true },
-            ["dmm"] = new() { Enabled = false },
-            ["iqqtv"] = new() { Enabled = false, Language = "zh_cn" },
-            ["avsox"] = new() { Enabled = false },
-            ["freejavbt"] = new() { Enabled = false },
-            ["fc2ppvdb"] = new() { Enabled = false },
-            ["fc2"] = new() { Enabled = false },
-            ["mgstage"] = new() { Enabled = false },
-            ["theporndb"] = new() { Enabled = false },
-            ["getchu"] = new() { Enabled = false },
-            ["official"] = new() { Enabled = false },
-            ["prestige"] = new() { Enabled = false },
-            ["r18dev"] = new() { Enabled = false },
+            // Tier 分级依据实测访问性能：1=快且稳（首批 2-3 个并发），2=中等，3=慢或地理受限
+            ["javbus"] = new() { Enabled = true, BaseUrl = "https://www.javbus.com", RateLimitPerSecond = 1, Tier = 1 },
+            ["javdb"] = new() { Enabled = true, BaseUrl = "https://javdb.com", Tier = 1 },
+            ["airav"] = new() { Enabled = true, UseCurlFallback = true, Tier = 2 },
+            ["dmm"] = new() { Enabled = true, BaseUrl = "https://www.dmm.co.jp", Tier = 3 },
+            ["iqqtv"] = new() { Enabled = true, Language = "zh_cn", Tier = 2 },
+            ["avsox"] = new() { Enabled = true, Tier = 2 },
+            ["freejavbt"] = new() { Enabled = true, Tier = 2 },
+            ["fc2ppvdb"] = new() { Enabled = true, Tier = 2 },
+            ["fc2"] = new() { Enabled = true, Tier = 3 },
+            ["fc2club"] = new() { Enabled = true, Tier = 3 },
+            ["mgstage"] = new() { Enabled = true, Tier = 3 },
+            ["theporndb"] = new() { Enabled = false, Tier = 2 },   // 需用户配置 apiKey 后启用（Western 内容链首）
+            ["getchu"] = new() { Enabled = true, Tier = 3 },
+            ["official"] = new() { Enabled = false, Tier = 3 },    // 未实现（厂牌官网路由规则库待建）
+            ["prestige"] = new() { Enabled = true, Tier = 3 },     // 日本 IP 限定：需用户配 proxyOverride 指向日本出口
+            ["r18dev"] = new() { Enabled = false, Tier = 3 },      // 未实现（离线 PostgreSQL 镜像查询，后续专项）
+            // —— 阶段2 新实现并默认启用的源 ——
+            ["javlibrary"] = new() { Enabled = true, BaseUrl = "https://www.javlibrary.com/cn", Tier = 2 },
+            ["jav321"] = new() { Enabled = true, BaseUrl = "https://www.jav321.com", Tier = 2 },
+            ["kin8"] = new() { Enabled = true, BaseUrl = "https://www.kin8tengoku.com", Tier = 3 },
+            ["xcity"] = new() { Enabled = true, Tier = 3 },
+            ["giga"] = new() { Enabled = true, Tier = 3 },
+            ["dahlia"] = new() { Enabled = true, Tier = 2 },
+            ["faleno"] = new() { Enabled = true, Tier = 2 },
+            // —— MissAV 元数据源（Tier 1 首批必含，用户指定）——
+            ["missav"] = new() { Enabled = true, BaseUrl = "https://missav.ws", Tier = 1 },
         };
 }
 

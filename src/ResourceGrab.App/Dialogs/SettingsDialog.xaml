@@ -33,7 +33,11 @@
                         <Border Name="Bd" Background="#00FFFFFF" BorderBrush="#00FFFFFF" BorderThickness="1"
                                 CornerRadius="10" Padding="12,9">
                             <StackPanel Orientation="Horizontal">
-                                <ContentPresenter ContentSource="Tag" VerticalAlignment="Center" />
+                                <Path Data="{TemplateBinding Tag}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"
+                                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round" Stretch="Uniform" Width="16" Height="16"
+                                      VerticalAlignment="Center" />
                                 <TextBlock Text="{TemplateBinding Content}" Margin="10,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -32,6 +33,9 @@ public partial class VideoView : CardGridViewBase
     private CancellationTokenSource? _enrichCts;
     private string _activeTaskId = "";
     private VideoTaskStatus _lastTaskStatus;
+    // 重扫根目录期间复用 TaskBar 显示扫描进度；_rescanBusy 防止刮削事件覆盖扫描文案。
+    private bool _rescanBusy;
+    private CancellationTokenSource? _rescanCts;
     private readonly HashSet<string> _enrichQueued = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _selectionMode;
@@ -67,7 +71,7 @@ public partial class VideoView : CardGridViewBase
         _chipCountStyle = (Style)FindResource("VideoChipCountStyle");
         _taskQueue = App.Services.GetService(typeof(VideoScrapeTaskQueue)) as VideoScrapeTaskQueue;
         Loaded += OnLoaded;
-        Unloaded += (_, _) => { _enrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
+        Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
     }
@@ -77,6 +81,9 @@ public partial class VideoView : CardGridViewBase
         if (_taskQueue != null) _taskQueue.ProgressChanged += OnQueueProgressChanged;
         Refresh();
     }
+
+    /// <summary>本地详情栏开关：true=详情打开（主窗口应收起右侧本地搜索面板），false=详情关闭（恢复面板）。</summary>
+    public event Action<bool>? DetailPanelToggled;
 
     public void SetSearchPanel(VideoSearchPanel panel)
     {
@@ -116,9 +123,20 @@ public partial class VideoView : CardGridViewBase
         RecommendPage.Visibility = nav == "recommend" ? Visibility.Visible : Visibility.Collapsed;
         LocalPage.Visibility = nav == "local" ? Visibility.Visible : Visibility.Collapsed;
         TaskPage.Visibility = nav == "tasks" ? Visibility.Visible : Visibility.Collapsed;
-        // 有进行中的刮削任务时保留底部进度条，避免切页后进度不可见。
-        if (!HasActiveScrapeTask) TaskBar.Visibility = Visibility.Collapsed;
+        ActorListPage.Visibility = nav == "actors" ? Visibility.Visible : Visibility.Collapsed;
+        // 有进行中的刮削任务或目录扫描时保留底部进度条，避免切页后进度不可见。
+        if (!HasActiveScrapeTask && !_rescanBusy) TaskBar.Visibility = Visibility.Collapsed;
         ActorPage.Visibility = Visibility.Collapsed;
+
+        // 切到其他子页时收起详情栏，恢复右侧本地搜索面板
+        if (nav != "local" && _currentItem is not null) CloseDetail();
+        // 在线详情侧栏同样随切页收起，恢复右侧筛选面板
+        if (nav != "search" && OnlineDetailPanel.Visibility == Visibility.Visible)
+        {
+            _onlineDetailVersion++;
+            OnlineDetailPanel.Visibility = Visibility.Collapsed;
+            DetailPanelToggled?.Invoke(false);
+        }
 
         if (nav == "local") Refresh();
         if (nav == "actors") ActorListPage.Refresh();
@@ -195,18 +213,28 @@ public partial class VideoView : CardGridViewBase
         IncludedTags = _filterState?.IncludedTags,
         ExcludedTags = _filterState?.ExcludedTags,
         ActorFilter = _filterState is { Actors.Count: > 0 } f1 ? f1.Actors : null,
-        Series = string.IsNullOrEmpty(_filterState?.Series) ? null : _filterState.Series,
-        Studio = string.IsNullOrEmpty(_filterState?.Studio) ? null : _filterState.Studio,
+        ExcludedActors = _filterState is { ExcludedActors.Count: > 0 } f2 ? f2.ExcludedActors : null,
+        Series = _filterState is { Series.Count: > 0 } f3 ? f3.Series : null,
+        Studio = _filterState is { Studio.Count: > 0 } f4 ? f4.Studio : null,
+        ExcludedSeries = _filterState is { ExcludedSeries.Count: > 0 } f5 ? f5.ExcludedSeries : null,
+        ExcludedStudio = _filterState is { ExcludedStudio.Count: > 0 } f6 ? f6.ExcludedStudio : null,
+        ExcludedResolution = _filterState is { ExcludedResolution.Count: > 0 } f7 ? f7.ExcludedResolution : null,
+        ExcludedDuration = _filterState is { ExcludedDuration.Count: > 0 } f8 ? f8.ExcludedDuration : null,
+        ExcludeFavorites = _filterState?.ExcludeFavorites ?? false,
+        ExcludeWatched = _filterState?.ExcludeWatched ?? false,
+        ExcludedScrapeStatus = _filterState is { ExcludedScrapeStatus.Count: > 0 } f9 ? f9.ExcludedScrapeStatus : null,
         CensorType = _filterState?.CensorType,
-        Resolution = string.IsNullOrEmpty(_filterState?.Resolution) ? null : _filterState.Resolution,
-        Duration = _filterState?.Duration,
+        Resolution = _filterState is { Resolution.Count: > 0 } f10 ? f10.Resolution : null,
+        Duration = _filterState is { Duration.Count: > 0 } f11 ? f11.Duration : null,
         FavoritesOnly = _filterState?.FavoritesOnly ?? false,
         WatchedOnly = _filterState?.WatchedOnly ?? false,
-        ScrapeStatus = _filterState?.ScrapeStatus,
+        ScrapeStatus = _filterState is { ScrapeStatus.Count: > 0 } f12 ? f12.ScrapeStatus : null,
         SortBy = SortBox.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse(tag, out VideoSortBy sortBy) ? sortBy : VideoSortBy.AddedDesc,
     };
 
     private VideoSearchPanel.VideoFilterState? _filterState;
+    /// <summary>上次渲染的页面条目 Id 序列，用于判断内容是否变化（不变则保留滚动位置）。</summary>
+    private List<string>? _lastRenderedPageIds;
 
     private void SyncPanelCounts()
     {
@@ -247,8 +275,8 @@ public partial class VideoView : CardGridViewBase
 
     private void RenderList()
     {
-        BackButton.Visibility = Visibility.Collapsed;
         DetailScroll.Visibility = Visibility.Collapsed;
+        DetailPanelToggled?.Invoke(false);
         try
         {
             using (RecursionGuard.Enter("RenderList"))
@@ -264,8 +292,18 @@ public partial class VideoView : CardGridViewBase
             .Take(_pageSize)
             .ToList();
 
+        // 内容没变（如后台 enrichment 刷新卡片数据）时不回到顶部，保留滚动位置；
+        // 只有筛选/翻页真正改变了列表内容才滚到顶。
+        var pageIds = pageItems.Select(i => i.Id).ToList();
+        var unchanged = _lastRenderedPageIds is not null
+            && pageIds.Count == _lastRenderedPageIds.Count
+            && pageIds.SequenceEqual(_lastRenderedPageIds);
+        _lastRenderedPageIds = pageIds;
+        var savedOffset = unchanged ? VideoItems.VerticalOffset : 0;
+
         VideoItems.ItemsSource = pageItems;
-        VideoItems.ScrollToTop();
+        if (savedOffset > 0) VideoItems.RestoreOffset(savedOffset);
+        else VideoItems.ScrollToTop();
         RenderPaging();
         KickEnrichment(pageItems);
             }
@@ -299,12 +337,8 @@ public partial class VideoView : CardGridViewBase
 
     private void RenderDetail(VideoItem item)
     {
-        BackButton.Visibility = Visibility.Visible;
-        VideoItems.Visibility = Visibility.Collapsed;
-        EmptyPanel.Visibility = Visibility.Collapsed;
         DetailScroll.Visibility = Visibility.Visible;
-        VideoCountText.Text = item.Number;
-        TitleText.Text = "详情";
+        DetailPanelToggled?.Invoke(true);
         DetailNumber.Text = string.IsNullOrEmpty(item.Number) ? "(未识别番号)" : item.Number;
         DetailTitle.Text = item.DisplayTitle;
         OriginalTitleText.Text = item.OriginalTitle;
@@ -329,9 +363,9 @@ public partial class VideoView : CardGridViewBase
         var poster = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }.FirstOrDefault(File.Exists);
         ImageLoader.SetSource(DetailPoster, poster);
         ActorChips.Children.Clear();
-        foreach (var actor in item.Actors.Take(12)) ActorChips.Children.Add(MakeDetailChip(actor, () => ShowActor(actor, () => ApplyAndRender())));
+        foreach (var actor in item.Actors.Take(12)) ActorChips.Children.Add(MakeDetailChip(actor, () => ShowActor(actor, () => ApplyAndRender()), () => ExcludeActor(actor)));
         TagChips.Children.Clear();
-        foreach (var tag in item.Tags.Concat(item.UserTags).Take(24)) TagChips.Children.Add(MakeDetailChip($"#{tag}", () => FilterByTag(tag)));
+        foreach (var tag in item.Tags.Concat(item.UserTags).Take(24)) TagChips.Children.Add(MakeDetailChip($"#{tag}", () => FilterByTag(tag), () => ExcludeTag(tag)));
 
         PartsHost.Children.Clear();
         var parts = _library.Items.Where(i => !string.IsNullOrEmpty(i.Number) && i.Number.Equals(item.Number, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -353,12 +387,18 @@ public partial class VideoView : CardGridViewBase
         RenderRecommends(item);
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>关闭右侧详情栏，恢复本地搜索面板。</summary>
+    private void CloseDetail()
     {
-        _currentItem = null; ApplyAndRender(); TitleText.Text = "本地视频";
+        if (_currentItem is null && DetailScroll.Visibility == Visibility.Collapsed) return;
+        _currentItem = null;
+        DetailScroll.Visibility = Visibility.Collapsed;
         ScrapeReportPanel.HideReport();
+        DetailPanelToggled?.Invoke(false);
     }
-    private Border MakeDetailChip(string text, Action onClick)
+
+    private void DetailClose_Click(object sender, RoutedEventArgs e) => CloseDetail();
+    private Border MakeDetailChip(string text, Action onClick, Action? onRightClick = null, string? toolTip = null)
     {
         var border = new Border
         {
@@ -369,9 +409,11 @@ public partial class VideoView : CardGridViewBase
             Padding = new Thickness(10, 4, 10, 4),
             Margin = new Thickness(0, 0, 6, 6),
             Cursor = Cursors.Hand,
+            ToolTip = toolTip ?? (onRightClick is not null ? "左键筛选，右键排除" : null),
         };
         border.Child = new TextBlock { Text = text, FontSize = 11.5 };
         border.MouseLeftButtonUp += (_, _) => onClick();
+        if (onRightClick is not null) border.MouseRightButtonUp += (_, e) => { onRightClick(); e.Handled = true; };
         return border;
     }
 
@@ -382,6 +424,11 @@ public partial class VideoView : CardGridViewBase
         SeriesPartsHost.Visibility = Visibility.Collapsed;
         if (item.SeriesNumbers.Count == 0) return;
         SeriesPartsHeader.Text = $"系列：{item.Series}（{item.SeriesNumbers.Count} 部）";
+        SeriesPartsHeader.ToolTip = "右键排除该系列";
+        SeriesPartsHeader.Cursor = Cursors.Hand;
+        // 渲染可能重复执行，先解绑再绑定，避免事件叠加
+        SeriesPartsHeader.MouseRightButtonUp -= SeriesHeader_RightClick;
+        SeriesPartsHeader.MouseRightButtonUp += SeriesHeader_RightClick;
         SeriesPartsHeader.Visibility = Visibility.Visible;
         SeriesPartsHost.Visibility = Visibility.Visible;
         foreach (var number in item.SeriesNumbers.Take(20))
@@ -398,6 +445,15 @@ public partial class VideoView : CardGridViewBase
             button.Click += (_, _) => { if (captured is not null) { _currentItem = captured; ApplyAndRender(); } };
             SeriesPartsHost.Children.Add(button);
         }
+    }
+
+    /// <summary>详情页系列标题右键：回到列表并排除该系列。</summary>
+    private void SeriesHeader_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_currentItem is not { } item || string.IsNullOrEmpty(item.Series)) return;
+        _currentItem = null;
+        _searchPanel?.AddSeriesExclusion(item.Series);
+        ApplyAndRender();
     }
 
     private void RenderRating(VideoItem item)
@@ -465,7 +521,7 @@ public partial class VideoView : CardGridViewBase
     private void RenderRecommends(VideoItem item)
     {
         SeriesRecommends.Children.Clear();
-        var sameSeries = _library.Items.Where(i => i.Id != item.Id && !string.IsNullOrEmpty(item.Series) && i.Series.Equals(item.Series, StringComparison.OrdinalIgnoreCase)).Take(10).ToList();
+        var sameSeries = VideoLibraryService.CollapseByNumber(_library.Items.Where(i => i.Id != item.Id && !string.IsNullOrEmpty(item.Series) && i.Series.Equals(item.Series, StringComparison.OrdinalIgnoreCase))).Take(10).ToList();
         SeriesRecommendHeader.Visibility = sameSeries.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var rec in sameSeries)
         {
@@ -476,7 +532,7 @@ public partial class VideoView : CardGridViewBase
         }
 
         ActorRecommends.Children.Clear();
-        var sameActors = _library.Items.Where(i => i.Id != item.Id && i.Actors.Any(a => item.Actors.Contains(a, StringComparer.OrdinalIgnoreCase))).Take(10).ToList();
+        var sameActors = VideoLibraryService.CollapseByNumber(_library.Items.Where(i => i.Id != item.Id && i.Actors.Any(a => item.Actors.Contains(a, StringComparer.OrdinalIgnoreCase)))).Take(10).ToList();
         ActorRecommendHeader.Visibility = sameActors.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         foreach (var rec in sameActors)
         {
@@ -525,6 +581,22 @@ public partial class VideoView : CardGridViewBase
     {
         _currentItem = null;
         _searchPanel?.AddTagFilter(tag);
+        ApplyAndRender();
+    }
+
+    /// <summary>详情页标签右键：回到列表并排除该标签。</summary>
+    private void ExcludeTag(string tag)
+    {
+        _currentItem = null;
+        _searchPanel?.AddTagExclusion(tag);
+        ApplyAndRender();
+    }
+
+    /// <summary>详情页演员右键：回到列表并排除该演员。</summary>
+    private void ExcludeActor(string actor)
+    {
+        _currentItem = null;
+        _searchPanel?.AddActorExclusion(actor);
         ApplyAndRender();
     }
 
@@ -611,12 +683,14 @@ public partial class VideoView : CardGridViewBase
     private void OnlineSearch_Submitted(object? sender, string e)
     {
         _onlineSearchText = e.Trim();
+        _onlinePage = 1;
         ExecuteOnlineSearch();
     }
 
     private void SearchButton_Click(object sender, RoutedEventArgs e)
     {
         _onlineSearchText = OnlineSearchBox.Text.Trim();
+        _onlinePage = 1;
         ExecuteOnlineSearch();
     }
 
@@ -638,6 +712,11 @@ public partial class VideoView : CardGridViewBase
         OnlineLoadingState.Visibility = Visibility.Visible;
         OnlineEmptyState.Visibility = Visibility.Collapsed;
         ResultsScroll.Visibility = Visibility.Collapsed;
+        if (OnlineDetailPanel.Visibility == Visibility.Visible)
+        {
+            OnlineDetailPanel.Visibility = Visibility.Collapsed;
+            DetailPanelToggled?.Invoke(false);
+        }
         try
         {
             var result = await source.SearchAsync(_onlineSearchText, _onlinePage, ct);
@@ -660,32 +739,209 @@ public partial class VideoView : CardGridViewBase
     {
         OnlineLoadingState.Visibility = Visibility.Collapsed;
         ResultCardsPanel.Children.Clear();
+        var cards = new List<(OnlineVideoSummary Item, VideoPosterCard Card)>();
         foreach (var item in result.Items.Take(30))
         {
-            var border = new Border
-            {
-                Width = 170, Margin = new Thickness(0, 0, 10, 10),
-                CornerRadius = new CornerRadius(8),
-                Background = (Brush)FindResource("HoverBgBrush"),
-                Cursor = Cursors.Hand,
-            };
-            var stack = new StackPanel();
-            if (!string.IsNullOrEmpty(item.CoverUrl))
-            {
-                var img = new Image { Height = 96, Stretch = Stretch.UniformToFill, Margin = new Thickness(6,6,6,4) };
-                    img.Loaded += (_, _) => Common.ImageLoader.SetSource(img, item.CoverUrl);
-                stack.Children.Add(img);
-            }
-            stack.Children.Add(new TextBlock { Text = item.Title, FontSize = 12, TextWrapping = TextWrapping.Wrap,
-                MaxHeight = 34, Margin = new Thickness(8,2,8,8) });
-            border.Child = stack;
-            ResultCardsPanel.Children.Add(border);
+            // 与本地库一致的海报卡片（封面为在线图片 URL，ImageLoader 支持网络加载）
+            var card = new VideoPosterCard();
+            card.Bind(item);
+            card.OnlineDetailRequested += OnlinePosterDetailRequested;
+            ResultCardsPanel.Children.Add(card);
+            cards.Add((item, card));
         }
         ResultsScroll.Visibility = result.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         OnlineEmptyState.Visibility = result.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         OnlineEmptyHint.Text = result.Items.Count > 0 ? "" : "没有找到匹配的视频";
         PageInfoText.Text = $"第 {_onlinePage} 页 · {result.Items.Count} 条";
         OnlinePagingHost.Visibility = result.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // 搜索页摘要信息有限，后台逐卡片拉详情回填（发行日期/演员/标签），低并发渐进显示
+        StartOnlineDetailEnrichment(cards);
+    }
+
+    // ── 在线详情侧栏 ─────────────────────────────────────────────────
+
+    private OnlineVideoSummary? _onlineDetailSummary;
+    private string? _onlineDetailMagnet;
+    private string? _onlineDetailUrl;
+    private int _onlineDetailVersion;
+    private CancellationTokenSource? _onlineEnrichCts;
+
+    /// <summary>详情页会话缓存：搜索回填与侧栏详情共用，同一视频不重复请求。</summary>
+    private readonly ConcurrentDictionary<string, OnlineVideoDetail> _onlineDetailCache = new();
+
+    /// <summary>
+    /// 后台为每张搜索卡片拉取详情并回填（并发 2，避免触发站点反爬）。
+    /// 新搜索/页面切换会取消上一轮回填；详情同时写入会话缓存供侧栏复用。
+    /// </summary>
+    private void StartOnlineDetailEnrichment(IReadOnlyList<(OnlineVideoSummary Item, VideoPosterCard Card)> cards)
+    {
+        _onlineEnrichCts?.Cancel();
+        _onlineEnrichCts = new CancellationTokenSource();
+        var ct = _onlineEnrichCts.Token;
+        var version = _onlineSearchVersion;
+        var source = OnlineSource;
+        if (source is null) return;
+
+        _ = Task.Run(async () =>
+        {
+            using var gate = new SemaphoreSlim(2);
+            await Task.WhenAll(cards.Select(async entry =>
+            {
+                try
+                {
+                    var url = source.GetDetailUrl(entry.Item.Id);
+                    if (string.IsNullOrEmpty(url)) return;
+
+                    if (!_onlineDetailCache.TryGetValue(url, out var detail))
+                    {
+                        await gate.WaitAsync(ct);
+                        try { detail = await source.GetDetailAsync(url, ct); }
+                        finally { gate.Release(); }
+                        if (detail is not null) _onlineDetailCache[url] = detail;
+                    }
+
+                    if (detail is null || ct.IsCancellationRequested || version != _onlineSearchVersion) return;
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (version != _onlineSearchVersion || ct.IsCancellationRequested) return;
+                        if (ReferenceEquals(entry.Card.Parent, ResultCardsPanel))
+                            entry.Card.UpdateOnlineDetail(detail);
+                    });
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.Warn($"[VideoView] 在线详情回填失败: {entry.Item.Id} ({ex.Message})");
+                }
+            }));
+        }, ct);
+    }
+
+    /// <summary>点击在线海报：先展示摘要并显示侧栏，随后拉取详情页补充完整信息。</summary>
+    private void OnlinePosterDetailRequested(OnlineVideoSummary item)
+    {
+        _onlineDetailVersion++;
+        var version = _onlineDetailVersion;
+        _onlineDetailSummary = item;
+        _onlineDetailMagnet = null;
+        _onlineDetailUrl = null;
+
+        OnlineDetailPanel.Visibility = Visibility.Visible;
+        OnlineDetailPanel.ScrollToTop();
+        // 与本地详情一致：顶替右侧筛选面板的位置
+        DetailPanelToggled?.Invoke(true);
+        ImageLoader.SetSource(OnlineDetailPoster, item.CoverUrl);
+        OnlineDetailTitle.Text = item.Title;
+        OnlineDetailOriginalTitle.Text = "";
+        OnlineDetailNumber.Text = VideoNumberParser.Parse(item.Title).Number;
+        OnlineDetailMeta.Text = string.IsNullOrEmpty(item.DurationText) ? "" : $"时长 {item.DurationText}";
+        OnlineDetailActorChips.Children.Clear();
+        OnlineDetailTagChips.Children.Clear();
+        OnlineDetailDescription.Text = "详情加载中…";
+        OnlineDetailActions.Visibility = Visibility.Collapsed;
+
+        var source = OnlineSource;
+        if (source is null) { OnlineDetailDescription.Text = "在线源未注册"; return; }
+        var url = source.GetDetailUrl(item.Id);
+        if (string.IsNullOrEmpty(url)) { OnlineDetailDescription.Text = "该源不支持详情页"; return; }
+        _onlineDetailUrl = url;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                OnlineVideoDetail? detail;
+                if (_onlineDetailUrl is not null && _onlineDetailCache.TryGetValue(_onlineDetailUrl, out var cached))
+                {
+                    detail = cached;
+                }
+                else
+                {
+                    detail = await source.GetDetailAsync(url);
+                    if (detail is not null && _onlineDetailUrl is not null)
+                        _onlineDetailCache[_onlineDetailUrl] = detail;
+                }
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (version != _onlineDetailVersion) return;
+                    if (detail is null) { OnlineDetailDescription.Text = "未能获取到详情"; return; }
+                    RenderOnlineDetail(detail);
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (version != _onlineDetailVersion) return;
+                    OnlineDetailDescription.Text = $"详情加载失败: {ex.Message}";
+                });
+            }
+        });
+    }
+
+    private void RenderOnlineDetail(OnlineVideoDetail detail)
+    {
+        if (!string.IsNullOrEmpty(detail.CoverUrl)) ImageLoader.SetSource(OnlineDetailPoster, detail.CoverUrl);
+        if (!string.IsNullOrEmpty(detail.Number)) OnlineDetailNumber.Text = detail.Number;
+        if (!string.IsNullOrEmpty(detail.Title)) OnlineDetailTitle.Text = detail.Title;
+        OnlineDetailOriginalTitle.Text = detail.OriginalTitle;
+
+        // 信息行：时长 · 发行日期 · 演员数 · 标签数
+        OnlineDetailMeta.Text = string.Join(" · ", new[]
+        {
+            string.IsNullOrEmpty(detail.DurationText) ? "" : $"时长 {detail.DurationText}",
+            string.IsNullOrEmpty(detail.ReleaseDateText) ? "" : $"发行 {detail.ReleaseDateText}",
+            detail.Actors.Count > 0 ? $"演员 {detail.Actors.Count}" : "",
+            detail.Tags.Count > 0 ? $"标签 {detail.Tags.Count}" : "",
+        }.Where(s => !string.IsNullOrEmpty(s)));
+
+        // 演员/标签可点击：直接以该关键词重新发起在线搜索
+        OnlineDetailActorChips.Children.Clear();
+        foreach (var actor in detail.Actors.Where(a => !string.IsNullOrWhiteSpace(a)).Take(12))
+            OnlineDetailActorChips.Children.Add(MakeDetailChip(actor,
+                () => RunOnlineSearch(actor), toolTip: "点击搜索该演员"));
+        OnlineDetailTagChips.Children.Clear();
+        foreach (var tag in detail.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Take(24))
+            OnlineDetailTagChips.Children.Add(MakeDetailChip($"#{tag}",
+                () => RunOnlineSearch($"#{tag}"), toolTip: "点击搜索该标签"));
+
+        OnlineDetailDescription.Text = detail.Description;
+        _onlineDetailMagnet = string.IsNullOrEmpty(detail.MagnetUri) ? null : detail.MagnetUri;
+        OnlineDetailActions.Visibility = _onlineDetailMagnet is not null || _onlineDetailUrl is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>以任意关键词重新发起在线搜索（在线详情页标签/演员点击时调用）。</summary>
+    private void RunOnlineSearch(string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return;
+        _onlinePage = 1;
+        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        DetailPanelToggled?.Invoke(false);
+        OnlineSearchBox.Text = keyword;
+        _onlineSearchText = keyword.Trim();
+        ExecuteOnlineSearch();
+    }
+
+    private void OnlineDetailClose_Click(object sender, RoutedEventArgs e)
+    {
+        _onlineDetailVersion++;
+        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        DetailPanelToggled?.Invoke(false);
+    }
+
+    private void OnlineDetailCopyMagnet_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_onlineDetailMagnet)) return;
+        Clipboard.SetText(_onlineDetailMagnet);
+        ToastService.Show("磁力链接已复制", ToastKind.Success);
+    }
+
+    private void OnlineDetailOpenUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_onlineDetailUrl)) return;
+        Process.Start(new ProcessStartInfo(_onlineDetailUrl) { UseShellExecute = true });
     }
 
     private async void PrevPage_Click(object sender, RoutedEventArgs e)
@@ -717,6 +973,7 @@ public partial class VideoView : CardGridViewBase
         var ct = _enrichCts.Token;
         _ = Task.Run(async () =>
         {
+            var lastRefreshAt = DateTime.UtcNow;
             foreach (var item in pending)
             {
                 ct.ThrowIfCancellationRequested();
@@ -734,8 +991,14 @@ public partial class VideoView : CardGridViewBase
                     item.ThumbnailPath = await VideoThumbnailService.GenerateAsync(item.FilePath, ct: ct);
                 }
                 _library.Update(item);
-                Dispatcher.BeginInvoke(new Action(() => ApplyAndRender()));
+                // 整页刷新较重（重新绑定所有卡片），节流到约 2 秒一次；循环结束后再补一次最终刷新。
+                if ((DateTime.UtcNow - lastRefreshAt).TotalMilliseconds >= 2000)
+                {
+                    lastRefreshAt = DateTime.UtcNow;
+                    Dispatcher.BeginInvoke(new Action(ApplyAndRender));
+                }
             }
+            Dispatcher.BeginInvoke(new Action(ApplyAndRender));
         }, ct);
             }
         }
@@ -817,12 +1080,12 @@ public partial class VideoView : CardGridViewBase
             state?.IncludedTags ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             state?.ExcludedTags ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             state?.Actors ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            state?.Series ?? "",
-            state?.Studio ?? "",
+            state?.Series ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            state?.Studio ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             state?.CensorType,
-            state?.Resolution ?? "",
-            state?.Duration,
-            ScrapeStatus.NoMatch,
+            state?.Resolution ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            state?.Duration ?? new HashSet<DurationRange>(),
+            new HashSet<ScrapeStatus> { ScrapeStatus.NoMatch },
             false,
             false));
         Refresh();
@@ -850,6 +1113,8 @@ public partial class VideoView : CardGridViewBase
 
     private void UpdateTaskBarFromQueue()
     {
+        // 重扫进行中时任务条归扫描使用，刮削事件不覆盖其文案。
+        if (_rescanBusy) return;
         if (_taskQueue is null || _activeTaskId.Length == 0)
         {
             TaskBar.Visibility = Visibility.Collapsed;
@@ -892,6 +1157,12 @@ public partial class VideoView : CardGridViewBase
 
     private void StopScrape_Click(object sender, RoutedEventArgs e)
     {
+        // 停止按钮同时服务重扫与刮削：谁在跑就停谁。
+        if (_rescanBusy)
+        {
+            _rescanCts?.Cancel();
+            return;
+        }
         if (_activeTaskId.Length > 0) _taskQueue?.Cancel(_activeTaskId);
     }
 
@@ -941,9 +1212,36 @@ public partial class VideoView : CardGridViewBase
     private void ChangePage(object sender, RoutedEventArgs e)
     {
         if (sender == PrevPageButton && _page > 1) _page--;
-        else if (sender == NextPageButton) _page++;
+        else if (sender == NextPageButton && _page < _pageCount) _page++;
         else _page = _pageCount;
         ApplyAndRender();
+    }
+
+    private void JumpPageBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            JumpToPage();
+        }
+    }
+
+    private void JumpPage_Click(object sender, RoutedEventArgs e) => JumpToPage();
+
+    private void JumpToPage()
+    {
+        if (!int.TryParse(JumpPageBox.Text.Trim(), out var page))
+        {
+            JumpPageBox.Clear();
+            return;
+        }
+        var clamped = Math.Clamp(page, 1, Math.Max(1, _pageCount));
+        if (clamped != _page)
+        {
+            _page = clamped;
+            ApplyAndRender();
+        }
+        JumpPageBox.Clear();
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e)
@@ -1013,26 +1311,54 @@ public partial class VideoView : CardGridViewBase
             ToastService.Show("还没有已保存的视频根目录", ToastKind.Info);
             return;
         }
+        if (_rescanBusy) return;
         RescanButton.IsEnabled = false;
+        _rescanBusy = true;
+        _rescanCts = new CancellationTokenSource();
+        var ct = _rescanCts.Token;
+        // 复用底部任务条显示扫描进度（不定进度条 + 当前目录与计数）。
+        TaskBar.Visibility = Visibility.Visible;
+        TaskTitle.Text = "正在扫描本地库";
+        TaskProgress.IsIndeterminate = true;
+        TaskSummary.Text = "准备扫描...";
+        TaskLogList.Visibility = Visibility.Collapsed;
+        ViewNoMatchButton.Visibility = Visibility.Collapsed;
+        RetryFailedButton.Visibility = Visibility.Collapsed;
+        StopButton.IsEnabled = true;
         try
         {
-            var pendingIds = await Task.Run(() =>
-                roots.SelectMany(path => _library.Rescan(path))
-                    .Select(item => item.Id)
-                    .Distinct()
-                    .ToList());
-            ToastService.Show("重新扫描完成", ToastKind.Success);
+            IProgress<string> progress = new Progress<string>(msg => TaskSummary.Text = msg);
+            var pendingIds = new List<string>();
+            await Task.Run(() =>
+            {
+                foreach (var path in roots)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    progress.Report($"正在扫描: {path}");
+                    foreach (var item in _library.Rescan(path, progress.Report, ct))
+                        pendingIds.Add(item.Id);
+                }
+            }, ct);
+            var newCount = pendingIds.Distinct().Count();
+            TaskTitle.Text = "扫描完成";
+            TaskProgress.IsIndeterminate = false;
+            TaskSummary.Text = $"发现 {newCount} 个新文件";
+            ToastService.Show($"重新扫描完成，发现 {newCount} 个新文件", ToastKind.Success);
             Refresh();
-            if (pendingIds.Count == 0) return;
+            if (newCount == 0) return;
             var autoScrape = App.Services.GetRequiredService<ConfigService>().Current.VideoScraping?.AutoScrapeNewFiles ?? true;
             if (autoScrape)
             {
-                StartScrape(pendingIds, autoStarted: true);
+                StartScrape(pendingIds.Distinct().ToList(), autoStarted: true);
             }
             else
             {
-                ToastService.Show($"发现 {pendingIds.Count} 个新文件（自动刮削已关闭）", ToastKind.Info);
+                ToastService.Show($"发现 {newCount} 个新文件（自动刮削已关闭）", ToastKind.Info);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            ToastService.Show("扫描已取消，视频库未改动", ToastKind.Info);
         }
         catch (Exception ex)
         {
@@ -1041,7 +1367,14 @@ public partial class VideoView : CardGridViewBase
         }
         finally
         {
+            _rescanBusy = false;
+            _rescanCts?.Dispose();
+            _rescanCts = null;
             RescanButton.IsEnabled = true;
+            TaskProgress.IsIndeterminate = false;
+            // 无活动刮削任务时收起任务条；有则交还刮削进度显示。
+            if (!HasActiveScrapeTask) TaskBar.Visibility = Visibility.Collapsed;
+            else UpdateTaskBarFromQueue();
         }
     }
 

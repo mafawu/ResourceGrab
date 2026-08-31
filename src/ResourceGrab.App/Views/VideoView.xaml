@@ -93,7 +93,7 @@
                                 </Grid.ColumnDefinitions>
                                 <controls:SearchBoxControl x:Name="OnlineSearchBox"
                                                            Height="{StaticResource ToolbarHeight}"
-                                                           Watermark="输入番号 / 标题 / 演员搜索"
+                                                           Watermark="输入番号 / 标题 / 演员；#标签名 按标签搜索"
                                                            SearchSubmitted="OnlineSearch_Submitted" />
                                 <Button Grid.Column="1" Style="{StaticResource LibraryPrimaryButtonStyle}"
                                         MinWidth="96" Margin="10,0,0,0" Click="SearchButton_Click">
@@ -109,29 +109,81 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 结果区域 -->
+                    <!-- 结果区域：左侧结果列表 + 右侧在线详情侧栏 -->
                     <Grid Grid.Row="1">
-                        <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                <StackPanel>
+                                    <WrapPanel x:Name="ResultCardsPanel" />
+                                </StackPanel>
+                            </ScrollViewer>
+                            <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
+                                    <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
+                                          StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28" />
+                                </Border>
+                                <TextBlock x:Name="OnlineEmptyHint" Text="输入关键词开始在线搜索"
+                                           FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,16,0,0" />
+                            </StackPanel>
+                            <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
+                                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
+                                <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <!-- 在线详情侧栏：与本地详情同款（窗口右缘、无卡片框、宽 348）；
+                             打开时经 DetailPanelToggled 收起右侧筛选面板顶替其位置 -->
+                        <ScrollViewer x:Name="OnlineDetailPanel" Grid.Column="1" Width="348"
+                                      Margin="0,0,14,0" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
                             <StackPanel>
-                                <WrapPanel x:Name="ResultCardsPanel" />
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="详情" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                    <Button x:Name="OnlineDetailCloseButton" Style="{StaticResource IconButtonStyle}"
+                                            Content="✕" HorizontalAlignment="Right" Click="OnlineDetailClose_Click"
+                                            ToolTip="关闭详情" VerticalAlignment="Center" />
+                                </Grid>
+
+                                <Border Height="230" CornerRadius="{DynamicResource RadiusLg}"
+                                        Background="{DynamicResource HoverBgBrush}"
+                                        BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                                    <Image x:Name="OnlineDetailPoster" Stretch="Uniform" Margin="6" />
+                                </Border>
+
+                                <TextBlock x:Name="OnlineDetailNumber" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" Margin="0,12,0,0" />
+                                <TextBlock x:Name="OnlineDetailTitle" FontSize="16" FontWeight="Bold"
+                                           TextWrapping="Wrap" Margin="0,10,0,2" />
+                                <TextBlock x:Name="OnlineDetailOriginalTitle" FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="OnlineDetailMeta" FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                           Margin="0,8,0,0" />
+
+                                <WrapPanel x:Name="OnlineDetailActions" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+                                    <Button Style="{StaticResource LibraryActionButtonStyle}" Content="复制磁力链接"
+                                            Click="OnlineDetailCopyMagnet_Click" />
+                                    <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开详情页"
+                                            Margin="6,0,0,0" Click="OnlineDetailOpenUrl_Click" />
+                                </WrapPanel>
+
+                                <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
+                                <WrapPanel x:Name="OnlineDetailActorChips" />
+                                <TextBlock Text="标签（点击搜索）" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />
+                                <WrapPanel x:Name="OnlineDetailTagChips" />
+                                <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,3" />
+                                <TextBox x:Name="OnlineDetailDescription" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         TextWrapping="Wrap" MaxHeight="96" VerticalScrollBarVisibility="Auto" FontSize="12"
+                                         Foreground="{DynamicResource TextSecondaryBrush}" />
                             </StackPanel>
                         </ScrollViewer>
-                        <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
-                                <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
-                                      StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28" />
-                            </Border>
-                            <TextBlock x:Name="OnlineEmptyHint" Text="输入关键词开始在线搜索"
-                                       FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
-                                       HorizontalAlignment="Center" Margin="0,16,0,0" />
-                        </StackPanel>
-                        <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
-                                    VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
-                            <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                       HorizontalAlignment="Center" Margin="0,12,0,0" />
-                        </StackPanel>
                     </Grid>
 
                     <!-- 分页 -->
@@ -156,7 +208,127 @@
                 <Grid x:Name="LocalPage" Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
+                    <!-- 右侧详情栏：点击卡片后顶替右侧本地搜索面板的位置 -->
+                    <ScrollViewer x:Name="DetailScroll" Grid.Column="1" Width="348"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="Collapsed">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock Text="详情" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                <Button x:Name="DetailCloseButton" Style="{StaticResource IconButtonStyle}"
+                                        Content="✕" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                        Click="DetailClose_Click" ToolTip="关闭详情" />
+                            </Grid>
+
+                            <Border Height="230" CornerRadius="{DynamicResource RadiusLg}"
+                                    Background="{DynamicResource HoverBgBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                                <Image x:Name="DetailPoster" Stretch="Uniform" Margin="6" />
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <TextBlock x:Name="DetailNumber" FontSize="15" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                <Button x:Name="FavoriteButton" Style="{StaticResource IconButtonStyle}"
+                                        Margin="8,0,0,0" Click="DetailFavorite_Click" ToolTip="收藏">
+                                    <TextBlock x:Name="FavoriteHeart" Text="♡" FontSize="15" />
+                                </Button>
+                            </StackPanel>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Style="{StaticResource LibraryPrimaryButtonStyle}" Content="播放" Click="PlayDetail_Click" />
+                                <Button Style="{StaticResource LibraryActionButtonStyle}" Content="重刮削" Margin="6,0,0,0" Click="ScrapeDetail_Click" />
+                                <Button Style="{StaticResource LibraryActionButtonStyle}" Content="编辑信息" Margin="6,0,0,0" Click="DetailEdit_Click" />
+                                <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开目录" Margin="6,0,0,0" Click="OpenFolder_Click" />
+                                <Button Style="{StaticResource LibraryActionButtonStyle}" Content="移除" Margin="6,0,0,0" Click="RemoveDetail_Click" />
+                            </WrapPanel>
+
+                            <TextBlock x:Name="DetailTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,2" />
+                            <TextBlock x:Name="OriginalTitleText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
+                            <WrapPanel x:Name="ActorChips" />
+                            <TextBlock Text="标签" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />
+                            <WrapPanel x:Name="TagChips" />
+                            <TextBlock x:Name="MetaText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,3" />
+                            <TextBox x:Name="DescriptionText" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                     TextWrapping="Wrap" MaxHeight="96" VerticalScrollBarVisibility="Auto" FontSize="12" />
+                            <StackPanel x:Name="PartsHost" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed" />
+                            <TextBlock x:Name="SeriesPartsHeader" FontSize="11.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,4" Visibility="Collapsed" />
+                            <WrapPanel x:Name="SeriesPartsHost" Orientation="Horizontal" Visibility="Collapsed" />
+                            <StackPanel x:Name="RatingHost" Orientation="Horizontal" Margin="0,12,0,0" />
+
+                            <TextBlock x:Name="PreviewHeader" Text="剧照" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="PreviewsHost" Orientation="Horizontal" />
+                            </ScrollViewer>
+
+                            <TextBlock Text="观看与文件" FontSize="15" FontWeight="Bold" Margin="0,18,0,8" />
+                            <Border Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="14,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="96" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="文件路径" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Top" />
+                                    <TextBlock x:Name="FilePathText" Grid.Row="0" Grid.Column="1" FontSize="12" TextWrapping="Wrap"
+                                               Cursor="Hand" MouseLeftButtonUp="CopyFilePath_Click" ToolTip="点击复制完整路径" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="文件大小" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="FileSizeText" Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="修改时间" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="FileModifiedText" Grid.Row="2" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="观看次数" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="WatchStatsText" Grid.Row="3" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="打开目录" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="OpenStatsText" Grid.Row="4" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="目录路径" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="DirectoryPathText" Grid.Row="5" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
+                                               Cursor="Hand" MouseLeftButtonUp="OpenDetailDirectory_Click" ToolTip="点击打开目录" />
+
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="NFO 文件" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="NfoStatusText" Grid.Row="6" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="文件状态" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="FileStatusText" Grid.Row="7" Grid.Column="1" FontSize="12" FontWeight="SemiBold" Margin="0,9,0,0" />
+
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="外部详情页" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock x:Name="SourceUrlText" Grid.Row="8" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
+                                               Cursor="Hand" MouseLeftButtonUp="CopySourceUrl_Click" ToolTip="点击复制来源详情页地址" />
+                                </Grid>
+                            </Border>
+
+                            <TextBlock x:Name="SeriesRecommendHeader" Text="同系列" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                            <WrapPanel x:Name="SeriesRecommends" />
+                            <TextBlock x:Name="ActorRecommendHeader" Text="同演员" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                            <WrapPanel x:Name="ActorRecommends" />
+                            <TextBlock x:Name="RelatedRecommendHeader" Text="相关推荐" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                            <WrapPanel x:Name="RelatedRecommends" />
+                            <controls:ScrapeReportPanel x:Name="ScrapeReportPanel" Margin="0,16,0,0" />
+                            <TextBlock x:Name="ReviewHeader" Text="短评" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                            <StackPanel x:Name="ReviewHost" />
+                        </StackPanel>
+                    </ScrollViewer>
 
                     <!-- 本地卡片区域 -->
                     <Grid Grid.Column="0" Margin="0,0,14,0">
@@ -168,10 +340,6 @@
 
                         <Grid Grid.Row="0" Margin="0,0,0,14">
                             <StackPanel Orientation="Horizontal">
-                                <Button x:Name="BackButton" Style="{StaticResource LibraryActionButtonStyle}"
-                                        Click="BackButton_Click" Visibility="Collapsed" Margin="0,0,10,0">
-                                    <TextBlock Text="← 返回" FontSize="12" FontWeight="SemiBold" />
-                                </Button>
                                 <TextBlock x:Name="TitleText" Text="本地视频" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource CountBadgeStyle}" Margin="8,0,0,0">
                                     <TextBlock x:Name="VideoCountText" FontSize="11" Foreground="{DynamicResource PrimaryBrush}" />
@@ -211,112 +379,6 @@
                             </controls:VirtualizedCardGrid.ItemTemplate>
                         </controls:VirtualizedCardGrid>
 
-                        <ScrollViewer x:Name="DetailScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                            <StackPanel Margin="4,0,4,0">
-                                <Grid Margin="0,0,0,16">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="280" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Width="280" Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusSm}">
-                                        <Image x:Name="DetailPoster" Stretch="Uniform" MinHeight="360" />
-                                    </Border>
-                                    <StackPanel Grid.Column="1" Margin="18,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock x:Name="DetailNumber" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
-                                            <Button x:Name="FavoriteButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0" Click="DetailFavorite_Click" ToolTip="收藏">
-                                                <TextBlock x:Name="FavoriteHeart" Text="♡" FontSize="15" />
-                                            </Button>
-                                            <Button Style="{StaticResource LibraryPrimaryButtonStyle}" Content="播放" Margin="8,0,0,0" Click="PlayDetail_Click" />
-                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="重刮削" Margin="8,0,0,0" Click="ScrapeDetail_Click" />
-                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="编辑信息" Margin="8,0,0,0" Click="DetailEdit_Click" />
-                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开目录" Margin="8,0,0,0" Click="OpenFolder_Click" />
-                                            <Button Style="{StaticResource LibraryActionButtonStyle}" Content="移除" Margin="8,0,0,0" Click="RemoveDetail_Click" />
-                                        </StackPanel>
-                                        <TextBlock x:Name="DetailTitle" FontSize="20" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,2" />
-                                        <TextBlock x:Name="OriginalTitleText" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
-                                        <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
-                                        <WrapPanel x:Name="ActorChips" />
-                                        <TextBlock Text="标签" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />
-                                        <WrapPanel x:Name="TagChips" />
-                                        <TextBlock x:Name="MetaText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,12,0,0" />
-                                        <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,3" />
-                                        <TextBox x:Name="DescriptionText" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                                 TextWrapping="Wrap" MaxHeight="96" VerticalScrollBarVisibility="Auto" FontSize="12" />
-                                        <StackPanel x:Name="PartsHost" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed" />
-                                        <TextBlock x:Name="SeriesPartsHeader" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,4" Visibility="Collapsed" />
-                                        <WrapPanel x:Name="SeriesPartsHost" Orientation="Horizontal" Visibility="Collapsed" />
-                                        <StackPanel x:Name="RatingHost" Orientation="Horizontal" Margin="0,12,0,0" />
-                                    </StackPanel>
-                                </Grid>
-                                <TextBlock x:Name="PreviewHeader" Text="剧照" FontSize="15" FontWeight="Bold" Margin="0,0,0,8" />
-                                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                    <StackPanel x:Name="PreviewsHost" Orientation="Horizontal" />
-                                </ScrollViewer>
-                                <TextBlock Text="观看与文件" FontSize="15" FontWeight="Bold" Margin="0,18,0,8" />
-                                <Border Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
-                                        BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="14,12" MaxWidth="900"
-                                        HorizontalAlignment="Left">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="96" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="文件路径" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Top" />
-                                        <TextBlock x:Name="FilePathText" Grid.Row="0" Grid.Column="1" FontSize="12" TextWrapping="Wrap"
-                                                   Cursor="Hand" MouseLeftButtonUp="CopyFilePath_Click" ToolTip="点击复制完整路径" />
-
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="文件大小" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="FileSizeText" Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="修改时间" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="FileModifiedText" Grid.Row="2" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="观看次数" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="WatchStatsText" Grid.Row="3" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="打开目录" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="OpenStatsText" Grid.Row="4" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="目录路径" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="DirectoryPathText" Grid.Row="5" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
-                                                   Cursor="Hand" MouseLeftButtonUp="OpenDetailDirectory_Click" ToolTip="点击打开目录" />
-
-                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="NFO 文件" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="NfoStatusText" Grid.Row="6" Grid.Column="1" FontSize="12" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="文件状态" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="FileStatusText" Grid.Row="7" Grid.Column="1" FontSize="12" FontWeight="SemiBold" Margin="0,9,0,0" />
-
-                                        <TextBlock Grid.Row="8" Grid.Column="0" Text="外部详情页" FontSize="12" Margin="0,9,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                        <TextBlock x:Name="SourceUrlText" Grid.Row="8" Grid.Column="1" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"
-                                                   Cursor="Hand" MouseLeftButtonUp="CopySourceUrl_Click" ToolTip="点击复制来源详情页地址" />
-                                    </Grid>
-                                </Border>
-                                <TextBlock x:Name="SeriesRecommendHeader" Text="同系列" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
-                                <WrapPanel x:Name="SeriesRecommends" />
-                                <TextBlock x:Name="ActorRecommendHeader" Text="同演员" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
-                                <WrapPanel x:Name="ActorRecommends" />
-                                <TextBlock x:Name="RelatedRecommendHeader" Text="相关推荐" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
-                                <WrapPanel x:Name="RelatedRecommends" />
-                                <controls:ScrapeReportPanel x:Name="ScrapeReportPanel" Margin="0,16,0,0" />
-                                <TextBlock x:Name="ReviewHeader" Text="短评" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
-                                <StackPanel x:Name="ReviewHost" />
-                            </StackPanel>
-                        </ScrollViewer>
-
                         <StackPanel x:Name="EmptyPanel" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                             <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
                                 <Path Data="{StaticResource IconLibrary}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2.2"
@@ -337,6 +399,12 @@
                                            Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0" MinWidth="76" TextAlignment="Center" />
                                 <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
                                         Content="下一页 ›" Click="ChangePage" Padding="12,5" />
+                                <TextBox x:Name="JumpPageBox" Style="{StaticResource ModernTextBoxStyle}"
+                                         Width="52" Height="28" Margin="16,0,0,0" FontSize="12"
+                                         VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                         ToolTip="输入页码后回车或点跳转" KeyDown="JumpPageBox_KeyDown" />
+                                <Button x:Name="JumpPageButton" Style="{StaticResource GhostButtonStyle}"
+                                        Content="跳转" Click="JumpPage_Click" Padding="12,5" Margin="6,0,0,0" />
                                 <ComboBox x:Name="PageSizeBox" Width="84" Margin="16,0,0,0" VerticalAlignment="Center"
                                           SelectionChanged="PageSizeBox_SelectionChanged">
                                     <ComboBoxItem Content="每页 20" Tag="20" />

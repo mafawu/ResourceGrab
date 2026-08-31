@@ -4,6 +4,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using ResourceGrab.App.Common;
 using ResourceGrab.Core.Models;
+using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Sources;
 
 namespace ResourceGrab.App.Controls;
 
@@ -14,9 +16,13 @@ namespace ResourceGrab.App.Controls;
 public class VideoPosterCard : PosterCard
 {
     private VideoItem? _item;
+    private OnlineVideoSummary? _onlineItem;
 
-    /// <summary>点击查看详情。</summary>
+    /// <summary>点击查看详情（本地条目）。</summary>
     public event Action<VideoItem>? DetailRequested;
+
+    /// <summary>点击查看详情（在线搜索结果）。</summary>
+    public event Action<OnlineVideoSummary>? OnlineDetailRequested;
 
     public VideoPosterCard()
     {
@@ -24,6 +30,7 @@ public class VideoPosterCard : PosterCard
         CardClick += (_, _) =>
         {
             if (_item is not null) DetailRequested?.Invoke(_item);
+            else if (_onlineItem is not null) OnlineDetailRequested?.Invoke(_onlineItem);
         };
     }
 
@@ -31,7 +38,7 @@ public class VideoPosterCard : PosterCard
     public void Bind(VideoItem item)
     {
         _item = item;
-
+        _onlineItem = null;
         // 封面
         var posterPath = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }
             .FirstOrDefault(p => !string.IsNullOrEmpty(p) && System.IO.File.Exists(p));
@@ -62,6 +69,70 @@ public class VideoPosterCard : PosterCard
         {
             Progress = item.WatchProgress;
         }
+    }
+
+    /// <summary>
+    /// 绑定在线搜索摘要：复用本地海报样式，封面直接走网络 URL（ImageLoader 支持 http）。
+    /// 点击触发 OnlineDetailRequested（与本地条目的 DetailRequested 区分）。
+    /// </summary>
+    public void Bind(OnlineVideoSummary item)
+    {
+        _item = null;
+        _onlineItem = item;
+
+        CoverSource = string.IsNullOrEmpty(item.CoverUrl) ? null : item.CoverUrl;
+        CoverFallback = item.Title;
+
+        Title = item.Title;
+
+        // 信息行：番号 + 内容类型；时长压在封面右下角标，不重复放
+        MetaLeft = string.IsNullOrEmpty(item.Number)
+            ? VideoNumberParser.Parse(item.Title).Number
+            : item.Number;
+        MetaRight = "";
+
+        SetTags(item.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Take(4).ToList());
+
+        // 清掉本地卡片的角标/进度/缺失态，类型压左上角标、时长压右下角标
+        TopLeftContent = string.IsNullOrEmpty(item.KindLabel)
+            ? null
+            : MakeBadge(item.KindLabel,
+                new SolidColorBrush(Color.FromRgb(0x9A, 0xC1, 0xFF)),
+                new SolidColorBrush(Color.FromArgb(0xB3, 0x1D, 0x4E, 0xD8)));
+        TopRightContent = null;
+        BottomLeftContent = null;
+        BottomRightContent = string.IsNullOrEmpty(item.DurationText)
+            ? null
+            : MakeBadge(item.DurationText);
+        Progress = 0;
+        Opacity = 1;
+    }
+
+    /// <summary>
+    /// 详情页回填：后台渐进拉到的详情补充到搜索卡片上（演员作副标题、发行日期进信息行、
+    /// 标签换为详情页完整标签）。摘要里已有的信息（时长、类型角标）保持不变。
+    /// </summary>
+    public void UpdateOnlineDetail(OnlineVideoDetail detail)
+    {
+        if (_onlineItem is null || _item is not null) return;
+
+        var actors = detail.Actors.Where(a => !string.IsNullOrWhiteSpace(a)).Take(3).ToList();
+        if (actors.Count > 0)
+            Subtitle = string.Join(" / ", actors);
+
+        if (!string.IsNullOrEmpty(detail.ReleaseDateText))
+            MetaRight = $"发行 {detail.ReleaseDateText}";
+
+        var detailTags = detail.Tags
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Where(t => !detail.Actors.Contains(t, StringComparer.OrdinalIgnoreCase))
+            .Take(4).ToList();
+        if (detailTags.Count > 0)
+            SetTags(detailTags);
+
+        // 番号以详情页为准（搜索摘要从 URL 提取，偶有出入）
+        if (!string.IsNullOrEmpty(detail.Number))
+            MetaLeft = detail.Number;
     }
 
     private void BuildBadges(VideoItem item)

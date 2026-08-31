@@ -19,6 +19,7 @@ using ResourceGrab.Core.Sources.Baozimh;
 using ResourceGrab.Core.Sources.Wnacg;
 using ResourceGrab.Core.Sources.VideoSources;
 using ResourceGrab.Core.Services.VideoScrape;
+using ResourceGrab.Core.Services.VideoScrape.Fetching;
 using ResourceGrab.Core.Services.VideoScrape.Sources;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -67,7 +68,8 @@ public partial class App : Application
         ThemeManager.Initialize();
 
         var services = new ServiceCollection();
-        services.AddSingleton(new ConfigService(AppPaths.ConfigPath));
+        var configService = new ConfigService(AppPaths.ConfigPath);
+        services.AddSingleton(configService);
         services.AddSingleton<ILogger>(sp => new FileLogger(AppPaths.LogsDir));
 
         // 内容源：派生应用可覆盖此方法以注册不同的源集合
@@ -97,7 +99,13 @@ public partial class App : Application
         services.AddSingleton<VideoActorMerger>();
         services.AddSingleton<IVideoActorSource, MinnanoSource>();
         services.AddSingleton<IVideoActorSource, WikipediaActorSource>();
-        services.AddSingleton<IVideoActorSource, GFriendsSource>();
+        // GFriends 头像源：HttpClient 走 per-source 工厂（代理 = 全局 VideoScraping.Proxy）
+        services.AddSingleton<GFriendsSource>(sp => new GFriendsSource(
+            sp.GetRequiredService<IVideoHttpClientFactory>().Create("gfriends"),
+            System.IO.Path.Combine(AppPaths.AppDataDir, "gfriends", "Filetree.json"),
+            System.IO.Path.Combine(AppPaths.AppDataDir, "avatars"),
+            sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoActorSource>(sp => sp.GetRequiredService<GFriendsSource>());
         services.AddSingleton<ScrapeReportService>();
         services.AddSingleton<VideoScrapeService>(sp => new VideoScrapeService(
             sp.GetRequiredService<VideoLibraryService>(),
@@ -108,11 +116,120 @@ public partial class App : Application
             Math.Clamp((sp.GetRequiredService<ConfigService>().Current.VideoScraping ?? new VideoScrapeSettings()).Concurrency, 1, 8),
             sp.GetRequiredService<ILogger>()));
         services.AddSingleton<VideoScrapeTaskExecutor>();
-        services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => new MissAvSource(
-            CreateMissAvHttpClient(sp.GetRequiredService<ConfigService>()),
+        // MissAV 在线搜索源：注册为具体单例，供 IVideoSource（在线搜索）与刮削源共用
+        services.AddSingleton(sp => new MissAvSource(
+            CreateMissAvHttpClient(configService),
+            sp.GetRequiredService<ILogger>(),
+            (configService.Current.VideoScraping ?? new VideoScrapeSettings()).Proxy));
+        services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => sp.GetRequiredService<MissAvSource>());
+
+        // —— 视频刮削新管道（图引擎）——
+        // per-source 配置与全局设置：取用户当前配置实例，用户改配置后重启生效。
+        var videoScrapeSettings = configService.Current.VideoScraping ?? new VideoScrapeSettings();
+        var advancedSettings = videoScrapeSettings.Advanced ?? new VideoScrapeAdvancedSettings();
+        services.AddSingleton(advancedSettings);
+        services.AddSingleton(videoScrapeSettings);
+        services.AddSingleton<DomainCookieJar>(sp => new DomainCookieJar(
+            System.IO.Path.Combine(AppPaths.AppDataDir, "video-cookies.json"),
+            VideoHttpClientFactory.DefaultUserAgent,
             sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<CurlImpersonateClient>(sp => new CurlImpersonateClient(
+            Math.Clamp(videoScrapeSettings.TimeoutSeconds, 5, 120), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoHttpClientFactory>(sp => new VideoHttpClientFactory(
+            sp.GetRequiredService<VideoScrapeAdvancedSettings>(),
+            sp.GetRequiredService<VideoScrapeSettings>(),
+            sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IResilientFetcher>(sp => new MultiTierFetcher(
+            sp.GetRequiredService<IVideoHttpClientFactory>(),
+            sp.GetRequiredService<VideoScrapeAdvancedSettings>(),
+            sp.GetRequiredService<VideoScrapeSettings>(),
+            sp.GetRequiredService<CurlImpersonateClient>(),
+            sp.GetRequiredService<DomainCookieJar>(),
+            sp.GetRequiredService<ILogger>()));
+        // 老三样刮削源经 Legacy 适配器进图（与 VideoScrapeService 内部自建的实例并存：
+        // 引擎切到 graph 时用这里的适配器，legacy 时用服务内建的，互不干扰）。
+        services.AddSingleton<VideoScrapeHttpClient>(sp => new VideoScrapeHttpClient(
+            configService.Current.VideoScraping ?? new VideoScrapeSettings()));
+        services.AddSingleton(sp => new JavBusScraper(sp.GetRequiredService<VideoScrapeHttpClient>(),
+            (configService.Current.VideoScraping ?? new VideoScrapeSettings()).JavBusBaseUrl));
+        services.AddSingleton(sp => new JavDbScraper(sp.GetRequiredService<VideoScrapeHttpClient>(),
+            (configService.Current.VideoScraping ?? new VideoScrapeSettings()).JavDbBaseUrl));
+        services.AddSingleton(sp => new AiravScraper(sp.GetRequiredService<VideoScrapeHttpClient>()));
+        services.AddSingleton<IVideoScrapeSource, LegacyJavBusSource>();
+        services.AddSingleton<IVideoScrapeSource, LegacyJavDbSource>();
+        services.AddSingleton<IVideoScrapeSource, LegacyAiravSource>();
+        // —— 阶段2 新实现的图引擎源（构造统一为 (IResilientFetcher, ILogger?)）——
+        // MissAV 刮削源：Tier 1 首批必含（复用在线源的搜索/详情/镜像/curl 全套链路）
+        services.AddSingleton<IVideoScrapeSource>(sp => new MissAvScrapeSource(
+            sp.GetRequiredService<IResilientFetcher>(),
+            sp.GetRequiredService<MissAvSource>(),
+            sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new JavLibrarySource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new Jav321Source(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new IqqtvSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new AvsoxSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new FreejavbtSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new Kin8Source(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new XcitySource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new GigaSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new GetchuSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new DahliaSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new FalenoSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new Fc2ppvdbSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new Fc2ClubSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new Fc2Source(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new MgstageSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new DmmSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<IVideoScrapeSource>(sp => new PrestigeSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>()));
+        // ThePornDb 的 API Key 来自 sourceConfigs.theporndb.apiKey（未配置时源自行降级返回 NoMatch）
+        services.AddSingleton<IVideoScrapeSource>(sp => new ThePornDbSource(
+            sp.GetRequiredService<IResilientFetcher>(), sp.GetRequiredService<ILogger>(),
+            advancedSettings.SourceConfigs.TryGetValue("theporndb", out var tpdb) && tpdb.Enabled
+                ? tpdb.ApiKey
+                : null));
+        services.AddSingleton<IVideoScrapeSourceRegistry, VideoScrapeSourceRegistry>();
+        services.AddSingleton<IVideoSourceSnapshotCache>(sp => new TtlSnapshotCache(
+            new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, sp.GetRequiredService<ILogger>()),
+            TimeSpan.FromDays(7), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<VideoFetchGraphScheduler>();
+        services.AddSingleton<VideoMetadataMerger>();
+        services.AddSingleton<VideoSourceHealthService>(sp => new VideoSourceHealthService(
+            System.IO.Path.Combine(AppPaths.AppDataDir, "video-source-health.json"),
+            sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<VideoGraphScrapeOrchestrator>();
         services.AddSingleton<DownloadPanelViewModel>();
         Services = services.BuildServiceProvider();
+
+        try
+        {
+            // 刮削配置校验：路由/字段优先级引用未注册源时打 warning，不阻塞启动
+            var registry = Services.GetRequiredService<IVideoScrapeSourceRegistry>();
+            var validation = VideoScrapeConfigValidator.Validate(
+                Services.GetRequiredService<VideoScrapeAdvancedSettings>(), registry);
+            foreach (var warning in validation.Warnings)
+                Services.GetRequiredService<ILogger>()?.Warn($"[App] 刮削配置: {warning}");
+        }
+        catch (Exception ex)
+        {
+            Services.GetService<ILogger>()?.Error("[App] 刮削配置校验失败", ex);
+        }
 
         try
         {

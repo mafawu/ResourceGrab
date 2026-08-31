@@ -5,25 +5,48 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Button x:Name="BackButton" Content="← 返回" HorizontalAlignment="Left"
+
+        <Button x:Name="BackButton" Grid.Row="0" Content="← 返回" HorizontalAlignment="Left"
                 Style="{StaticResource LibraryActionButtonStyle}" Margin="0,0,0,10" />
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+
+        <!-- 头部资料区（头像/名字/别名/资料 + 在线资料）：空间不足时独立滚动 -->
+        <ScrollViewer Grid.Row="1" MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel MaxWidth="960" Margin="0,0,12,0">
                 <Image x:Name="Avatar" Width="120" Height="120" Stretch="UniformToFill"
-                       Margin="0,0,0,10" Visibility="Collapsed" />
+                       Margin="0,0,0,10" Visibility="Collapsed" HorizontalAlignment="Left" />
                 <TextBlock x:Name="NameText" FontSize="20" FontWeight="Bold" />
                 <WrapPanel x:Name="AliasWrap" Margin="0,6,0,0" />
                 <TextBlock x:Name="InfoText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" Margin="0,8,0,0" />
-                <TextBlock Text="本地作品" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
-                <WrapPanel x:Name="WorksWrap" />
                 <TextBlock Text="在线资料" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
                 <TextBlock x:Name="OnlineText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
                 <WrapPanel x:Name="SourceWrap" Margin="0,8,0,0" />
             </StackPanel>
         </ScrollViewer>
+
+        <TextBlock Grid.Row="2" Text="本地作品" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+
+        <!-- 作品网格：虚拟化（行分组 + 容器回收），全量绑定不实例化不可视卡片 -->
+        <Grid Grid.Row="3">
+            <controls:VirtualizedCardGrid x:Name="WorksGrid" Margin="0,0,0,10"
+                                          CardWidth="180" SlotWidth="194">
+                <controls:VirtualizedCardGrid.ItemTemplate>
+                    <DataTemplate>
+                        <controls:VideoFileCard Item="{Binding}"
+                                                Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}"
+                                                HorizontalAlignment="Center"
+                                                Loaded="ActorWorkCard_Loaded" />
+                    </DataTemplate>
+                </controls:VirtualizedCardGrid.ItemTemplate>
+            </controls:VirtualizedCardGrid>
+            <TextBlock x:Name="WorksEmpty" Text="该演员暂无本地作品" FontSize="13"
+                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" Visibility="Collapsed" />
+        </Grid>
     </Grid>
 </UserControl>

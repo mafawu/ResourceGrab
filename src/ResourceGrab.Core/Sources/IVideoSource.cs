@@ -15,10 +15,10 @@ public class VideoSourceInfo
     /// <summary>备用镜像域名列表（Cloudflare 拦截时按顺序切换）。</summary>
     public IReadOnlyList<string> MirrorUrls { get; init; } = Array.Empty<string>();
 
-    /// <summary>是否需要先访问首页预热 Cookie。</summary>
+    /// <summary>是否需要先访问首页预热 Cookie（预留标志，当前无消费方）。</summary>
     public bool RequiresCookieWarmup { get; init; }
 
-    /// <summary>是否需要通过 curl 子进程绕过 Cloudflare。</summary>
+    /// <summary>是否需要通过 curl 子进程绕过 Cloudflare（预留标志，当前无消费方）。</summary>
     public bool RequiresCurlFallback { get; init; }
 }
 
@@ -33,6 +33,12 @@ public class OnlineVideoSummary
     public string Title { get; init; } = "";
 
     public string CoverUrl { get; init; } = "";
+
+    /// <summary>番号，如 "SSIS-960"；解析不出时为空串。</summary>
+    public string Number { get; init; } = "";
+
+    /// <summary>内容类型角标文本，如 "無碼影片"/"中文字幕"；无则留空。</summary>
+    public string KindLabel { get; init; } = "";
 
     public List<string> Tags { get; init; } = new();
 
@@ -64,6 +70,9 @@ public class OnlineVideoDetail
     public string Description { get; init; } = "";
     public string Number { get; init; } = "";
 
+    /// <summary>发行/上传日期文本（yyyy-MM-dd），源未提供时为空。</summary>
+    public string ReleaseDateText { get; init; } = "";
+
     /// <summary>HLS m3u8 或 MP4 直链；null 表示无法获取。</summary>
     public string? StreamUrl { get; init; }
 
@@ -91,4 +100,11 @@ public interface IVideoSource
 
     /// <summary>获取视频详情页信息（含流地址与磁力链接）。</summary>
     Task<OnlineVideoDetail?> GetDetailAsync(string videoUrl, CancellationToken ct = default);
+
+    /// <summary>
+    /// 由搜索摘要的 Id 构造详情页 URL。
+    /// 默认实现：Id 本身是完整 URL 则直接用，否则返回 null（源未提供拼URL规则）。
+    /// </summary>
+    string? GetDetailUrl(string videoId)
+        => videoId.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? videoId : null;
 }

@@ -7,6 +7,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -56,8 +57,20 @@
             </StackPanel>
         </Border>
 
+        <!-- 来源健康：per-source 成功率 / Block 率（阶段3观测） -->
+        <Border x:Name="HealthPanel" Grid.Row="2" Margin="20,8,20,0" Padding="12,8"
+                Background="{DynamicResource HoverBgBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                BorderThickness="1" CornerRadius="{DynamicResource RadiusSm}" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="来源健康" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                <TextBlock x:Name="HealthText" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+        </Border>
+
         <!-- 任务列表 -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="20,8,20,20">
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="20,8,20,20">
             <StackPanel>
                 <StackPanel x:Name="TaskListPanel" />
                 <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center"

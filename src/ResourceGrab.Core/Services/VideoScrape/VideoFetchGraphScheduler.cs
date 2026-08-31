@@ -13,6 +13,12 @@ public sealed class VideoFetchNode
     public required string SourceId { get; init; }
     public string? Language { get; init; }
 
+    /// <summary>
+    /// 源性能分级（越小越先抓）：1=快且稳（missav/javbus/javdb），2=中等，3=慢或受限。
+    /// 调度器按 Tier 分波执行，命中即停；不影响节点相等性（仍按 SourceId+Language）。
+    /// </summary>
+    public int Tier { get; init; } = 2;
+
     public override bool Equals(object? obj) =>
         obj is VideoFetchNode other &&
         string.Equals(SourceId, other.SourceId, StringComparison.OrdinalIgnoreCase) &&
@@ -107,7 +113,9 @@ public sealed class VideoFetchGraphScheduler
     }
 
     /// <summary>
-    /// 执行完整抓取图调度：波次执行、字段剪枝、缓存注入。
+    /// 执行抓取图调度：缓存注入 + 按 Tier 分波执行。
+    /// 波次语义：先抓 Tier 最小的首批（2-3 个高性能源，missav 必在），
+    /// 任一源命中即停；全部未命中/失败才继续下一波。避免全源并发浪费配额。
     /// </summary>
     public async Task<IReadOnlyList<VideoSourceFetchResult>> ExecuteAsync(
         VideoScrapeRequest request,
@@ -115,9 +123,6 @@ public sealed class VideoFetchGraphScheduler
         CancellationToken ct)
     {
         var results = new List<VideoSourceFetchResult>();
-        var fetchedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // 决定哪些来源需要实际请求
         var nodesToFetch = new List<VideoFetchNode>();
         var cachedResults = new List<VideoSourceFetchResult>();
 
@@ -145,7 +150,6 @@ public sealed class VideoFetchGraphScheduler
                     // Auto / RefreshMissing / BypassExpired: 缓存命中
                     cachedResults.Add(VideoSourceFetchResult.Success(
                         node.SourceId, snapshot.Metadata, language: node.Language));
-                    fetchedSources.Add(node.SourceId);
                     _logger?.Info($"[FetchGraph] 缓存命中: {node}");
                     continue;
                 }
@@ -155,51 +159,62 @@ public sealed class VideoFetchGraphScheduler
         }
 
         _logger?.Info($"[FetchGraph] 需要联网: {nodesToFetch.Count}, 缓存命中: {cachedResults.Count}");
-
-        // 并发执行所有需要联网的节点
-        var fetchTasks = nodesToFetch.Select(async node =>
-        {
-            var source = _registry.Get(node.SourceId);
-            if (source is null)
-            {
-                _logger?.Warn($"[FetchGraph] 来源未注册: {node.SourceId}");
-                return VideoSourceFetchResult.Failure(
-                    node.SourceId, VideoSourceOutcome.Disabled, "Source not registered");
-            }
-
-            var sourceRequest = new VideoSourceRequest(
-                request.Number,
-                request.ContentKind,
-                node.Language,
-                request.FilePath,
-                new VideoSourceFetchOptions { ForceRefresh = cacheMode == VideoScrapeCacheMode.ForceRefreshAll });
-
-            var result = await source.FetchAsync(sourceRequest, ct);
-            _logger?.Info($"[FetchGraph] {node}: {result.Outcome} ({result.ElapsedMs}ms)");
-
-            // 写入缓存
-            if (result.Outcome == VideoSourceOutcome.Success && result.Metadata is not null && _cache is not null)
-            {
-                var snapshot = new VideoSourceSnapshot
-                {
-                    Number = request.Number,
-                    SourceId = node.SourceId,
-                    Language = node.Language,
-                    SchemaVersion = "v1",
-                    Metadata = result.Metadata
-                };
-                await _cache.SetAsync(snapshot);
-            }
-
-            return result;
-        });
-
-        var fetchedResults = await Task.WhenAll(fetchTasks);
-
         results.AddRange(cachedResults);
-        results.AddRange(fetchedResults);
+
+        // 缓存已命中有效数据则不再联网；否则按 Tier 分波执行
+        var found = cachedResults.Count > 0;
+        foreach (var wave in nodesToFetch.GroupBy(n => n.Tier).OrderBy(g => g.Key))
+        {
+            if (found) break;
+
+            var waveNodes = wave.ToList();
+            _logger?.Info($"[FetchGraph] 波次 Tier={wave.Key}: {string.Join("+", waveNodes.Select(n => n.SourceId))}");
+
+            var fetchedResults = await Task.WhenAll(waveNodes.Select(node => FetchNodeAsync(node, request, cacheMode, ct)));
+            results.AddRange(fetchedResults);
+            found = fetchedResults.Any(r => r.Outcome == VideoSourceOutcome.Success);
+        }
 
         return results;
+    }
+
+    /// <summary>抓取单个节点：解析源、构造请求、联网、成功后写缓存。</summary>
+    private async Task<VideoSourceFetchResult> FetchNodeAsync(
+        VideoFetchNode node, VideoScrapeRequest request, VideoScrapeCacheMode cacheMode, CancellationToken ct)
+    {
+        var source = _registry.Get(node.SourceId);
+        if (source is null)
+        {
+            _logger?.Warn($"[FetchGraph] 来源未注册: {node.SourceId}");
+            return VideoSourceFetchResult.Failure(
+                node.SourceId, VideoSourceOutcome.Disabled, "Source not registered");
+        }
+
+        var sourceRequest = new VideoSourceRequest(
+            request.Number,
+            request.ContentKind,
+            node.Language,
+            request.FilePath,
+            new VideoSourceFetchOptions { ForceRefresh = cacheMode == VideoScrapeCacheMode.ForceRefreshAll });
+
+        var result = await source.FetchAsync(sourceRequest, ct);
+        _logger?.Info($"[FetchGraph] {node}: {result.Outcome} ({result.ElapsedMs}ms)");
+
+        // 写入缓存
+        if (result.Outcome == VideoSourceOutcome.Success && result.Metadata is not null && _cache is not null)
+        {
+            var snapshot = new VideoSourceSnapshot
+            {
+                Number = request.Number,
+                SourceId = node.SourceId,
+                Language = node.Language,
+                SchemaVersion = "v1",
+                Metadata = result.Metadata
+            };
+            await _cache.SetAsync(snapshot);
+        }
+
+        return result;
     }
 }
 

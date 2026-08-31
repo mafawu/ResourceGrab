@@ -39,6 +39,20 @@ public sealed class VideoScrapeProgress(int total)
         }
         Publish();
     }
+
+    /// <summary>批内条目结果流水上限（最新在前），看板明细展示用。</summary>
+    private const int MaxItemResults = 500;
+    private readonly List<VideoTaskItemResult> _itemResults = new();
+    public IReadOnlyList<VideoTaskItemResult> ItemResults { get { lock (_lock) return _itemResults.ToArray(); } }
+
+    public void RecordItem(VideoTaskItemResult result)
+    {
+        lock (_lock)
+        {
+            _itemResults.Insert(0, result);
+            if (_itemResults.Count > MaxItemResults) _itemResults.RemoveAt(_itemResults.Count - 1);
+        }
+    }
 }
 
 public sealed class VideoScrapeHttpClient : IDisposable
@@ -546,6 +560,7 @@ public sealed class VideoScrapeService : IDisposable
 
     private async Task ScrapeItemAsync(VideoItem item, VideoScrapeProgress progress, bool useCache, CancellationToken ct)
     {
+        var itemSw = System.Diagnostics.Stopwatch.StartNew();
         if (item.Number.Length == 0)
         {
             var reparsed = VideoNumberParser.Parse(item.FilePath, _logger);
@@ -562,6 +577,7 @@ public sealed class VideoScrapeService : IDisposable
         {
             item.ScrapeStatus = Models.ScrapeStatus.Skipped;
             progress.RecordSkipped();
+            progress.RecordItem(new VideoTaskItemResult { FileName = item.FileName, Outcome = "跳过", Detail = "未识别番号", ElapsedMs = (int)itemSw.ElapsedMilliseconds });
             progress.Log($"{item.FileName}: 未识别番号");
             _logger?.Warn($"[Scrape] 跳过 {item.FileName}: 未识别番号 (path={item.FilePath})");
             _library.Update(item, deferSave: true);
@@ -648,14 +664,20 @@ public sealed class VideoScrapeService : IDisposable
                 var hasErrors = attempts.Any(a => a.Outcome is VideoSourceOutcome.HttpError or VideoSourceOutcome.Blocked or VideoSourceOutcome.ParseError);
                 item.ScrapeStatus = hasErrors ? Models.ScrapeStatus.Failed : Models.ScrapeStatus.NoMatch;
                 item.ScrapedAt = DateTime.UtcNow;
+                var failDetail = string.Join("；", attempts
+                    .Where(a => a.Outcome is VideoSourceOutcome.HttpError or VideoSourceOutcome.Blocked or VideoSourceOutcome.ParseError && !string.IsNullOrEmpty(a.Reason))
+                    .Select(a => $"{a.SourceId}: {a.Reason}")
+                    .Distinct());
                 if (hasErrors)
                 {
                     progress.RecordFailed();
+                    progress.RecordItem(new VideoTaskItemResult { Number = item.Number, FileName = item.FileName, Outcome = "失败", Detail = failDetail, ElapsedMs = (int)itemSw.ElapsedMilliseconds });
                     progress.Log($"{item.Number}: 所有来源均失败");
                 }
                 else
                 {
                     progress.RecordNoMatch();
+                    progress.RecordItem(new VideoTaskItemResult { Number = item.Number, FileName = item.FileName, Outcome = "未匹配", Detail = failDetail, ElapsedMs = (int)itemSw.ElapsedMilliseconds });
                     progress.Log($"{item.Number}: 未匹配");
                 }
                 // 失败/未匹配同样落报告，报告面板才看得到失败原因。
@@ -671,6 +693,16 @@ public sealed class VideoScrapeService : IDisposable
                 item.ScrapedAt = DateTime.UtcNow;
                 progress.RecordSuccess();
                 var hits = string.Join("+", attempts.Where(a => a.Outcome is VideoSourceOutcome.Success or VideoSourceOutcome.CacheHit).Select(a => a.SourceId).Distinct());
+                progress.RecordItem(new VideoTaskItemResult
+                {
+                    Number = item.Number,
+                    FileName = item.FileName,
+                    Outcome = "成功",
+                    Sources = hits.Length > 0 ? hits : meta.Source,
+                    Title = meta.Title,
+                    Detail = $"演员{meta.Actors.Count} 标签{meta.Tags.Count}",
+                    ElapsedMs = (int)itemSw.ElapsedMilliseconds,
+                });
                 progress.Log($"{item.Number}: 命中 {(hits.Length > 0 ? hits : meta.Source)}");
                 _logger?.Info($"[Scrape] {item.Number} 成功 source={meta.Source} actors={meta.Actors.Count} tags={meta.Tags.Count}");
                 SaveFieldSourcesReport(item, meta, attempts);
@@ -681,6 +713,7 @@ public sealed class VideoScrapeService : IDisposable
         {
             item.ScrapeStatus = Models.ScrapeStatus.Failed;
             progress.RecordFailed();
+            progress.RecordItem(new VideoTaskItemResult { Number = item.Number, FileName = item.FileName, Outcome = "失败", Detail = ex.Message, ElapsedMs = (int)itemSw.ElapsedMilliseconds });
             progress.Log($"{item.Number}: {ex.Message}");
             _logger?.Error($"[Scrape] {item.Number} 刮削失败", ex);
             SaveFailureReport(item, attempts);
@@ -814,8 +847,26 @@ public sealed class VideoScrapeService : IDisposable
             _logger?.Warn($"[Scrape] {item.Number} 保存刮削报告失败: {ex.Message}");
         }
     }
+    /// <summary>
+    /// 图引擎聚合结果落报告：FieldSources/Attempts 来自 VideoMetadataMerger 的逐字段溯源，
+    /// 与 SaveFieldSourcesReport（老单源路径）互补。
+    /// </summary>
+    internal void SaveAggregateReport(VideoItem item, VideoScrapeAggregate aggregate)
+    {
+        if (_reportService is null || string.IsNullOrEmpty(item.Id)) return;
+        try
+        {
+            _reportService.SaveReport(item.Id, aggregate);
+            _reportService.SaveMetadataByNumber(item.Number, item);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[Scrape] {item.Number} 保存聚合报告失败: {ex.Message}");
+        }
+    }
+
     /// <summary>失败/未匹配时仅落来源尝试记录，供报告面板展示失败原因。</summary>
-    private void SaveFailureReport(VideoItem item, IReadOnlyCollection<VideoSourceAttempt> attempts)
+    internal void SaveFailureReport(VideoItem item, IReadOnlyCollection<VideoSourceAttempt> attempts)
     {
         if (_reportService is null || string.IsNullOrEmpty(item.Id)) return;
         try
@@ -835,7 +886,7 @@ public sealed class VideoScrapeService : IDisposable
 
     private static string Pick(string scraped, string current) => string.IsNullOrWhiteSpace(scraped) ? current : scraped.Trim();
 
-    private async Task DownloadImagesAsync(VideoItem item, VideoScrapeMetadata meta, CancellationToken ct)
+    internal async Task DownloadImagesAsync(VideoItem item, VideoScrapeMetadata meta, CancellationToken ct)
     {
         var dir = AppPaths.VideoArtworkDir;
         Directory.CreateDirectory(dir);

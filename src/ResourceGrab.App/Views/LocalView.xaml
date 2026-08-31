@@ -90,6 +90,12 @@
                            Margin="14,0" MinWidth="76" TextAlignment="Center" />
                 <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
                         Content="下一页 ›" Click="NextPage_Click" Padding="12,5" />
+                <TextBox x:Name="JumpPageBox" Style="{StaticResource ModernTextBoxStyle}"
+                         Width="52" Height="28" Margin="16,0,0,0" FontSize="12"
+                         VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                         ToolTip="输入页码后回车或点跳转" KeyDown="JumpPageBox_KeyDown" />
+                <Button x:Name="JumpPageButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="跳转" Click="JumpPage_Click" Padding="12,5" Margin="6,0,0,0" />
                 <ComboBox x:Name="PageSizeBox" Width="84" Margin="16,0,0,0"
                           VerticalAlignment="Center"
                           SelectionChanged="PageSizeBox_SelectionChanged" />

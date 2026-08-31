@@ -19,7 +19,9 @@ internal static class VideoFileValidator
             using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (fs.Length < MinFileSizeBytes) return false;
 
-        var header = new byte[Math.Min((int)fs.Length, 12)];
+            // 注意先转 long 再取 Min：直接 (int)fs.Length 对超过 2GB 的文件会溢出为负数，
+            // 导致 new byte[负数] 抛异常、大文件被误判为非法视频而永远无法入库。
+            var header = new byte[(int)Math.Min(fs.Length, 12)];
             if (fs.Read(header) < 4) return false;
 
             return TryMatchContainer(header, Path.GetExtension(filePath));

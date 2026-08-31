@@ -14,14 +14,22 @@ public sealed record VideoQueryOptions
     public IReadOnlySet<string>? IncludedTags { get; init; }
     public IReadOnlySet<string>? ExcludedTags { get; init; }
     public IReadOnlySet<string>? ActorFilter { get; init; }
-    public string? Series { get; init; }
-    public string? Studio { get; init; }
+    public IReadOnlySet<string>? ExcludedActors { get; init; }
+    public IReadOnlySet<string>? Series { get; init; }
+    public IReadOnlySet<string>? Studio { get; init; }
+    public IReadOnlySet<string>? ExcludedSeries { get; init; }
+    public IReadOnlySet<string>? ExcludedStudio { get; init; }
     public CensorType? CensorType { get; init; }
-    public string? Resolution { get; init; }
-    public DurationRange? Duration { get; init; }
+    public IReadOnlySet<string>? Resolution { get; init; }
+    public IReadOnlySet<DurationRange>? Duration { get; init; }
+    public IReadOnlySet<string>? ExcludedResolution { get; init; }
+    public IReadOnlySet<DurationRange>? ExcludedDuration { get; init; }
+    public bool ExcludeFavorites { get; init; }
+    public bool ExcludeWatched { get; init; }
+    public IReadOnlySet<ScrapeStatus>? ExcludedScrapeStatus { get; init; }
     public bool FavoritesOnly { get; init; }
     public bool WatchedOnly { get; init; }
-    public ScrapeStatus? ScrapeStatus { get; init; }
+    public IReadOnlySet<ScrapeStatus>? ScrapeStatus { get; init; }
     public VideoSortBy SortBy { get; init; } = VideoSortBy.AddedDesc;
 }
 
@@ -89,7 +97,18 @@ public class VideoLibraryService
         _logger?.Info($"[VideoLibrary] 已加载 {_items.Count} 条记录 ({Path.GetFileName(_filePath)})");
     }
 
-    public IReadOnlyList<VideoItem> Items => _items;
+    // 读取端一律走锁内快照：后台扫描/刮削线程会增删 _items，
+    // 若直接把原始列表交给 UI 枚举，遇到并发修改会抛 "Collection was modified"。
+    public IReadOnlyList<VideoItem> Items
+    {
+        get { lock (_lock) return _items.ToList(); }
+    }
+
+    /// <summary>当前库条目的线程安全快照。</summary>
+    private List<VideoItem> Snapshot()
+    {
+        lock (_lock) return _items.ToList();
+    }
     public int DataVersion => _dataVersion;
 
     public IReadOnlyList<string> RootFolders => _rootFolders;
@@ -102,19 +121,27 @@ public class VideoLibraryService
             _rootFolders.Add(normalized);
             SaveRootFolders();
         }
-        var existing = _items.Select(i => i.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var added = ScanVideoFiles(folderPath).Select(file =>
+        List<VideoItem> added;
+        lock (_lock)
         {
-            file.Id = VideoItem.CreateId(file.FilePath);
-            var parsed = VideoNumberParser.Parse(file.FileName);
-            file.Number = parsed.Number;
-            file.Part = parsed.Part;
-            return file;
-        }).Where(file => existing.Add(file.FilePath)).ToList();
+            var existing = _items.Select(i => i.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            added = ScanVideoFiles(folderPath).Select(file =>
+            {
+                file.Id = VideoItem.CreateId(file.FilePath);
+                var parsed = VideoNumberParser.Parse(file.FileName);
+                file.Number = parsed.Number;
+                file.Part = parsed.Part;
+                return file;
+            }).Where(file => existing.Add(file.FilePath)).ToList();
 
+            if (added.Count > 0)
+            {
+                _items.AddRange(added);
+                Interlocked.Increment(ref _dataVersion);
+            }
+        }
         if (added.Count > 0)
         {
-            _items.AddRange(added);
             RestoreMetadataFromCache(added);
             Save();
         }
@@ -131,14 +158,19 @@ public class VideoLibraryService
         return count > 0;
     }
 
-    /// <summary>重新扫描目录；按路径和大小合并旧记录，保留元数据与用户数据。</summary>
-    public List<VideoItem> Rescan(string folderPath)
+    /// <summary>重新扫描目录；按路径和大小合并旧记录，保留元数据与用户数据。
+    /// reportProgress 报告扫描进展；取消时在重建库之前中止，库状态不变。</summary>
+    public List<VideoItem> Rescan(string folderPath, Action<string>? reportProgress = null, CancellationToken ct = default)
     {
-        var fresh = ScanVideoFiles(folderPath);
+        ct.ThrowIfCancellationRequested();
+        var fresh = ScanVideoFiles(folderPath, ct,
+            found => reportProgress?.Invoke($"{folderPath} → 已发现 {found} 个视频"));
+        // 扫描被取消时不进入合并/重建阶段，避免把未扫到的文件当成已删除。
+        ct.ThrowIfCancellationRequested();
         List<VideoItem> snapshot;
         lock (_lock) { snapshot = _items.ToList(); }
         var old = new Dictionary<string, VideoItem>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in _items)
+        foreach (var item in snapshot)
         {
             old.TryAdd(StateKey(item.FilePath, item.FileSizeBytes), item);
         }
@@ -190,7 +222,22 @@ public class VideoLibraryService
         }
 
         var freshPaths = fresh.Select(i => i.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var otherItems = _items.Where(i => !freshPaths.Contains(i.FilePath) && !replacedOldPaths.Contains(i.FilePath)).ToList();
+        var otherItems = snapshot.Where(i => !freshPaths.Contains(i.FilePath) && !replacedOldPaths.Contains(i.FilePath)).ToList();
+
+        // 清理被新解析规则否定的旧条目：文件仍在重扫目录下、但文件名已解析不出番号
+        // （如推广/试看小视频靠旧的父目录兜底借用了番号入库）。磁盘上已消失的条目不受影响，仍照常保留。
+        var root = Path.GetFullPath(folderPath);
+        var droppedJunk = 0;
+        otherItems.RemoveAll(item =>
+        {
+            if (!IsUnderRoot(item.FilePath, root)) return false;
+            if (!File.Exists(item.FilePath)) return false;
+            if (VideoNumberParser.Parse(item.FilePath).Number.Length > 0) return false;
+            droppedJunk++;
+            return true;
+        });
+        if (droppedJunk > 0)
+            _logger?.Info($"[VideoLibrary] 重扫清理无番号残留条目 {droppedJunk} 条");
         var removedCount = otherItems.Count;
         lock (_lock) {
             _items.Clear();
@@ -204,13 +251,25 @@ public class VideoLibraryService
     /// <summary>清空全部视频记录（不删除磁盘上的视频文件与封面缓存）。</summary>
     public void ClearAll()
     {
-        var count = _items.Count;
-        _items.Clear();
+        int count;
+        lock (_lock)
+        {
+            count = _items.Count;
+            _items.Clear();
+            Interlocked.Increment(ref _dataVersion);
+        }
         Save();
         _logger?.Info($"[VideoLibrary] 清空视频库: 移除 {count} 条记录");
     }
 
     private static string StateKey(string path, long size) => $"{path}|{size}";
+
+    private static bool IsUnderRoot(string path, string root)
+    {
+        var normalized = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return path.StartsWith(normalized + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(path, normalized, StringComparison.OrdinalIgnoreCase);
+    }
 
     internal static void CopyItemState(VideoItem source, VideoItem target)
     {
@@ -341,7 +400,7 @@ public class VideoLibraryService
     {
         var changed = 0;
         var idSet = ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in _items.Where(i => idSet.Contains(i.Id) && i.IsFavorite != isFavorite))
+        foreach (var item in Snapshot().Where(i => idSet.Contains(i.Id) && i.IsFavorite != isFavorite))
         {
             item.IsFavorite = isFavorite;
             changed++;
@@ -376,7 +435,7 @@ public class VideoLibraryService
 
     public IReadOnlyList<VideoItem> Query(VideoQueryOptions options)
     {
-        IEnumerable<VideoItem> result = _items;
+        IEnumerable<VideoItem> result = Snapshot();
         var text = options.SearchText.Trim();
         if (text.Length > 0) result = result.Where(i => MatchesSearchText(i, text));
         if (options.IncludedTags is { Count: > 0 } included)
@@ -385,30 +444,63 @@ public class VideoLibraryService
             result = result.Where(i => !AllTags(i).Any(tag => excluded.Contains(tag, StringComparer.OrdinalIgnoreCase)));
         if (options.ActorFilter is { Count: > 0 } actors)
             result = result.Where(i => i.Actors.Any(actor => actors.Contains(actor, StringComparer.OrdinalIgnoreCase)));
-        if (!string.IsNullOrEmpty(options.Series))
-            result = result.Where(i => i.Series.Equals(options.Series, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrEmpty(options.Studio))
-            result = result.Where(i => StudioName(i).Equals(options.Studio, StringComparison.OrdinalIgnoreCase));
+        if (options.ExcludedActors is { Count: > 0 } excludedActors)
+            result = result.Where(i => !i.Actors.Any(actor => excludedActors.Contains(actor, StringComparer.OrdinalIgnoreCase)));
+        if (options.Series is { Count: > 0 } seriesFilter)
+            result = result.Where(i => seriesFilter.Contains(i.Series, StringComparer.OrdinalIgnoreCase));
+        if (options.ExcludedSeries is { Count: > 0 } excludedSeries)
+            result = result.Where(i => !excludedSeries.Contains(i.Series, StringComparer.OrdinalIgnoreCase));
+        if (options.Studio is { Count: > 0 } studioFilter)
+            result = result.Where(i => studioFilter.Contains(StudioName(i), StringComparer.OrdinalIgnoreCase));
+        if (options.ExcludedStudio is { Count: > 0 } excludedStudio)
+            result = result.Where(i => !excludedStudio.Contains(StudioName(i), StringComparer.OrdinalIgnoreCase));
         if (options.CensorType is { } censor) result = result.Where(i => i.CensorType == censor);
-        if (!string.IsNullOrEmpty(options.Resolution))
-            result = options.Resolution == "4K"
-                ? result.Where(i => ParseWidth(i.Resolution) >= 3600)
-                : result.Where(i => MatchesResolutionBucket(i.Resolution, options.Resolution));
-        if (options.Duration is { } duration and not DurationRange.Any)
-        {
-            result = duration switch
-            {
-                DurationRange.Under30Minutes => result.Where(i => i.DurationSeconds > 0 && i.DurationSeconds < 1800),
-                DurationRange.From30To60Minutes => result.Where(i => i.DurationSeconds >= 1800 && i.DurationSeconds <= 3600),
-                DurationRange.Over60Minutes => result.Where(i => i.DurationSeconds > 3600),
-                _ => result,
-            };
-        }
+        if (options.Resolution is { Count: > 0 } resolutions)
+            result = result.Where(i => resolutions.Any(bucket => MatchesResolution(i, bucket)));
+        if (options.ExcludedResolution is { Count: > 0 } excludedResolutions)
+            result = result.Where(i => !excludedResolutions.Any(bucket => MatchesResolution(i, bucket)));
+        if (options.Duration is { Count: > 0 } durations)
+            result = result.Where(i => durations.Any(d => MatchesDuration(i, d)));
+        if (options.ExcludedDuration is { Count: > 0 } excludedDurations)
+            result = result.Where(i => !excludedDurations.Any(d => MatchesDuration(i, d)));
         if (options.FavoritesOnly) result = result.Where(i => i.IsFavorite);
+        if (options.ExcludeFavorites) result = result.Where(i => !i.IsFavorite);
         if (options.WatchedOnly) result = result.Where(i => i.WatchProgress > 0);
-        if (options.ScrapeStatus is { } status) result = result.Where(i => i.ScrapeStatus == status);
-        return Sort(result, options.SortBy).ToList();
+        if (options.ExcludeWatched) result = result.Where(i => i.WatchProgress <= 0);
+        if (options.ScrapeStatus is { Count: > 0 } statuses)
+            result = result.Where(i => statuses.Contains(i.ScrapeStatus));
+        if (options.ExcludedScrapeStatus is { Count: > 0 } excludedStatuses)
+            result = result.Where(i => !excludedStatuses.Contains(i.ScrapeStatus));
+        return CollapseByNumber(Sort(result, options.SortBy));
     }
+
+    private static bool MatchesResolution(VideoItem item, string bucket) => bucket == "4K"
+        ? ParseWidth(item.Resolution) >= 3600
+        : MatchesResolutionBucket(item.Resolution, bucket);
+
+    private static bool MatchesDuration(VideoItem item, DurationRange range) => range switch
+    {
+        DurationRange.Under30Minutes => item.DurationSeconds > 0 && item.DurationSeconds < 1800,
+        DurationRange.From30To60Minutes => item.DurationSeconds >= 1800 && item.DurationSeconds <= 3600,
+        DurationRange.Over60Minutes => item.DurationSeconds > 3600,
+        _ => true,
+    };
+
+    /// <summary>
+    /// 按番号折叠条目列表：同一番号只保留一个代表条目。
+    /// 历史抓取曾把同文件夹里的推广小视频和正片一起刮成同一番号，库里因此有大量同番号重复条目，
+    /// 列表/统计若不去重会出现成片的重复海报。代表条目优先选在库文件、文件更大、评分更高的；
+    /// 无番号的条目不折叠（各算各的）。
+    /// </summary>
+    public static List<VideoItem> CollapseByNumber(IEnumerable<VideoItem> items) => items
+        .GroupBy(i => string.IsNullOrEmpty(i.Number) ? $"__id:{i.Id}" : i.Number, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g
+            .OrderByDescending(i => i.FileExists)
+            .ThenByDescending(i => i.FileSizeBytes)
+            .ThenByDescending(i => i.Score)
+            .ThenByDescending(i => i.AddedDate)
+            .First())
+        .ToList();
 
     internal static IEnumerable<VideoItem> Sort(IEnumerable<VideoItem> source, VideoSortBy sortBy) => sortBy switch
     {
@@ -426,11 +518,18 @@ public class VideoLibraryService
         _ => source.OrderByDescending(i => i.AddedDate),
     };
 
-    private static bool MatchesSearchText(VideoItem item, string text) =>
-        Contains(item.FileName, text) || Contains(item.Number, text) || Contains(item.Title, text)
-        || Contains(item.OriginalTitle, text) || Contains(item.Description, text) || Contains(item.Series, text)
-        || Contains(item.Studio, text) || Contains(item.Publisher, text) || Contains(item.Director, text)
-        || AllTags(item).Any(tag => Contains(tag, text)) || item.Actors.Any(actor => Contains(actor, text));
+    private static bool MatchesSearchText(VideoItem item, string text)
+    {
+        // 多关键字：空格分隔，所有关键字都命中（任意字段）才算匹配（AND 语义）。
+        var keywords = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return keywords.All(keyword => MatchesKeyword(item, keyword));
+    }
+
+    private static bool MatchesKeyword(VideoItem item, string keyword) =>
+        Contains(item.FileName, keyword) || Contains(item.Number, keyword) || Contains(item.Title, keyword)
+        || Contains(item.OriginalTitle, keyword) || Contains(item.Description, keyword) || Contains(item.Series, keyword)
+        || Contains(item.Studio, keyword) || Contains(item.Publisher, keyword) || Contains(item.Director, keyword)
+        || AllTags(item).Any(tag => Contains(tag, keyword)) || item.Actors.Any(actor => Contains(actor, keyword));
 
     private static bool Contains(string? field, string text) => !string.IsNullOrEmpty(field) && field.Contains(text, StringComparison.OrdinalIgnoreCase);
 
@@ -456,12 +555,15 @@ public class VideoLibraryService
         };
     }
 
-    public Dictionary<string, int> GetTagCounts() => CountValues(_items.ToList().SelectMany(AllTags));
-    public Dictionary<string, int> GetActorCounts() => CountValues(_items.ToList().SelectMany(i => i.Actors));
+    // 侧栏计数同样基于去重后的快照：同一番号的重复条目共用同一套标签/演员，不去重会把计数翻好几倍。
+    public Dictionary<string, int> GetTagCounts() => CountValues(UniqueItems().SelectMany(AllTags));
+    public Dictionary<string, int> GetActorCounts() => CountValues(UniqueItems().SelectMany(i => i.Actors));
     public List<string> GetAllActors() => GetActorCounts().Keys.ToList();
-    public Dictionary<string, int> GetSeriesCounts() => CountValues(_items.ToList().Select(i => i.Series));
+    public Dictionary<string, int> GetSeriesCounts() => CountValues(UniqueItems().Select(i => i.Series));
     public List<string> GetAllSeries() => GetSeriesCounts().Keys.ToList();
-    public Dictionary<string, int> GetStudioCounts() => CountValues(_items.ToList().Select(StudioName));
+    public Dictionary<string, int> GetStudioCounts() => CountValues(UniqueItems().Select(StudioName));
+
+    private List<VideoItem> UniqueItems() => CollapseByNumber(Snapshot());
 
     private static Dictionary<string, int> CountValues(IEnumerable<string?> values)
     {
@@ -476,14 +578,17 @@ public class VideoLibraryService
             .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
     }
 
-    public static List<VideoItem> ScanVideoFiles(string dirPath)
+    public static List<VideoItem> ScanVideoFiles(string dirPath, CancellationToken ct = default, Action<int>? onFound = null)
     {
         var result = new List<VideoItem>();
         if (string.IsNullOrWhiteSpace(dirPath) || !Directory.Exists(dirPath)) return result;
         try
         {
+            var found = 0;
             foreach (var path in Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories))
             {
+                if (ct.IsCancellationRequested) break;
+
                 // 跳过隐藏文件与系统目录（Thumbs.db、@eaDir 等）
                 var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 if (segments.Any(s => s.StartsWith('.') || s.Equals("@eaDir", StringComparison.OrdinalIgnoreCase)
@@ -498,9 +603,10 @@ public class VideoLibraryService
                 if (info.Length < VideoFileValidator.MinFileSizeBytes) continue;
                 if (!VideoFileValidator.IsValidVideoFile(path)) continue;
 
-                // 文件名与父目录均无法识别出有效番号时，视为非正片（推广/试看/附属文件），跳过。
+                // 文件名无法识别出有效番号时，视为非正片（推广/试看/附属文件），跳过。
+                // 解析器不做父目录兜底：广告杂片不会借用文件夹番号。
                 var numberResult = VideoNumberParser.Parse(path);
-                if (numberResult.Number.Length == 0 && numberResult.Confidence <= 0)
+                if (numberResult.Number.Length == 0)
                     continue;
 
                 result.Add(new VideoItem
@@ -509,7 +615,11 @@ public class VideoLibraryService
                     FilePath = path,
                     FileSizeBytes = info.Length,
                 });
+                found++;
+                // 文件头校验是逐个读盘的慢步骤，定期上报计数让前端能显示进展。
+                if (onFound is not null && found % 20 == 0) onFound(found);
             }
+            onFound?.Invoke(found);
         }
         catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException or IOException)
         {
@@ -563,6 +673,22 @@ public class VideoLibraryService
         }
     }
 
+
+    /// <summary>
+    /// 对库内所有缺少演员/标题的条目，尝试从刮削报告缓存（按番号）恢复元数据。
+    /// 用于"库重建/重扫后元数据为空、但刮削缓存还在"的场景，零联网。返回恢复条数。
+    /// </summary>
+    public int RestoreMetadataFromCacheForAll()
+    {
+        var targets = Snapshot().Where(i =>
+                i.Number.Length > 0 &&
+                (i.Actors.Count == 0 || string.IsNullOrWhiteSpace(i.Title)))
+            .ToList();
+        if (targets.Count == 0) return 0;
+        RestoreMetadataFromCache(targets);
+        Flush();
+        return targets.Count(i => i.Actors.Count > 0 || !string.IsNullOrWhiteSpace(i.Title));
+    }
 
     /// <summary>从路径缓存恢复刮削元数据（删除 video-library.json 后重新添加文件时调用）。</summary>
     private void RestoreMetadataFromCache(List<VideoItem> items)

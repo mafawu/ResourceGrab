@@ -23,7 +23,7 @@ public partial class SnackbarHost : UserControl
         {
             ToastKind.Success => (Brush)FindResource("SuccessBrush"),
             ToastKind.Error => (Brush)FindResource("DangerBrush"),
-            _ => Brushes.White,
+            _ => (Brush)FindResource("PrimaryBrush"),   // Info 用品牌色：白色在浅色主题背景上不可见
         };
         var glyph = kind switch
         {
@@ -58,7 +58,8 @@ public partial class SnackbarHost : UserControl
         {
             Text = message,
             FontSize = 12.5,
-            Foreground = Brushes.White,
+            // 主题自适应：SnackbarBgBrush 浅色主题为半透明白、深色主题为深灰，写死白色会在浅色主题下"白字白底"隐形
+            Foreground = (Brush)FindResource("TextPrimaryBrush"),
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 360,
             Margin = new Thickness(8, 0, 0, 0),

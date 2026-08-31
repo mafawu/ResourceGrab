@@ -65,11 +65,8 @@ public static partial class VideoNumberParser
         uncensored = Regex.Match(text, @"(?:^|\s)(\d{3,4})[_-](\d{3})(?:$|\s)");
         if (uncensored.Success) return new($"{uncensored.Groups[1].Value}-{uncensored.Groups[2].Value}", VideoNumberKind.Uncensored, part, 0.7);
 
-        var parent = Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(filePath))) ?? "";
-        var fallback = StandardNumber().Match(parent) is { Success: true } parentMatch
-            ? $"{parentMatch.Groups[1].Value.ToUpperInvariant()}-{parentMatch.Groups[2].Value}" : "";
-        return string.IsNullOrEmpty(fallback)
-            ? new("", VideoNumberKind.Unknown, part, 0)
-            : new(fallback, VideoNumberKind.Normal, part, 0.35);
+        // 严格模式：只认文件名本身的番号，不做父目录兜底——
+        // 否则文件夹内的广告/预告/任意命名杂片会借用文件夹番号入库被误刮削。
+        return new("", VideoNumberKind.Unknown, part, 0);
     }
 }

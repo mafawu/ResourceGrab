@@ -11,8 +11,8 @@
                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                 ClipToBounds="True">
             <StackPanel>
-                <!-- 封面区：宽高比 0.7 -->
-                <Grid x:Name="CoverHost">
+                <!-- 封面区：宽高比 0.7（170 宽 → 243 高），固定高度避免每张图原始尺寸不一导致卡片高低错落 -->
+                <Grid x:Name="CoverHost" Height="243">
                     <Border Background="{DynamicResource HoverBgBrush}" MinHeight="120">
                         <TextBlock x:Name="FallbackText" Text=""
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -53,7 +53,7 @@
                 <!-- 信息区 -->
                 <Border x:Name="InfoHost" Padding="10,8,10,10">
                     <StackPanel>
-                        <TextBlock x:Name="TitleText" Text=""
+                        <TextBlock x:Name="TitleText" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}"
                                    TextWrapping="Wrap" MaxHeight="34"
@@ -63,9 +63,9 @@
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                    Visibility="Collapsed" />
                         <StackPanel x:Name="MetaRow" Orientation="Horizontal" Margin="0,4,0,0">
-                            <TextBlock x:Name="MetaLeftText" Text="" FontSize="11"
+                            <TextBlock x:Name="MetaLeftText" Text="{Binding MetaLeft, RelativeSource={RelativeSource AncestorType=UserControl}}" FontSize="11"
                                        Foreground="{DynamicResource TextSecondaryBrush}" />
-                            <TextBlock x:Name="MetaRightText" Text="" FontSize="11"
+                            <TextBlock x:Name="MetaRightText" Text="{Binding MetaRight, RelativeSource={RelativeSource AncestorType=UserControl}}" FontSize="11"
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        Margin="6,0,0,0" />
                         </StackPanel>

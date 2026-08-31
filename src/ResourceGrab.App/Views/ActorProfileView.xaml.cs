@@ -48,15 +48,20 @@ public partial class ActorProfileView : UserControl
             SortBy = VideoSortBy.AddedDesc,
         }).ToList();
 
-        WorksWrap.Children.Clear();
-        foreach (var item in items)
-        {
-            var card = new VideoFileCard { Item = item, Width = 180 };
-            card.DetailRequested += OnCardDetail;
-            WorksWrap.Children.Add(card);
-        }
+        // 全量绑定，虚拟化网格只实例化可视卡片（滚动位置复位）
+        WorksGrid.ItemsSource = items;
+        WorksGrid.ScrollToTop();
+        WorksEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         _ = LoadOnlineAsync(actor);
+    }
+
+    private void ActorWorkCard_Loaded(object sender, RoutedEventArgs e)
+    {
+        // 容器回收会复用卡片实例，Loaded 反复触发：先解绑再绑，避免重复订阅
+        if (sender is not VideoFileCard card) return;
+        card.DetailRequested -= OnCardDetail;
+        card.DetailRequested += OnCardDetail;
     }
 
     private void OnCardDetail(VideoItem item) => OnLocalWorkSelected?.Invoke(item);
@@ -113,11 +118,14 @@ public partial class ActorProfileView : UserControl
         }
     }
 
-    private async Task LoadAvatarAsync(string url, CancellationToken ct)
+    private async Task LoadAvatarAsync(string source, CancellationToken ct)
     {
         try
         {
-            var bytes = await _http.GetByteArrayAsync(url, ct);
+            // GFriends 返回本地落盘路径，在线源返回 URL，两者都支持
+            var bytes = !source.StartsWith("http", StringComparison.OrdinalIgnoreCase) && File.Exists(source)
+                ? await File.ReadAllBytesAsync(source, ct)
+                : await _http.GetByteArrayAsync(source, ct);
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;

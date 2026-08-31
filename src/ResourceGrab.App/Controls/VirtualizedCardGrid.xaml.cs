@@ -96,6 +96,21 @@ public partial class VirtualizedCardGrid : UserControl
 
     public void ScrollToTop() => _scroller?.ScrollToTop();
 
+    /// <summary>
+    /// 行集合重建会把 ScrollViewer 归零；在重建完成后把滚动位置还原到 offset。
+    /// 用于内容不变、仅卡片数据刷新的重新绑定，避免拖动滚动条时位置被拉回顶部。
+    /// </summary>
+    public void RestoreOffset(double offset)
+    {
+        if (offset <= 0) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            if (_scroller is null) return;
+            _scroller.UpdateLayout();
+            _scroller.ScrollToVerticalOffset(Math.Min(offset, _scroller.ScrollableHeight));
+        });
+    }
+
     private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var grid = (VirtualizedCardGrid)d;

@@ -55,6 +55,25 @@ public sealed class VideoScrapeTask
     public int FailedCount { get; set; }
     public int SkippedCount { get; set; }
     public List<string> Logs { get; set; } = [];
+
+    /// <summary>批内单条刮削结果流水（最新在前，执行器实时回填，供看板明细展示）。</summary>
+    public List<VideoTaskItemResult> ItemResults { get; set; } = [];
+}
+
+/// <summary>批内单条刮削的明细：命中来源、刮到的标题、耗时或失败原因。</summary>
+public sealed class VideoTaskItemResult
+{
+    public string Number { get; init; } = "";
+    public string FileName { get; init; } = "";
+    /// <summary>成功 / 未匹配 / 失败 / 跳过。</summary>
+    public string Outcome { get; init; } = "";
+    /// <summary>命中的来源，如 "javbus+javdb"。</summary>
+    public string Sources { get; init; } = "";
+    public string Title { get; init; } = "";
+    /// <summary>补充信息：成功时为演员/标签数，失败时为原因。</summary>
+    public string Detail { get; init; } = "";
+    public int ElapsedMs { get; init; }
+    public DateTimeOffset At { get; init; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class VideoScrapeFollowUp

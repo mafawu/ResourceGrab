@@ -719,6 +719,24 @@ public partial class MainWindow : Window
         ApplyRightPanelVisibility();
     }
 
+    /// <summary>视频本地详情开关：打开时收起右侧本地搜索面板，由 VideoView 内置详情栏顶替其位置；关闭时恢复。</summary>
+    private void SetVideoDetailPanelOpen(bool open)
+    {
+        if (!ReferenceEquals(PageHost.Content, _videoView)) return;
+        if (open)
+        {
+            RightPanelHost.Visibility = Visibility.Collapsed;
+            PanelSplitter.Visibility = Visibility.Collapsed;
+            PanelColumn.MinWidth = 0;
+            PanelColumn.MaxWidth = 440;
+            PanelColumn.Width = new GridLength(0);
+        }
+        else
+        {
+            ApplyRightPanelVisibility();
+        }
+    }
+
 
     /// <summary>离开阅读页（进入列表/详情等页面）时：隐藏右侧面板，恢复下载队列内容。</summary>
     public async Task TriggerLocalRefreshAsync()
@@ -780,6 +798,8 @@ private void OpenNovelLocal()
         {
             _videoView ??= new VideoView();
             _videoView.SetSearchPanel(VideoSearchPanelView);
+            _videoView.DetailPanelToggled -= SetVideoDetailPanelOpen;
+            _videoView.DetailPanelToggled += SetVideoDetailPanelOpen;
             _lastPage = _videoView;
             SetPage(_videoView);
             RightPanelHost.Content = VideoSearchPanelView;

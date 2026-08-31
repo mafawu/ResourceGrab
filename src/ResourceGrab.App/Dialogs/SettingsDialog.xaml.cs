@@ -30,6 +30,7 @@ public partial class SettingsDialog : Window
         _initialThemeIsDark = ThemeManager.IsDark;
 
         LoadFromConfig(_configService.Current);
+        RefreshSliderValueTexts();
         SelectPage(MangaNavItem);
     }
 
@@ -148,26 +149,52 @@ public partial class SettingsDialog : Window
         GeneralPage.Visibility = nav == GeneralNavItem ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    // XAML 解析期间设置 Minimum/Value 就会触发 ValueChanged，此时标签元素尚未创建，必须判空
     private void ScrollSpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => ScrollSpeedValueText.Text = $"{e.NewValue:0.0}x";
+    {
+        if (ScrollSpeedValueText != null) ScrollSpeedValueText.Text = $"{e.NewValue:0.0}x";
+    }
 
     private void PreloadSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => PreloadValueText.Text = e.NewValue.ToString("0");
+    {
+        if (PreloadValueText != null) PreloadValueText.Text = e.NewValue.ToString("0");
+    }
 
     private void NovelFontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => NovelFontSizeText.Text = $"{e.NewValue:0.#} pt";
+    {
+        if (NovelFontSizeText != null) NovelFontSizeText.Text = $"{e.NewValue:0.#} pt";
+    }
 
     private void LineHeightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => LineHeightText.Text = $"{e.NewValue:0.00}";
+    {
+        if (LineHeightText != null) LineHeightText.Text = $"{e.NewValue:0.00}";
+    }
 
     private void IndentSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => IndentText.Text = $"{e.NewValue:0.#} em";
+    {
+        if (IndentText != null) IndentText.Text = $"{e.NewValue:0.#} em";
+    }
 
     private void PlaybackRateSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => PlaybackRateText.Text = $"{e.NewValue:0.00}x";
+    {
+        if (PlaybackRateText != null) PlaybackRateText.Text = $"{e.NewValue:0.00}x";
+    }
 
     private void CacheLimitSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        => CacheLimitText.Text = $"{e.NewValue / 1024.0:0.#} GB";
+    {
+        if (CacheLimitText != null) CacheLimitText.Text = $"{e.NewValue / 1024.0:0.#} GB";
+    }
+
+    private void RefreshSliderValueTexts()
+    {
+        ScrollSpeedValueText.Text = $"{ScrollSpeedSlider.Value:0.0}x";
+        PreloadValueText.Text = PreloadSlider.Value.ToString("0");
+        NovelFontSizeText.Text = $"{NovelFontSizeSlider.Value:0.#} pt";
+        LineHeightText.Text = $"{LineHeightSlider.Value:0.00}";
+        IndentText.Text = $"{IndentSlider.Value:0.#} em";
+        PlaybackRateText.Text = $"{PlaybackRateSlider.Value:0.00}x";
+        CacheLimitText.Text = $"{CacheLimitSlider.Value / 1024.0:0.#} GB";
+    }
 
     private void BrowseDownloadDir_Click(object sender, RoutedEventArgs e)
         => BrowseFolder(DownloadDirBox, "选择漫画下载目录");
