@@ -12,10 +12,11 @@ release/
 *.user
 *.suo
 
-# Runtime data written next to exe
+# Runtime data written next to exe（用户配置与下载数据，不入库）
 config/
-/docs
-/tests
+
+# docs/ 与 tests/ 必须入库：开发计划文档和单元测试是源码资产。
+# 其内部构建产物由上面的 [Bb]in/ [Oo]bj/ 规则兜底（不带前导斜杠，匹配任意层级）。
 
 # Local tooling state and reference copies
 .ref/
