@@ -1003,6 +1003,20 @@
   <Style x:Key="SpacedPlainListBoxItemStyle" TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource PlainListBoxItemStyle}">
     <Setter Property="Margin" Value="0,6,0,6" />
   </Style>
+  <!-- 可拖选文本：只读 TextBox 伪装成 TextBlock，支持鼠标拖选部分文字 + 默认右键/Ctrl+C 复制 -->
+  <Style x:Key="SelectableTextStyle" TargetType="{x:Type TextBox}">
+    <Setter Property="IsReadOnly" Value="True" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource PrimarySubtleBrush}" />
+  </Style>
   <Style x:Key="DangerHoverIconButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource IconButtonStyle}">
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Style.Triggers>

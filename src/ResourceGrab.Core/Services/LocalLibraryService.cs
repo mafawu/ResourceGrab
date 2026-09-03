@@ -735,6 +735,43 @@ public class LocalLibraryService
 
     private SourceMetadata? TryReadSourceMetadata(string albumDir) => ReadSourceMetadata(albumDir);
 
+    /// <summary>在线匹配回填：用站点专辑数据重建 album.json；保留已有 nameCn（翻译/提取结果），缺失时用 fallbackNameCn。</summary>
+    public void SaveMatchedMetadata(string albumDir, Album album, string fallbackNameCn = "")
+    {
+        if (string.IsNullOrWhiteSpace(albumDir) || album is null)
+        {
+            return;
+        }
+        Directory.CreateDirectory(albumDir);
+        var existing = TryReadMetadata(albumDir);
+        var nameCn = existing?.NameCn is { Length: > 0 } cn ? cn : (fallbackNameCn ?? "");
+        WriteMetadata(albumDir, BuildMetadata(album, nameCn));
+    }
+
+    /// <summary>把来源元数据写入指定专辑目录（在线匹配回填场景；目录已存在，区别于按下载根目录计算的 SaveSourceMetadata）。</summary>
+    public void SaveSourceMetadataForDir(string albumDir, string sourceId, ComicDetail detail)
+    {
+        if (string.IsNullOrWhiteSpace(albumDir) || detail is null || string.IsNullOrWhiteSpace(detail.Id))
+        {
+            return;
+        }
+        Directory.CreateDirectory(albumDir);
+        var metadata = new SourceMetadata
+        {
+            SourceId = sourceId,
+            ComicId = detail.Id,
+            Title = detail.Title,
+            Authors = detail.Authors,
+            Tags = detail.Tags,
+            CoverUrl = detail.CoverUrl,
+            Description = detail.Description,
+        };
+        var target = Path.Combine(albumDir, SourceMetadataFileName);
+        var temp = target + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(metadata, JsonOptions));
+        File.Move(temp, target, true);
+    }
+
     /// <summary>扫描下载目录，收集「已下载」漫画的 (源, id) 键集合（无 source.json 的旧版下载回退为禁漫 jm）。</summary>
     public HashSet<string> GetDownloadedKeys(string downloadDir)
     {

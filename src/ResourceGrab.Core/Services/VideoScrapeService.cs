@@ -784,6 +784,8 @@ public sealed class VideoScrapeService : IDisposable
 
     internal static void ApplyMetadata(VideoItem item, VideoScrapeMetadata meta)
     {
+        // 离线词典后处理：标题/简介繁转简、演员译名、标签归一化（两套引擎共用汇合点）
+        OfflineLexicon.ProcessMetadata(meta);
         item.Title = Pick(meta.Title, item.Title);
         item.OriginalTitle = Pick(meta.OriginalTitle, item.OriginalTitle);
         item.Description = Pick(meta.Description, item.Description);

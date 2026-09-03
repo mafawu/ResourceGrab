@@ -13,7 +13,7 @@
             <StackPanel>
                 <!-- 封面区：宽高比 0.7（170 宽 → 243 高），固定高度避免每张图原始尺寸不一导致卡片高低错落 -->
                 <Grid x:Name="CoverHost" Height="243">
-                    <Border Background="{DynamicResource HoverBgBrush}" MinHeight="120">
+                    <Border x:Name="FallbackBorder" Background="{DynamicResource HoverBgBrush}" MinHeight="120">
                         <TextBlock x:Name="FallbackText" Text=""
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                    FontSize="14" FontWeight="Bold"

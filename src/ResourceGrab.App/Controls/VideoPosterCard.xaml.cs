@@ -32,6 +32,12 @@ public class VideoPosterCard : PosterCard
             if (_item is not null) DetailRequested?.Invoke(_item);
             else if (_onlineItem is not null) OnlineDetailRequested?.Invoke(_onlineItem);
         };
+        // 在线卡片宽度可调（每行个数滑杆）：横版封面高度始终跟随卡片宽度保持 1.5:1
+        SizeChanged += (_, _) =>
+        {
+            if (_onlineItem is not null && _item is null && ActualWidth > 0)
+                CoverHeight = ActualWidth / 1.5;
+        };
     }
 
     /// <summary>绑定 VideoItem，自动填充所有属性和角标。</summary>
@@ -39,7 +45,8 @@ public class VideoPosterCard : PosterCard
     {
         _item = item;
         _onlineItem = null;
-        // 封面
+        // 封面（本地为竖版海报，重置横版在线卡片改过的高度）
+        CoverHeight = PosterCard.DefaultCoverHeight;
         var posterPath = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }
             .FirstOrDefault(p => !string.IsNullOrEmpty(p) && System.IO.File.Exists(p));
         CoverSource = posterPath;
@@ -80,6 +87,9 @@ public class VideoPosterCard : PosterCard
         _item = null;
         _onlineItem = item;
 
+        // 在线封面为横版（宽:高 = 1.5:1），按卡片宽 170 换算高度，完整显示不裁切
+        CoverHeight = 170 / 1.5;
+
         CoverSource = string.IsNullOrEmpty(item.CoverUrl) ? null : item.CoverUrl;
         CoverFallback = item.Title;
 
@@ -93,13 +103,15 @@ public class VideoPosterCard : PosterCard
 
         SetTags(item.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Take(4).ToList());
 
-        // 清掉本地卡片的角标/进度/缺失态，类型压左上角标、时长压右下角标
+        // 清掉本地卡片的角标/进度/缺失态，类型压左上角标、评分压右上角标、时长压右下角标
         TopLeftContent = string.IsNullOrEmpty(item.KindLabel)
             ? null
             : MakeBadge(item.KindLabel,
                 new SolidColorBrush(Color.FromRgb(0x9A, 0xC1, 0xFF)),
                 new SolidColorBrush(Color.FromArgb(0xB3, 0x1D, 0x4E, 0xD8)));
-        TopRightContent = null;
+        TopRightContent = string.IsNullOrEmpty(item.RatingText)
+            ? null
+            : MakeRatingBadge(item.RatingText);
         BottomLeftContent = null;
         BottomRightContent = string.IsNullOrEmpty(item.DurationText)
             ? null
@@ -110,7 +122,7 @@ public class VideoPosterCard : PosterCard
 
     /// <summary>
     /// 详情页回填：后台渐进拉到的详情补充到搜索卡片上（演员作副标题、发行日期进信息行、
-    /// 标签换为详情页完整标签）。摘要里已有的信息（时长、类型角标）保持不变。
+    /// 评分压右上角标、标签换为详情页完整标签）。摘要里已有的信息（时长、类型角标）保持不变。
     /// </summary>
     public void UpdateOnlineDetail(OnlineVideoDetail detail)
     {
@@ -123,7 +135,10 @@ public class VideoPosterCard : PosterCard
         if (!string.IsNullOrEmpty(detail.ReleaseDateText))
             MetaRight = $"发行 {detail.ReleaseDateText}";
 
-        var detailTags = detail.Tags
+        if (!string.IsNullOrEmpty(detail.RatingText))
+            TopRightContent = MakeRatingBadge(detail.RatingText);
+
+        var detailTags = detail.Tags.Concat(detail.Genres)
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Where(t => !detail.Actors.Contains(t, StringComparer.OrdinalIgnoreCase))
             .Take(4).ToList();
@@ -133,6 +148,14 @@ public class VideoPosterCard : PosterCard
         // 番号以详情页为准（搜索摘要从 URL 提取，偶有出入）
         if (!string.IsNullOrEmpty(detail.Number))
             MetaLeft = detail.Number;
+    }
+
+    /// <summary>评分角标：琥珀色 ★ 徽章，评分文本已含 ★ 时不重复加。</summary>
+    private static Border MakeRatingBadge(string ratingText)
+    {
+        var text = ratingText.Trim();
+        if (!text.Contains('★')) text = $"★ {text}";
+        return MakeBadge(text, new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x47)));
     }
 
     private void BuildBadges(VideoItem item)

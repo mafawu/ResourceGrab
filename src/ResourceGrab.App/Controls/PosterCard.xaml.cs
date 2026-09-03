@@ -30,6 +30,23 @@ public partial class PosterCard : UserControl
         set => SetValue(CoverSourceProperty, value);
     }
 
+    /// <summary>默认封面区高度：170 宽对应的 0.7 竖版海报。</summary>
+    public const double DefaultCoverHeight = 243;
+
+    /// <summary>
+    /// 封面区高度，默认竖版 243。横版封面（宽:高 = 1.5:1，如在线搜索结果）按卡片宽 / 1.5
+    /// 设置，否则 UniformToFill 会把封面左右裁掉。
+    /// </summary>
+    public double CoverHeight
+    {
+        get => CoverHost.Height;
+        set
+        {
+            CoverHost.Height = value;
+            FallbackBorder.MinHeight = Math.Min(120, value);
+        }
+    }
+
     public string CoverFallback
     {
         get => (string)GetValue(CoverFallbackProperty);

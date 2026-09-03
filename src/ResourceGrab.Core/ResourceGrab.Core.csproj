@@ -16,4 +16,10 @@
   <ItemGroup>
     <InternalsVisibleTo Include="ResourceGrab.Core.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 离线词典：演员名翻译/标签归一化（amane 项目分发的 mapping 表）与繁简转换词典，随包内嵌无网络可用 -->
+    <EmbeddedResource Include="Resources\mapping_actor.xml" />
+    <EmbeddedResource Include="Resources\mapping_info.xml" />
+    <EmbeddedResource Include="Resources\zhcdict.json" />
+  </ItemGroup>
 </Project>

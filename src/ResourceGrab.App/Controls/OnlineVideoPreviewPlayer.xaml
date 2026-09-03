@@ -1,0 +1,78 @@
+<UserControl x:Class="ResourceGrab.App.Controls.OnlineVideoPreviewPlayer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF">
+
+    <!--
+      在线视频预览/全片播放器（源无关）：吃 OnlineVideoDetail 的 StreamUrl + Referer 契约。
+      空域限制（airspace）：VideoView 是 HwndHost，永远浮在同级 WPF 元素之上，
+      因此播放中的加载/错误/暂停覆盖层必须放在 VideoView.Content 内部。
+    -->
+    <Grid Background="#FF101418">
+        <!-- 播放器宿主：非播放态折叠，避免黑块挡住海报 -->
+        <vlc:VideoView x:Name="VideoHost" Visibility="Collapsed" Loaded="VideoHost_Loaded">
+            <Grid>
+                <!-- 加载态 -->
+                <Grid x:Name="LoadingLayer" Background="#E6101418" Visibility="Collapsed">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ProgressBar Width="160" Height="4" IsIndeterminate="True" />
+                        <TextBlock Text="加载中…" FontSize="12" Foreground="#B3FFFFFF"
+                                   HorizontalAlignment="Center" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 错误态 -->
+                <Grid x:Name="ErrorLayer" Background="#E6101418" Visibility="Collapsed">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="播放失败，视频可能已下架或网络受限" FontSize="12"
+                                   Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                        <Button Content="重试" Style="{StaticResource LibraryActionButtonStyle}"
+                                Click="Retry_Click" HorizontalAlignment="Center" Margin="0,10,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 播放中的暂停/继续（左上小按钮，避免遮挡画面主体） -->
+                <Button x:Name="PauseToggleButton" Style="{StaticResource IconButtonStyle}"
+                        Content="⏸" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="8,8,0,0" Click="PauseToggle_Click" ToolTip="暂停 / 继续" />
+
+                <!-- 底部进度条：当前时间 | 滑条 | 总时长（直播流无时长时自动隐藏） -->
+                <Border x:Name="SeekBar" VerticalAlignment="Bottom" Background="#99000000"
+                        Padding="10,4" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="CurrentTimeText" Text="0:00" FontSize="11"
+                                   Foreground="#E6FFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                                VerticalAlignment="Center" ToolTip="拖动跳转进度"
+                                ValueChanged="SeekSlider_ValueChanged"
+                                Thumb.DragStarted="SeekSlider_DragStarted"
+                                Thumb.DragCompleted="SeekSlider_DragCompleted" />
+                        <TextBlock x:Name="DurationText" Grid.Column="2" Text="--:--" FontSize="11"
+                                   Foreground="#B3FFFFFF" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </vlc:VideoView>
+
+        <!-- 海报占位 + 播放大按钮（空闲态） -->
+        <Grid x:Name="PosterLayer">
+            <Image x:Name="PosterImage" Stretch="Uniform" Opacity="0.5" />
+            <StackPanel x:Name="PlayHost" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Cursor="Hand" MouseLeftButtonUp="PlayHost_Click">
+                <Border Width="56" Height="56" CornerRadius="999"
+                        Background="#B3000000" BorderBrush="#66FFFFFF" BorderThickness="1">
+                    <Path Data="M 0,0 L 16,9 L 0,18 Z" Fill="White"
+                          Stretch="Uniform" Width="18" Height="18"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0" />
+                </Border>
+                <TextBlock x:Name="PlayHintText" Text="播放预览" FontSize="12" FontWeight="SemiBold"
+                           Foreground="#E6FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

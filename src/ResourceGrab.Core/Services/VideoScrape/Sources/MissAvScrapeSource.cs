@@ -61,6 +61,7 @@ public sealed class MissAvScrapeSource : HtmlScrapeSourceBase
         metadata.CoverUrl = detail.CoverUrl;
         metadata.Actors.AddRange(detail.Actors);
         metadata.Tags.AddRange(detail.Tags);
+        metadata.Tags.AddRange(detail.Genres);
         metadata.ReleaseDate = ParseDate(detail.ReleaseDateText);
         metadata.RuntimeMinutes = DurationToMinutes(detail.DurationText);
         metadata.HasMagnet = detail.MagnetUri is not null;

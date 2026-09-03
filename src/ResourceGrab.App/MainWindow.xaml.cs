@@ -56,6 +56,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, ChapterView> _chapterViews = new();
     private readonly LinkedList<string> _chapterOrder = new();
     private UserControl? _lastPage;
+    // 进入在线阅读器前记录详情页自己的返回目标（搜索/排行等），避免阅读器往返后详情页返回又跳回阅读器
+    private UserControl? _pageBeforeOnlineReader;
     private bool _rightPanelVisible;
     private ResourceKind _currentKind = ResourceKind.Manga;
     private readonly ShellController _shellController;
@@ -136,8 +138,9 @@ public partial class MainWindow : Window
             }
             if (PageHost.Content is OnlineReaderView)
             {
-                // 在线阅读器返回：回到章节详情页
+                // 在线阅读器返回：回到章节详情页，并恢复详情页自己的返回目标
                 SetPage(_lastPage);
+                if (_pageBeforeOnlineReader != null) _lastPage = _pageBeforeOnlineReader;
                 return;
             }
             if (ReferenceEquals(PageHost.Content, _localTabContent) && _localTabContent is ReaderView)
@@ -509,6 +512,7 @@ public partial class MainWindow : Window
     private void OpenOnlineReader(IComicSource source, IReadOnlyList<Chapter> chapters, int startIndex)
     {
         CollapseRightPanel();
+        _pageBeforeOnlineReader = _lastPage;
         _lastPage = (UserControl)PageHost.Content;
         SetPage(new OnlineReaderView(source, chapters, startIndex));
     }
@@ -796,7 +800,10 @@ private void OpenNovelLocal()
     {
         try
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             _videoView ??= new VideoView();
+            App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Info($"[VideoView] 首次创建 VideoView 耗时 {sw.ElapsedMilliseconds} ms");
+            sw.Restart();
             _videoView.SetSearchPanel(VideoSearchPanelView);
             _videoView.DetailPanelToggled -= SetVideoDetailPanelOpen;
             _videoView.DetailPanelToggled += SetVideoDetailPanelOpen;
@@ -808,6 +815,7 @@ private void OpenNovelLocal()
             ApplyRightPanelVisibility();
             UpdateTopBarForKind();
             _videoView.OnShown();
+            App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Info($"[VideoView] OpenVideoView 总耗时 {sw.ElapsedMilliseconds} ms");
         }
         catch (Exception ex)
         {

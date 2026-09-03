@@ -51,6 +51,7 @@ public partial class ActorListView : UserControl
     /// <summary>重建统计/海报缓存并回到第一页。翻页/过滤请走内部方法，不要调这个。</summary>
     public void Refresh()
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _ordered = _library.GetActorCounts()
             .OrderByDescending(kv => kv.Value)
             .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
@@ -58,6 +59,7 @@ public partial class ActorListView : UserControl
         BuildPosterMap();
         _page = 1;
         ApplyFilterAndRender();
+        App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Info($"[ActorListView] Refresh 耗时 {sw.ElapsedMilliseconds} ms ({_ordered.Count} 位演员)");
     }
 
     /// <summary>演员 → 卡片图：优先 GFriends 本地头像，其次该演员最新一部有封面的作品海报（零联网，纯本地映射）。</summary>

@@ -10,7 +10,7 @@ namespace ResourceGrab.Core.Sources.Jm;
 /// 禁漫天堂（18comic）内容源：把 JmHttpClient 的站点特有实现适配到 IComicSource 通用接口。
 /// 搜索、详情、章节图片地址（含 scramble_id / block_num / 图片域名 / UA）均收敛在此。
 /// </summary>
-public class JmSource : IComicSource
+public class JmSource : IComicSource, ICommentSource
 {
     private readonly JmHttpClient _client;
 
@@ -62,9 +62,13 @@ public class JmSource : IComicSource
     public Task<AlbumRespData> GetAlbumRawAsync(string comicId, CancellationToken ct = default)
         => _client.GetAlbumAsync(long.Parse(comicId), ct);
     public async Task<ComicDetail> GetComicAsync(string comicId, CancellationToken ct = default)
+        => (await GetComicWithRawAsync(comicId, ct)).Detail;
+
+    /// <summary>一次请求同时返回通用详情与站点原始数据（本地匹配回填元数据场景，避免重复请求）。</summary>
+    public async Task<(ComicDetail Detail, AlbumRespData Raw)> GetComicWithRawAsync(string comicId, CancellationToken ct = default)
     {
         var album = await _client.GetAlbumAsync(long.Parse(comicId), ct);
-        return ToComicDetail(album);
+        return (ToComicDetail(album), album);
     }
 
     public async Task<IReadOnlyList<ImagePage>> GetChapterImagesAsync(Chapter chapter, CancellationToken ct = default)

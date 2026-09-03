@@ -91,7 +91,8 @@ public class MissAvScrapeSourceTests
         Assert.Equal("missav", result.SourceId);
         Assert.Equal("SNOS-001 サンプルタイトル", meta.Title);   // | MissAV 后缀已剥除
         Assert.Equal("https://ss.example.com/snos-001-cover.jpg", meta.CoverUrl);
-        Assert.Equal("テスト説明文", meta.Description);
+        // 离线词典繁转简：説明文 → 说明文
+        Assert.Equal("テスト说明文", meta.Description);
         Assert.Contains("sato hanako", meta.Actors);
         Assert.Contains("big", meta.Tags);
         Assert.Equal(62, meta.RuntimeMinutes);                   // PT1H2M3S

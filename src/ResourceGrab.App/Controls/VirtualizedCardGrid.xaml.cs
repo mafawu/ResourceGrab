@@ -197,6 +197,9 @@ public partial class VirtualizedCardGrid : UserControl
             // 本地页等固定列模式：按视口可用宽度重算卡片宽度，避免父容器 ActualWidth（含外层 Margin）与视口不一致导致遮挡
             if (width > 0)
             {
+                // 详情侧栏展开等挤压视口时自动减少列数（每列至少保留最小卡片宽度），避免行宽超出视口被裁切
+                var maxFit = Math.Max(1, (int)Math.Floor((width + GridCellSizer.Spacing) / (GridCellSizer.MinCardWidth + GridCellSizer.Spacing)));
+                columns = Math.Min(columns, maxFit);
                 var newSlot = width / columns;
                 var newCard = newSlot - GridCellSizer.Spacing;
                 newCard = Math.Max(80, newCard);

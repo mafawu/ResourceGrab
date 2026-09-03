@@ -105,7 +105,16 @@
                                     </StackPanel>
                                 </Button>
                             </Grid>
-                            <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" Margin="0,14,0,0" />
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" />
+                                <controls:CardSizeSlider Grid.Column="1"
+                                                         Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
+                                                         VerticalAlignment="Center" Margin="10,0,0,0" />
+                            </Grid>
                         </StackPanel>
                     </Border>
 
@@ -116,7 +125,8 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid Grid.Column="0">
-                            <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                            <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
                                 <StackPanel>
                                     <WrapPanel x:Name="ResultCardsPanel" />
                                 </StackPanel>
@@ -144,44 +154,111 @@
                                       Margin="0,0,14,0" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
                             <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <TextBlock Text="详情" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                <!-- 标题栏：强调条 + 标题 + 关闭 -->
+                                <Grid Margin="0,0,0,12">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Border Width="4" Height="15" CornerRadius="2"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="在线详情" FontSize="15" FontWeight="Bold"
+                                                   Margin="8,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
                                     <Button x:Name="OnlineDetailCloseButton" Style="{StaticResource IconButtonStyle}"
                                             Content="✕" HorizontalAlignment="Right" Click="OnlineDetailClose_Click"
                                             ToolTip="关闭详情" VerticalAlignment="Center" />
                                 </Grid>
 
+                                <!-- 封面 + 在线播放（详情有流地址时显示播放器，复用同一槽位） -->
                                 <Border Height="230" CornerRadius="{DynamicResource RadiusLg}"
                                         Background="{DynamicResource HoverBgBrush}"
                                         BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
-                                    <Image x:Name="OnlineDetailPoster" Stretch="Uniform" Margin="6" />
+                                    <Grid ClipToBounds="True">
+                                        <Image x:Name="OnlineDetailPoster" Stretch="Uniform" Margin="6" />
+                                        <controls:OnlineVideoPreviewPlayer x:Name="OnlinePreviewPlayer"
+                                                                           Visibility="Collapsed" Margin="1" />
+                                    </Grid>
                                 </Border>
 
-                                <TextBlock x:Name="OnlineDetailNumber" FontSize="15" FontWeight="Bold"
-                                           Foreground="{DynamicResource PrimaryBrush}" Margin="0,12,0,0" />
-                                <TextBlock x:Name="OnlineDetailTitle" FontSize="16" FontWeight="Bold"
-                                           TextWrapping="Wrap" Margin="0,10,0,2" />
-                                <TextBlock x:Name="OnlineDetailOriginalTitle" FontSize="12"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
-                                <TextBlock x:Name="OnlineDetailMeta" FontSize="12"
+                                <!-- JAVDB/MissAV 式版式：封面 → 番号+评分胶囊 → 标题 → Tab(详情/磁力) -->
+                                <Grid Margin="0,12,0,0">
+                                    <TextBlock x:Name="OnlineDetailNumber" FontSize="17" FontWeight="Bold"
+                                               Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                    <Border x:Name="OnlineDetailRating" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            CornerRadius="999" Background="#26FFB347" Padding="9,3" Visibility="Collapsed">
+                                        <TextBlock x:Name="OnlineDetailRatingText" Text="" FontSize="12" FontWeight="Bold"
+                                                   Foreground="#E8890C" />
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="OnlineDetailTitle" FontSize="14" FontWeight="SemiBold"
+                                           TextWrapping="Wrap" Margin="0,6,0,0" />
+                                <TextBlock x:Name="OnlineDetailOriginalTitle" FontSize="11.5"
                                            Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                                           Margin="0,8,0,0" />
+                                           Margin="0,3,0,0" />
 
-                                <WrapPanel x:Name="OnlineDetailActions" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
-                                    <Button Style="{StaticResource LibraryActionButtonStyle}" Content="复制磁力链接"
-                                            Click="OnlineDetailCopyMagnet_Click" />
-                                    <Button Style="{StaticResource LibraryActionButtonStyle}" Content="打开详情页"
-                                            Margin="6,0,0,0" Click="OnlineDetailOpenUrl_Click" />
-                                </WrapPanel>
+                                <!-- Tab 分段控件：视频详情 / 磁力列表；右侧“打开详情页”直达源站 -->
+                                <Grid Margin="0,12,0,0">
+                                    <Border HorizontalAlignment="Left" Background="{DynamicResource HoverBgBrush}"
+                                            BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                            CornerRadius="999" Padding="3">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="OnlineTabDetailButton" Content="视频详情" Click="OnlineTabDetail_Click" />
+                                            <Button x:Name="OnlineTabMagnetButton" Content="磁力列表" Margin="2,0,0,0" Click="OnlineTabMagnet_Click" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Button x:Name="OnlineDetailOpenUrlButton" Content="打开详情页 ↗" HorizontalAlignment="Right"
+                                            Style="{StaticResource LibraryActionButtonStyle}" Visibility="Collapsed"
+                                            Click="OnlineDetailOpenUrl_Click" ToolTip="在浏览器打开源站详情页" />
+                                </Grid>
 
-                                <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
-                                <WrapPanel x:Name="OnlineDetailActorChips" />
-                                <TextBlock Text="标签（点击搜索）" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />
-                                <WrapPanel x:Name="OnlineDetailTagChips" />
-                                <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="0,12,0,3" />
-                                <TextBox x:Name="OnlineDetailDescription" IsReadOnly="True" BorderThickness="0" Background="Transparent"
-                                         TextWrapping="Wrap" MaxHeight="96" VerticalScrollBarVisibility="Auto" FontSize="12"
-                                         Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <!-- Tab 1：视频详情（表格式信息行，代码生成） -->
+                                <StackPanel x:Name="OnlineDetailTabInfo" Margin="0,12,0,0">
+                                    <Border Background="{DynamicResource HoverBgBrush}"
+                                            BorderBrush="{DynamicResource CardBorderBrush}"
+                                            BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}"
+                                            Padding="12,4">
+                                        <StackPanel x:Name="OnlineInfoHost" />
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                        <Border Width="3" Height="11" CornerRadius="1.5"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="标签（点击搜索）" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <WrapPanel x:Name="OnlineDetailTagChips" />
+
+                                    <!-- 预览图（剧照）：横向滚动，点击在浏览器看原图；无预览图时整段隐藏 -->
+                                    <StackPanel x:Name="OnlinePreviewImagesSection" Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                            <Border Width="3" Height="11" CornerRadius="1.5"
+                                                    Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="预览图" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                        <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                                      VerticalScrollBarVisibility="Disabled">
+                                            <StackPanel x:Name="OnlinePreviewImagesHost" Orientation="Horizontal" />
+                                        </ScrollViewer>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
+                                        <Border Width="3" Height="11" CornerRadius="1.5"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <Border Background="{DynamicResource HoverBgBrush}"
+                                            BorderBrush="{DynamicResource CardBorderBrush}"
+                                            BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}"
+                                            Padding="10,8" Margin="0,0,0,4">
+                                        <TextBox x:Name="OnlineDetailDescription" Style="{StaticResource SelectableTextStyle}"
+                                                 MaxHeight="110" VerticalScrollBarVisibility="Auto" FontSize="12"
+                                                 Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Tab 2：磁力列表（每条可复制，JAVDB 表格式：名称 | 体积 | 复制） -->
+                                <StackPanel x:Name="OnlineDetailTabMagnets" Margin="0,12,0,0" Visibility="Collapsed">
+                                    <TextBlock x:Name="OnlineMagnetHint" Text="该影片暂无磁力链接" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <StackPanel x:Name="OnlineMagnetListHost" />
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

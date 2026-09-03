@@ -56,6 +56,7 @@ public partial class ChapterView : UserControl
         _session = App.Services.GetRequiredService<SessionService>();
         _pageCountCache = App.Services.GetRequiredService<OnlinePageCountCacheService>();
         FavoriteButton.Visibility = source.Info.SupportsFavorites ? Visibility.Visible : Visibility.Collapsed;
+        CommentsToggleButton.Visibility = source is ICommentSource ? Visibility.Visible : Visibility.Collapsed;
         ImageLoader.SetHeaders(CoverImage, source.Info.CoverHeaders);
         ChapterItems.ItemsSource = Chapters;
         _ = LoadAsync(comicId);
@@ -507,6 +508,142 @@ public partial class ChapterView : UserControl
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => Navigation.Back();
+
+    // ====================== 复制 ======================
+
+    private void CopyComment_Click(object sender, RoutedEventArgs e)
+        => ClipboardHelper.CopyCommentFromMenu(sender);
+
+    private void CommentsCopyAllButton_Click(object sender, RoutedEventArgs e)
+        => _ = CopyAllCommentsAsync();
+
+    /// <summary>复制全部评论：逐页抓取后拼接（上限 50 页，防止超大评论区刷爆请求）。</summary>
+    private async Task CopyAllCommentsAsync()
+    {
+        if (_source is not ICommentSource commentSource || _detail is null)
+        {
+            return;
+        }
+        CommentsCopyAllButton.IsEnabled = false;
+        try
+        {
+            var all = new List<CommentViewModel>();
+            var pageCount = 1;
+            for (var page = 1; page <= pageCount && page <= 50; page++)
+            {
+                CommentsStatusText.Text = $"正在抓取全部评论（{page}{(pageCount > 1 ? $" / {pageCount}" : "")} 页）…";
+                var data = await commentSource.GetCommentsAsync(_detail.Id, page);
+                all.AddRange(data.Items.Select(c => new CommentViewModel(c)));
+                if (data.PageCount is { } pc)
+                {
+                    pageCount = Math.Max(1, pc);
+                }
+                else
+                {
+                    // 接口未提供总页数：本页不足一页（少于 10 条主评）即认为结束
+                    if (data.Items.Count < 10) break;
+                    pageCount = page + 1;
+                }
+            }
+            if (all.Count == 0)
+            {
+                ToastService.Show("没有可复制的评论", ToastKind.Info);
+                return;
+            }
+            ClipboardHelper.CopyWithToast(string.Join("\n\n", all.Select(c => c.ToPlainText())), $"全部评论（{all.Count:N0} 条）");
+            CommentsStatusText.Text = $"第 {_commentsPage} 页 · 共抓取 {all.Count:N0} 条主评";
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex);
+        }
+        finally
+        {
+            CommentsCopyAllButton.IsEnabled = true;
+        }
+    }
+
+    // ====================== 评论（支持 ICommentSource 的源，如禁漫） ======================
+
+    private List<CommentViewModel> _comments = new();
+    private int _commentsPage = 1;
+    private int _commentsPageCount = 1;
+    private CancellationTokenSource? _commentsCts;
+
+    private void CommentsToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (CommentsPanel.Visibility == Visibility.Visible)
+        {
+            CommentsPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        CommentsPanel.Visibility = Visibility.Visible;
+        if (CommentsList.ItemsSource is null)
+        {
+            _ = LoadCommentsPageAsync(1);
+        }
+    }
+
+    private void CommentsRefreshButton_Click(object sender, RoutedEventArgs e)
+        => _ = LoadCommentsPageAsync(_commentsPage);
+
+    private void CommentsPrevButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_commentsPage > 1) _ = LoadCommentsPageAsync(_commentsPage - 1);
+    }
+
+    private void CommentsNextButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_commentsPage < _commentsPageCount) _ = LoadCommentsPageAsync(_commentsPage + 1);
+    }
+
+    private async Task LoadCommentsPageAsync(int page)
+    {
+        if (_source is not ICommentSource commentSource)
+        {
+            return;
+        }
+        if (_detail is null)
+        {
+            CommentsStatusText.Text = "详情尚未加载完成，请稍后刷新";
+            return;
+        }
+
+        _commentsCts?.Cancel();
+        _commentsCts = new CancellationTokenSource();
+        var ct = _commentsCts.Token;
+        CommentsStatusText.Text = "正在加载评论…";
+        try
+        {
+            var data = await commentSource.GetCommentsAsync(_detail.Id, page, ct);
+            if (ct.IsCancellationRequested) return;
+            _comments = data.Items.Select(c => new CommentViewModel(c)).ToList();
+            _commentsPage = data.Page;
+            _commentsPageCount = Math.Max(1, data.PageCount ?? 1);
+            CommentsList.ItemsSource = _comments;
+            CommentsStatusText.Text = data.Total is { } total
+                ? $"第 {page} 页 · 共 {total:N0} 条评论"
+                : $"第 {page} 页";
+            UpdateCommentsPager();
+        }
+        catch (OperationCanceledException)
+        {
+            // 切换页码 / 刷新时取消旧请求，不提示
+        }
+        catch (Exception ex)
+        {
+            if (ct.IsCancellationRequested) return;
+            CommentsStatusText.Text = "评论加载失败，可点击「刷新」重试";
+            ToastService.ShowError(ex);
+        }
+    }
+
+    private void UpdateCommentsPager()
+    {
+        CommentsPagerText.Text = $"{_commentsPage} / {_commentsPageCount}";
+        CommentsPrevButton.IsEnabled = _commentsPage > 1;
+        CommentsNextButton.IsEnabled = _commentsPage < _commentsPageCount;
+    }
 
     // ====================== 视觉树工具 ======================
 

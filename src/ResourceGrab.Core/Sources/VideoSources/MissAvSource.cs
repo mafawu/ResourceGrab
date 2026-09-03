@@ -16,18 +16,19 @@ namespace ResourceGrab.Core.Sources.VideoSources;
 /// </summary>
 public sealed class MissAvSource : IVideoSource
 {
-    private static readonly string BaseUrl = "https://missav.ws";
+    private static readonly string BaseUrl = "https://missav.live";
 
     private static readonly VideoSourceInfo SourceInfo = new()
     {
         Id = "missav",
         DisplayName = "MissAV",
         SupportsSearchSort = false,
-        // 2026-08-30 实测：missav.ws/missav.ai 有 Cloudflare 挑战，missav.live/missav123.com 可直取；
-        // 主域 BaseUrl 单独放在候选首位，镜像列表里不再重复收录。
+        // 2026-08-30 实测：missav.ws/missav.ai 有 Cloudflare 挑战（HttpClient 403 → curl 兜底，
+        // 单请求 4~5 秒），missav.live/missav123.com 可直取。主域用可直取的 missav.live，
+        // 被挑战的旧主域 missav.ws 降为末位兜底镜像，避免每个请求都白付一次降级链耗时。
         MirrorUrls =
         [
-            "missav.live", "missav123.com", "missav.ai",
+            "missav123.com", "missav.ws", "missav.ai",
         ],
         RequiresCookieWarmup = true,
         RequiresCurlFallback = true,
@@ -37,6 +38,14 @@ public sealed class MissAvSource : IVideoSource
     private readonly ILogger? _logger;
     private readonly string? _proxy;
     private string? _cachedCookieHeader;
+
+    /// <summary>
+    /// 最近一次成功请求的源站（如 https://missav.live）与是否经 curl 兜底。
+    /// Cloudflare 拦截下每个请求都要走 主域403→curl→镜像403→curl 的完整降级链（约 4~5 秒），
+    /// 记住上次成功的组合直接首选，可把单请求耗时从 4~5 秒降到 1 秒左右；失败时清零自愈。
+    /// </summary>
+    private string? _lastGoodOrigin;
+    private bool _lastGoodViaCurl;
 
     public MissAvSource(HttpClient http, ILogger? logger = null, string? proxy = null)
     {
@@ -98,14 +107,18 @@ public sealed class MissAvSource : IVideoSource
 
     /// <summary>
     /// 解析搜索/标签页的 thumbnail 卡片。
-    /// 视频链接判定放宽为「末段含连字符 + 多位数字」（覆盖普通番号、FC2、纯数字番号等），
-    /// 避免番号正则过严导致命中率低；按 Id 去重；卡片内演员链接并入 Tags。
+    /// 视频链接判定放宽为「末段含连字符 + 多位数字」（覆盖普通番号、FC2、纯数字番号等）；
+    /// 卡片内演员链接并入 Tags。
+    /// 去重：同一视频常以 主链接（/dmXX/ssis-960）+ 变体（ssis-960-uncensored-leak、
+    /// ssis-960-chinese-subtitle）同时命中，末段不同但封面标题相同——按番号归一去重，
+    /// 主链接优先于变体（变体和主链接在页面里交错出现，不能只保留先出现的）。
     /// </summary>
     internal List<OnlineVideoSummary> ParseSearchCards(string html)
     {
         var doc = new HtmlParser().ParseDocument(html);
         var items = new List<OnlineVideoSummary>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 番号 → items 下标；无番号的（纯数字路径等）退回末段做键
+        var cardIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var cards = doc.QuerySelectorAll("[class*='thumbnail']");
         _logger?.Info($"[MissAV] 解析到 thumbnail 卡片数: {cards.Count()}");
@@ -122,7 +135,9 @@ public sealed class MissAvSource : IVideoSource
             var segment = ExtractVideoId(href);
             if (!Regex.IsMatch(segment, @"-\d{2,}")) continue;
 
-            if (!seen.Add(segment)) continue;
+            var number = ExtractNumberFromPath(href);
+            var dedupeKey = number.Length > 0 ? number : segment;
+            var isCanonical = number.Length > 0 && segment.Equals(number, StringComparison.OrdinalIgnoreCase);
 
             var img = card.QuerySelector("img");
             var cover = img?.GetAttribute("data-src") ?? img?.GetAttribute("src") ?? "";
@@ -161,17 +176,26 @@ public sealed class MissAvSource : IVideoSource
                     tags.Insert(0, actress);
             }
 
-            items.Add(new OnlineVideoSummary
+            var summary = new OnlineVideoSummary
             {
                 SourceId = Info.Id,
                 Id = segment,
                 Title = title,
                 CoverUrl = cover.StartsWith("//") ? "https:" + cover : cover,
                 DurationText = duration,
-                Number = ExtractNumberFromPath(href),
+                Number = number,
                 KindLabel = kindLabel,
                 Tags = tags,
-            });
+            };
+
+            if (cardIndex.TryGetValue(dedupeKey, out var existingIndex))
+            {
+                // 同番号变体：主链接替换先到的变体卡片，其余丢弃
+                if (isCanonical) items[existingIndex] = summary;
+                continue;
+            }
+            cardIndex[dedupeKey] = items.Count;
+            items.Add(summary);
         }
 
         return items;
@@ -225,11 +249,41 @@ public sealed class MissAvSource : IVideoSource
         // 磁力链接：部分页面内嵌（如 /download 弹层脚本），有就带上
         var magnet = Regex.Match(html, @"(magnet:\?xt=urn:btih:[a-zA-Z0-9&=%.+-]+)").Groups[1].Value;
 
+        // 信息行（番號/發行日期/標題/女優/類型/發行商/導演/標籤…）：
+        // 各站行名措辞不一，按同义词归一化后覆盖正则兜底值
+        var info = ParseInfoRows(html);
+        string Field(string key) => info.TryGetValue(key, out var v) && v.Count > 0 ? v[0] : "";
+        string FieldJoined(string key) => info.TryGetValue(key, out var v) ? string.Join(", ", v) : "";
+
+        if (Field("title") is { Length: > 0 } infoTitle) title = infoTitle;
+        if (Field("number") is { Length: > 0 } infoNumber) number = infoNumber;
+        if (Field("release") is { Length: > 0 } infoRelease) releaseDate = infoRelease;
+
+        var genres = info.TryGetValue("genres", out var infoGenres) && infoGenres.Count > 0
+            ? infoGenres : ParseGenres(html);
+        var actors = info.TryGetValue("actress", out var infoActress) && infoActress.Count > 0
+            ? infoActress : ParseActors(html);
+
+        var magnets = ParseMagnets(html);
+        if (magnets.Count == 0 && magnet.Length > 0)
+            magnets = [new OnlineMagnetLink { Url = magnet }];
+
+        var previewImages = ParsePreviewImages(html);
+
+        // MissAV 页面内容为繁体中文：离线词典繁转简 + 演员名译中文（词典失败原样保留）。
+        // OriginalTitle 保留原题。
+        var cleanTitle = OfflineLexicon.ToSimplified(CleanTitle(title));
+        var tags = OfflineLexicon.NormalizeTags(ParseTags(html));
+        genres = OfflineLexicon.NormalizeTags(genres);
+        actors = actors.Select(OfflineLexicon.TranslateActor)
+            .Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        description = OfflineLexicon.ToSimplified(description);
+
         return new OnlineVideoDetail
         {
             SourceId = Info.Id,
             VideoUrl = videoUrl,
-            Title = CleanTitle(title),
+            Title = cleanTitle,
             OriginalTitle = title,
             CoverUrl = coverUrl.StartsWith("//") ? "https:" + coverUrl : coverUrl,
             Number = number,
@@ -237,11 +291,53 @@ public sealed class MissAvSource : IVideoSource
             ReleaseDateText = releaseDate,
             StreamUrl = streamUrl,
             Referer = videoUrl,
-            MagnetUri = magnet.Length > 0 ? magnet : null,
-            Actors = ParseActors(html),
-            Tags = ParseTags(html),
+            MagnetUri = magnets.Count > 0 ? magnets[0].Url : null,
+            Magnets = magnets,
+            Actors = actors,
+            Tags = tags,
+            Genres = genres,
+            Maker = Field("maker"),
+            Label = Field("label"),
+            Director = Field("director"),
+            RatingText = Field("rating"),
             Description = description,
+            PreviewImages = previewImages,
         };
+    }
+
+    /// <summary>
+    /// 解析详情页"預覽圖"区块（简繁/英文措辞都收）下的剧照图片。
+    /// 容错策略：锚定标题文本后收集 img，直到下一个区块级标签（h1-h4/hr）或窗口结束，
+    /// 避免把后续"同系列/相關影片"的缩略图误收进来。懒加载图优先取 data-src。
+    /// </summary>
+    internal static List<string> ParsePreviewImages(string html)
+    {
+        var header = Regex.Match(html, @"預覽圖|预览图|[Pp]review [Ii]mages?");
+        if (!header.Success) return [];
+
+        var window = html[header.Index..];
+        // 截断到下一个区块级标签（跳过标题文本本身），防止吃进后续推荐区的图
+        var skip = Math.Min(20, window.Length);
+        var nextSection = Regex.Match(window[skip..], @"<h[1-4][\s>]|<hr[\s>]");
+        if (nextSection.Success) window = window[..(skip + nextSection.Index)];
+
+        var images = new List<string>();
+        foreach (Match m in Regex.Matches(window, @"<img\b[^>]*>"))
+        {
+            var tag = m.Value;
+            // 懒加载图优先取 data-src
+            var src = Regex.Match(tag, @"data-src=""([^""]+)""") is { Success: true } lazy
+                ? lazy
+                : Regex.Match(tag, @"src=""([^""]+)""");
+            if (!src.Success) continue;
+            var url = src.Groups[1].Value;
+            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+            if (url.StartsWith("//")) url = "https:" + url;
+            if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!images.Contains(url)) images.Add(url);
+            if (images.Count >= 30) break;
+        }
+        return images;
     }
 
     // ── HTTP 层（带镜像轮换 + curl 兜底）─────────────────────────────
@@ -267,6 +363,33 @@ public sealed class MissAvSource : IVideoSource
         }
 
         Exception? lastError = null;
+        // 上次成功的镜像+传输方式直接首选；失败则清零并按原顺序轮换
+        if (_lastGoodOrigin is { } preferred)
+        {
+            var viaCurl = _lastGoodViaCurl;
+            var index = candidates.FindIndex(c =>
+                Uri.TryCreate(c, UriKind.Absolute, out var u)
+                && u.GetLeftPart(UriPartial.Authority) == preferred);
+            if (index > 0)
+            {
+                var move = candidates[index];
+                candidates.RemoveAt(index);
+                candidates.Insert(0, move);
+            }
+            if (index < 0) { _lastGoodOrigin = null; }
+            else try
+            {
+                return await GetStringAsync(candidates[0], ct, viaCurl);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _lastGoodOrigin = null;
+                lastError = ex;
+                _logger?.Warn($"[MissAV] 上次成功的镜像也失败了，恢复镜像轮换: {candidates[0]} ({ex.Message})");
+            }
+        }
+
         foreach (var candidate in candidates)
         {
             try
@@ -285,8 +408,19 @@ public sealed class MissAvSource : IVideoSource
             : new HttpRequestException("所有 MissAV 域名均请求失败。", lastError);
     }
 
-    private async Task<string> GetStringAsync(string url, CancellationToken ct)
+    private async Task<string> GetStringAsync(string url, CancellationToken ct, bool preferCurl = false)
     {
+        if (preferCurl)
+        {
+            // 上次该镜像就是靠 curl 兜底成功的：跳过注定 403 的 HttpClient 尝试
+            var htmlViaCurl = await GetWithCurlAsync(url, ct);
+            if (BlockDetector.IsBlocked(null, htmlViaCurl))
+                throw new HttpRequestException("MissAV curl 兜底仍返回拦截页", null, HttpStatusCode.Forbidden);
+            _lastGoodOrigin = new Uri(url).GetLeftPart(UriPartial.Authority);
+            _lastGoodViaCurl = true;
+            return htmlViaCurl;
+        }
+
         _logger?.Info($"[MissAV] HttpClient 请求: {url}");
 
         try
@@ -295,10 +429,13 @@ public sealed class MissAvSource : IVideoSource
             request.Headers.TryAddWithoutValidation("Referer", BaseUrl + "/");
             request.Headers.TryAddWithoutValidation("Origin", new Uri(BaseUrl).GetLeftPart(UriPartial.Authority));
 
-            using var response = await _http.SendAsync(request, ct);
+            // 单次尝试限时：挂死的域名快速失败，把时间让给镜像轮换而不是无限等
+            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            attemptCts.CancelAfter(TimeSpan.FromSeconds(15));
+            using var response = await _http.SendAsync(request, attemptCts.Token);
             _logger?.Info($"[MissAV] HttpClient 响应: {(int)response.StatusCode} {response.StatusCode}");
 
-            var html = await response.Content.ReadAsStringAsync(ct);
+            var html = await response.Content.ReadAsStringAsync(attemptCts.Token);
 
             // 200 但 body 是挑战页的情况（Cloudflare 软拦截）也要当作被拦，交给 curl/镜像降级链
             if (BlockDetector.IsBlocked((int)response.StatusCode, html))
@@ -316,6 +453,8 @@ public sealed class MissAvSource : IVideoSource
             if (_cachedCookieHeader is null && response.Headers.TryGetValues("Set-Cookie", out var cookies))
                 _cachedCookieHeader = string.Join("; ", cookies.Select(c => c.Split(';')[0]));
 
+            _lastGoodOrigin = new Uri(url).GetLeftPart(UriPartial.Authority);
+            _lastGoodViaCurl = false;
             return html;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Forbidden)
@@ -326,7 +465,15 @@ public sealed class MissAvSource : IVideoSource
             // curl 拿到 200 也可能是挑战页：必须继续走拦截检测并抛出，否则镜像轮换被提前短路
             if (BlockDetector.IsBlocked(null, html))
                 throw new HttpRequestException("MissAV curl 兜底仍返回拦截页", null, HttpStatusCode.Forbidden);
+            _lastGoodOrigin = new Uri(url).GetLeftPart(UriPartial.Authority);
+            _lastGoodViaCurl = true;
             return html;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // 单次尝试超时（外层未取消）：转成请求异常，交给镜像轮换处理
+            _logger?.Warn($"[MissAV] 请求超时（15s）: {url}");
+            throw new HttpRequestException($"MissAV 请求超时: {url}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -494,17 +641,92 @@ public sealed class MissAvSource : IVideoSource
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    internal static List<string> ParseTags(string html)
+    internal static List<string> ParseTags(string html) => ParseLinkSlugs(html, "tags");
+
+    internal static List<string> ParseGenres(string html) => ParseLinkSlugs(html, "genres");
+
+    private static List<string> ParseLinkSlugs(string html, string kind)
     {
-        var tags = new List<string>();
-        // 标签页与类型页两种链接形态都收（/tags/xxx、/genres/xxx，可带语言前缀）
-        foreach (Match m in Regex.Matches(html, @"href=""/(?:[a-z]{2}/)?(?:tags|genres)/([^""/#?]+)"""))
+        var list = new List<string>();
+        foreach (Match m in Regex.Matches(html, $@"href=""/(?:[a-z]{{2}}/)?{kind}/([^""/#?]+)"""))
         {
             var tag = WebUtility.HtmlDecode(m.Groups[1].Value.Replace('-', ' ').Trim());
-            if (tag.Length > 0 && !tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
-                tags.Add(tag);
+            if (tag.Length > 0 && !list.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                list.Add(tag);
         }
-        return tags;
+        return list;
+    }
+
+    // ── 详情页信息行归一化 ──────────────────────────────────────────
+
+    /// <summary>统一字段 → 各站点行名同义词（繁/简/英文都收）。</summary>
+    private static readonly Dictionary<string, string[]> InfoRowAliases = new()
+    {
+        ["number"] = ["番號", "番号", "品番", "识别码", "識別碼"],
+        ["release"] = ["發行日期", "发行日期", "発売日", "发布日期", "上市日"],
+        ["title"] = ["標題", "标题", "片名", "作品名"],
+        ["actress"] = ["女優", "女优", "出演", "演员", "演員", "cast", "actor"],
+        ["genres"] = ["類型", "类型", "分类", "分類", "ジャンル", "genre"],
+        ["maker"] = ["發行商", "发行商", "制作商", "製作商", "studio", "maker"],
+        ["label"] = ["標籤", "标签", "廠商", "厂商", "厂牌", "レーベル", "label"],
+        ["director"] = ["導演", "导演", "director"],
+        ["rating"] = ["評分", "评分", "rating"],
+    };
+
+    /// <summary>
+    /// 解析详情页 "标签: 值" 信息行（&lt;div class="text-secondary"&gt;&lt;span&gt;類型:&lt;/span&gt; …&lt;/div&gt;），
+    /// 按同义词映射为统一字段；同字段取首个出现。解析不出时由调用方的正则兜底。
+    /// </summary>
+    internal static Dictionary<string, List<string>> ParseInfoRows(string html)
+    {
+        var result = new Dictionary<string, List<string>>();
+        foreach (Match m in Regex.Matches(html,
+                     @"<div[^>]*class=""text-secondary""[^>]*>\s*<span>([^<]+?)</span>([\s\S]*?)</div>"))
+        {
+            var rawLabel = WebUtility.HtmlDecode(m.Groups[1].Value).Trim().TrimEnd(':', '：');
+            var key = MapInfoRow(rawLabel);
+            if (key is null || result.ContainsKey(key)) continue;
+
+            var values = WebUtility.HtmlDecode(Regex.Replace(m.Groups[2].Value, @"<[^>]+>", " "))
+                .Split(',', '，')
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0)
+                .ToList();
+            if (values.Count > 0) result[key] = values;
+        }
+        return result;
+    }
+
+    private static string? MapInfoRow(string rawLabel)
+    {
+        foreach (var (key, aliases) in InfoRowAliases)
+            if (aliases.Contains(rawLabel, StringComparer.OrdinalIgnoreCase))
+                return key;
+        return null;
+    }
+
+    /// <summary>
+    /// 解析磁力表格：每行 &lt;tr&gt; 含一条 magnet 链接（名称锚点）+ 体积 + 日期。
+    /// 整页范围内扫描含 magnet 的行并按 btih 去重；无表格时返回空。
+    /// </summary>
+    internal static List<OnlineMagnetLink> ParseMagnets(string html)
+    {
+        var links = new List<OnlineMagnetLink>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match row in Regex.Matches(html, @"<tr>([\s\S]*?)</tr>"))
+        {
+            var body = row.Groups[1].Value;
+            var url = Regex.Match(body, @"href=""(magnet:\?xt=urn:btih:[^""]+)""")
+                .Groups[1].Value.Replace("&amp;", "&");
+            if (url.Length == 0 || !seen.Add(url)) continue;
+
+            var name = WebUtility.HtmlDecode(
+                Regex.Match(body, @"href=""magnet:[^""]*""[^>]*>([^<]*)</a>").Groups[1].Value.Trim());
+            var size = Regex.Match(body, @"(\d+(?:\.\d+)?\s*(?:TB|GB|MB|KB))", RegexOptions.IgnoreCase).Groups[1].Value;
+            var date = Regex.Match(body, @"(\d{4}-\d{2}-\d{2})").Groups[1].Value;
+            links.Add(new OnlineMagnetLink { Name = name, Size = size, Date = date, Url = url });
+        }
+        return links;
     }
 
     internal static string CleanTitle(string rawTitle)

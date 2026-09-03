@@ -86,6 +86,7 @@ public partial class App : Application
             services.AddSingleton<SessionService>();
         }
         services.AddSingleton<LocalLibraryService>();
+        services.AddSingleton<JmMatchService>();
         services.AddSingleton<NovelIndexService>();
         services.AddSingleton<NovelReadingHistoryService>();
         services.AddSingleton<NovelReaderSettingsService>();
@@ -122,6 +123,8 @@ public partial class App : Application
             sp.GetRequiredService<ILogger>(),
             (configService.Current.VideoScraping ?? new VideoScrapeSettings()).Proxy));
         services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => sp.GetRequiredService<MissAvSource>());
+        // 在线详情内存缓存：搜索回填与详情侧栏共用，应用生命周期内同一详情不重复请求
+        services.AddSingleton<OnlineVideoDetailCache>();
 
         // —— 视频刮削新管道（图引擎）——
         // per-source 配置与全局设置：取用户当前配置实例，用户改配置后重启生效。
@@ -214,6 +217,8 @@ public partial class App : Application
             System.IO.Path.Combine(AppPaths.AppDataDir, "video-source-health.json"),
             sp.GetRequiredService<ILogger>()));
         services.AddSingleton<VideoGraphScrapeOrchestrator>();
+        // 在线搜索兜底：MissAV 关键词搜不到且关键词为番号时，按 contentRoutes 顺序换源按番号取详情
+        services.AddSingleton<OnlineVideoFallbackSearchService>();
         services.AddSingleton<DownloadPanelViewModel>();
         Services = services.BuildServiceProvider();
 

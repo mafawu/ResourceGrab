@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using ResourceGrab.App.Common;
 using ResourceGrab.App.Services;
+using ResourceGrab.App.ViewModels;
 using ResourceGrab.Core.Downloading;
 using ResourceGrab.Core.Http;
 using ResourceGrab.Core.Models;
@@ -20,6 +22,7 @@ public partial class LocalComicDetailPanel : UserControl
 {
     private readonly DownloadManager _downloadManager;
     private readonly AlbumUpdateService _updateService;
+    private readonly JmMatchService _matchService;
 
     private LocalComic? _comic;
     private AlbumUpdateResult? _lastResult;
@@ -28,9 +31,11 @@ public partial class LocalComicDetailPanel : UserControl
     private bool _checking;
     private readonly LocalLibraryService _localLib;
     private Guid _commentsToken;
-    private List<CommentVM> _allComments = new();
+    private List<CommentViewModel> _allComments = new();
     private int _commentsPage = 1;
     private int _commentsPageCount = 1;
+    private CancellationTokenSource? _matchCts;
+    private bool _matching;
 
     public LocalComicDetailPanel()
     {
@@ -39,6 +44,7 @@ public partial class LocalComicDetailPanel : UserControl
         _updateService = App.Services.GetRequiredService<AlbumUpdateService>();
         _userData = App.Services.GetService(typeof(ComicUserDataService)) as ComicUserDataService;
         _localLib = App.Services.GetRequiredService<LocalLibraryService>();
+        _matchService = App.Services.GetRequiredService<JmMatchService>();
     }
 
     public void Show(LocalComic comic, bool inReader = false)
@@ -67,9 +73,11 @@ public partial class LocalComicDetailPanel : UserControl
         PathText.Text = comic.Path;
         ImageLoader.SetSource(CoverImage, comic.CoverPath);
 
+        ResetMatchUi(comic);
+
         _commentsToken = Guid.NewGuid();
         CommentsList.ItemsSource = null;
-        _allComments = new List<CommentVM>();
+        _allComments = new List<CommentViewModel>();
         _commentsPage = 1;
         _commentsPageCount = 1;
         UpdateCommentsPager();
@@ -217,7 +225,7 @@ public partial class LocalComicDetailPanel : UserControl
         var total = loaded.Value.total;
         var comments = loaded.Value.comments;
         var savedAt = loaded.Value.savedAt;
-        var vms = await Task.Run(() => comments.Select(c => new CommentVM(c)).ToList());
+        var vms = await Task.Run(() => comments.Select(c => new CommentViewModel(c)).ToList());
         Dispatcher.Invoke(() => {
             if (!Equals(_commentsToken, token)) return;
             _allComments = vms;
@@ -284,29 +292,185 @@ public partial class LocalComicDetailPanel : UserControl
         }
     }
 
-    private class CommentVM
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+        => Navigation.CloseLocalDetail();
+
+    // ====================== 在线匹配（禁漫天堂） ======================
+
+    private void ResetMatchUi(LocalComic comic)
     {
-        public string AuthorLine { get; }
-        public string Content { get; }
-        public string LikesText { get; }
-        public string TimeText { get; }
-        public List<CommentVM> Replies { get; }
-        public CommentVM(ForumCommentRespData c)
+        _matchCts?.Cancel();
+        _matchCts = null;
+        _matching = false;
+        MatchButton.IsEnabled = true;
+        ApplyMatchButton.IsEnabled = false;
+        MatchCandidatesList.ItemsSource = null;
+        MatchCandidatesList.Visibility = Visibility.Collapsed;
+        MatchStatusText.Text = comic.SourceId is "jm" && comic.AlbumId is > 0
+            ? $"当前匹配：禁漫专辑 id={comic.AlbumId}（重新匹配可更换）"
+            : "未匹配，点击「重新匹配」按标题在禁漫搜索";
+    }
+
+    private async void MatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        var comic = _comic;
+        if (comic is null || _matching)
         {
-            var name = !string.IsNullOrWhiteSpace(c.Nickname) ? c.Nickname : (!string.IsNullOrWhiteSpace(c.Username) ? c.Username : "anon");
-            AuthorLine = name ?? "anon";
-            Content = HtmlText.StripToText(c.Content);
-            LikesText = c.Likes is { Length: >0 } s ? s : "0";
-            TimeText = c.Addtime is { Length: >0 } tt ? FormatTime(tt) : "";
-            Replies = (c.Replies ?? new()).Select(r => new CommentVM(r)).ToList();
+            return;
         }
-        private static string FormatTime(string raw)
+
+        _matching = true;
+        MatchButton.IsEnabled = false;
+        ApplyMatchButton.IsEnabled = false;
+        MatchCandidatesList.ItemsSource = null;
+        MatchCandidatesList.Visibility = Visibility.Collapsed;
+        MatchStatusText.Text = "正在搜索禁漫…";
+        _matchCts?.Cancel();
+        _matchCts = new CancellationTokenSource();
+
+        try
         {
-            if (long.TryParse(raw, out var ts)) return DateTimeOffset.FromUnixTimeSeconds(ts).LocalDateTime.ToString("MM-dd HH:mm");
-            return raw;
+            var result = await _matchService.MatchAsync(comic, _matchCts.Token);
+            if (!ReferenceEquals(_comic, comic))
+            {
+                return;
+            }
+            RenderMatchResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            // 切换漫画时取消旧匹配，不提示
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_comic, comic))
+            {
+                MatchStatusText.Text = "匹配失败，可稍后重试";
+            }
+            ToastService.ShowError(ex);
+        }
+        finally
+        {
+            _matching = false;
+            if (ReferenceEquals(_comic, comic))
+            {
+                MatchButton.IsEnabled = true;
+            }
         }
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e)
-        => Navigation.CloseLocalDetail();
+    private void RenderMatchResult(ComicMatchResult result)
+    {
+        if (result.Status == ComicMatchStatus.NotFound)
+        {
+            MatchStatusText.Text = "未找到候选结果，可尝试修改目录名（去掉合集/页数等噪音）后重试";
+            return;
+        }
+
+        var vms = result.Candidates
+            .Select(c => new MatchCandidateViewModel(c))
+            .ToList();
+        MatchCandidatesList.ItemsSource = vms;
+        MatchCandidatesList.Visibility = Visibility.Visible;
+
+        MatchStatusText.Text = result.Status == ComicMatchStatus.Matched
+            ? $"唯一命中（相似度 {vms[0].ScoreText}），如不正确可从下方候选中另选后应用"
+            : $"找到 {vms.Count} 个候选，已按相似度排序，请选择后应用";
+        // 自动命中（或仅一个候选）时预选首项，用户可直接应用
+        MatchCandidatesList.SelectedIndex = 0;
+        ApplyMatchButton.IsEnabled = true;
+    }
+
+    private void MatchCandidatesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => ApplyMatchButton.IsEnabled = MatchCandidatesList.SelectedItem is MatchCandidateViewModel;
+
+    private async void ApplyMatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        var comic = _comic;
+        if (comic is null || MatchCandidatesList.SelectedItem is not MatchCandidateViewModel vm || _matching)
+        {
+            return;
+        }
+
+        _matching = true;
+        MatchButton.IsEnabled = false;
+        ApplyMatchButton.IsEnabled = false;
+        MatchStatusText.Text = $"正在拉取详情并写入元数据（id {vm.Candidate.Summary.Id}）…";
+
+        try
+        {
+            var detail = await _matchService.ApplyMatchAsync(comic, vm.Candidate.Summary.Id);
+            if (!ReferenceEquals(_comic, comic))
+            {
+                return;
+            }
+
+            // 原地更新本地对象，卡片与详情即时生效；列表页下次刷新从 album.json 读取
+            comic.SourceId = "jm";
+            comic.AlbumId = long.TryParse(detail.Id, out var aid) ? aid : null;
+            comic.HasMetadata = true;
+            comic.MetadataStamp = DateTime.Now;
+            comic.Tags = detail.Tags;
+            comic.Author = detail.Authors;
+            var cover = Path.Combine(comic.Path, "cover.jpg");
+            if (File.Exists(cover))
+            {
+                comic.CoverPath = cover;
+                ImageLoader.SetSource(CoverImage, cover);
+            }
+
+            CheckUpdateButton.IsEnabled = comic.AlbumId is > 0;
+            MatchStatusText.Text = $"已匹配：{detail.Title}（id {detail.Id}），元数据已写入本地";
+            ToastService.Show("匹配成功，元数据已写入本地", ToastKind.Success);
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_comic, comic))
+            {
+                MatchStatusText.Text = "应用匹配失败，可稍后重试";
+            }
+            ToastService.ShowError(ex);
+        }
+        finally
+        {
+            _matching = false;
+            if (ReferenceEquals(_comic, comic))
+            {
+                MatchButton.IsEnabled = true;
+                ApplyMatchButton.IsEnabled = MatchCandidatesList.SelectedItem is MatchCandidateViewModel;
+            }
+        }
+    }
+
+    /// <summary>匹配候选行视图模型。</summary>
+    private class MatchCandidateViewModel
+    {
+        public ComicMatchCandidate Candidate { get; }
+
+        public MatchCandidateViewModel(ComicMatchCandidate candidate)
+        {
+            Candidate = candidate;
+            ScoreText = $"{candidate.Score:P0}";
+            Title = string.IsNullOrWhiteSpace(candidate.Summary.Title) ? $"专辑 id {candidate.Summary.Id}" : candidate.Summary.Title;
+            var author = candidate.Summary.Author?.Trim();
+            var category = candidate.Summary.Category?.Trim();
+            AuthorLine = string.Join(" · ", new[] { author, category }.Where(s => !string.IsNullOrEmpty(s)));
+            AuthorVisibility = AuthorLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public string ScoreText { get; }
+        public string Title { get; }
+        public string AuthorLine { get; }
+        public Visibility AuthorVisibility { get; }
+    }
+
+    // ====================== 复制 ======================
+
+    private void CopyComment_Click(object sender, RoutedEventArgs e)
+        => ClipboardHelper.CopyCommentFromMenu(sender);
+
+    private void CopyAllComments_Click(object sender, RoutedEventArgs e)
+        => ClipboardHelper.CopyWithToast(
+            string.Join("\n\n", _allComments.Select(c => c.ToPlainText())),
+            $"全部评论（{_allComments.Count:N0} 条）");
 }

@@ -54,6 +54,35 @@ public class MissAvSourceSearchTests
     }
 
     [Fact]
+    public void ParseSearchCards_MergesVariantUrlsByNumber_PrefersCanonical()
+    {
+        // 2026-09 实测：同一视频以 主链接(/dmXX/ssis-960) + 变体(-uncensored-leak / -chinese-subtitle)
+        // 同时命中且交错出现，变体可能先于主链接——应按番号合并，且最终保留主链接
+        const string html = """
+            <html><body>
+            <div class="thumbnail">
+              <a href="/dm82/ssis-960-chinese-subtitle"><img data-src="https://fourhoi.com/ssis-960-chinese-subtitle/cover-t.jpg" alt="SSIS-960 中字版" /></a>
+            </div>
+            <div class="thumbnail">
+              <a href="/dm63/ssis-960-uncensored-leak"><img data-src="https://fourhoi.com/ssis-960-uncensored-leak/cover-t.jpg" alt="SSIS-960 流出" /></a>
+            </div>
+            <div class="thumbnail">
+              <a href="/dm93/ssis-960"><img data-src="https://fourhoi.com/ssis-960/cover-t.jpg" alt="SSIS-960" /></a>
+            </div>
+            <div class="thumbnail">
+              <a href="/dm118/ssis-971"><img data-src="https://fourhoi.com/ssis-971/cover-t.jpg" alt="SSIS-971" /></a>
+            </div>
+            </body></html>
+            """;
+        var items = CreateSource().ParseSearchCards(html);
+
+        Assert.Equal(2, items.Count);
+        Assert.Equal("ssis-960", items[0].Id); // 先到的两条变体被合并，主链接替换占位
+        Assert.Equal("SSIS-960", items[0].Number);
+        Assert.Equal("ssis-971", items[1].Id);
+    }
+
+    [Fact]
     public void ParseSearchCards_ExcludesNonVideoPromoLinks()
     {
         var html = File.ReadAllText(Path.Combine("Fixtures", "missav-search.html"));
