@@ -322,7 +322,13 @@ public sealed class HlsLocalRelay : IDisposable
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add("-s");
-        psi.ArgumentList.Add("--noproxy"); psi.ArgumentList.Add("*");
+        // 只在未显式指定代理时才禁用代理（避免继承系统/环境变量里的代理）。
+        // 注意 curl 的 --noproxy '*' 会完全覆盖 -x（文档原话：effectively disables the
+        // proxy），两者同时给出时代理不生效，所以这里必须二选一。
+        if (string.IsNullOrEmpty(proxyUrl))
+        {
+            psi.ArgumentList.Add("--noproxy"); psi.ArgumentList.Add("*");
+        }
         psi.ArgumentList.Add("-A"); psi.ArgumentList.Add(RelayUserAgent);
         if (!string.IsNullOrEmpty(target.Referer)) { psi.ArgumentList.Add("-e"); psi.ArgumentList.Add(target.Referer); }
         if (!string.IsNullOrEmpty(proxyUrl)) { psi.ArgumentList.Add("-x"); psi.ArgumentList.Add(proxyUrl); }
@@ -378,9 +384,13 @@ public sealed class HlsLocalRelay : IDisposable
         Uri abs;
         try { abs = new Uri(baseForRelative, uri); }
         catch { return uri; }
-        if (string.Equals(abs.Host, target.Host, StringComparison.OrdinalIgnoreCase))
-            return $"http://127.0.0.1:{_port}/{target.Token}{abs.PathAndQuery}";
-        return uri;
+        if (!string.Equals(abs.Host, target.Host, StringComparison.OrdinalIgnoreCase))
+            return abs.AbsoluteUri;
+        // 必须相对注册基址（BaseUri）生成，不能照搬绝对路径：
+        // Prepare() 收到本地请求后会用 target.BaseUri 还原绝对地址，若这里吐出完整的
+        // /87b52.../720p/index.m3u8，还原时目录会重复一层，CDN 直接 404。
+        var rel = target.BaseUri.MakeRelativeUri(abs);
+        return $"http://127.0.0.1:{_port}/{target.Token}/" + rel.ToString();
     }
 
     private static string ReasonPhrase(int code) => code switch

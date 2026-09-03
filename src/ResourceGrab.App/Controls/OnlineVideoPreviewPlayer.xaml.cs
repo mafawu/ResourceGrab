@@ -107,7 +107,8 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void UpdatePlayButton()
     {
         PlayHost.Visibility = ShowPlayButton ? Visibility.Visible : Visibility.Collapsed;
-        PlayHintText.Text = StreamUrl != "" && StreamUrl.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)
+        // 与 StartPlayback 用同一个 IsHlsUrl 判断，避免带 query 的地址在两处结论不一致
+        PlayHintText.Text = System.Uri.TryCreate(StreamUrl, UriKind.Absolute, out var u) && IsHlsUrl(u)
             ? "播放影片" : "播放预览";
     }
 
@@ -184,7 +185,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
 
         Media media;
-        if (StreamUrl.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase))
+        if (IsHlsUrl(mediaUri))
         {
             // HLS：LibVLC 3.x 的 adaptive 模块在拉子播放列表/分片时不会继承 media 级的
             // :http-referrer，强制校验 Referer 的 CDN（如 surrit.com）会对子请求返回 403，
@@ -196,9 +197,11 @@ public partial class OnlineVideoPreviewPlayer : UserControl
                 _logger?.Info($"[OnlineVideoPreviewPlayer] HLS 走本地中继: {_currentRelayUrl} (原 {StreamUrl})");
                 media = new Media(_libVlc, new Uri(_currentRelayUrl));
                 media.AddOption(":network-caching=1500");
-                // 强制用 HLS 解复用器解析本地 m3u8：VLC 对 localhost http 的 .m3u8 会因 Content-Type/嗅探
+                // 强制解复用器解析本地 m3u8：VLC 对 localhost http 的 .m3u8 会因 Content-Type/嗅探
                 // 误选 mjpeg/avcodec 等解复用器而报 "cannot peek"，显式指定可避免。
-                media.AddOption(":demux=hls");
+                // 注意 VLC 3.x 的 HLS 由 adaptive 模块处理，模块名是 "adaptive" 而非 "hls"，
+                // 写 :demux=hls 会因找不到该模块直接报 "Your input can't be opened"。
+                media.AddOption(":demux=adaptive");
             }
             catch (Exception ex)
             {
@@ -220,6 +223,13 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         _mediaPlayer.Play(media);
         _logger?.Info($"[OnlineVideoPreviewPlayer] 已调用 Play()。PlayerState={_mediaPlayer.State}");
     }
+
+    /// <summary>
+    /// 是否 HLS 流。用 Uri 的 AbsolutePath 判断而非字符串后缀：带 query string 的地址
+    /// （如 ?token=xxx）字符串不以 .m3u8 结尾，用后缀判断会漏，进而错误地走直连分支。
+    /// </summary>
+    private static bool IsHlsUrl(Uri uri) =>
+        uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>直连式 Media（mp4 直链或 HLS 回退）：直接把 Referer/UA/代理传给 LibVLC。</summary>
     private Media BuildDirectMedia(LibVLC libVlc, Uri mediaUri)
