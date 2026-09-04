@@ -15,13 +15,12 @@ namespace ResourceGrab.App.Controls;
 /// </summary>
 public partial class ScrapeReportPanel : UserControl
 {
-    private readonly ScrapeReportService? _reportService;
+    private readonly ScrapeReportService _reportService;
 
     public ScrapeReportPanel()
     {
         InitializeComponent();
-        try { _reportService = App.Services.GetRequiredService<ScrapeReportService>(); }
-        catch { /* DI 未注册时静默 */ }
+        _reportService = App.Services.GetRequiredService<ScrapeReportService>();
     }
 
     /// <summary>加载并显示指定 VideoItem 的刮削报告。</summary>
@@ -31,7 +30,7 @@ public partial class ScrapeReportPanel : UserControl
         DetailBorder.Visibility = Visibility.Collapsed;
         ExpandArrow.Text = "▸";
 
-        if (_reportService is null || string.IsNullOrEmpty(item.Id))
+        if (string.IsNullOrEmpty(item.Id))
         {
             ShowEmpty("暂无刮削报告");
             return;

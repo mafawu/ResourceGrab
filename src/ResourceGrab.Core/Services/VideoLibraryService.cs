@@ -76,14 +76,9 @@ public class VideoLibraryService
     private DateTime _lastThrottledSaveAt = DateTime.MinValue;
     private readonly List<string> _rootFolders;
     private readonly ILogger? _logger;
-    private readonly ScrapeReportService? _reportService;
+    private readonly ScrapeReportService _reportService;
 
-    public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger = null)
-        : this(filePath, legacyFilePath, logger, null)
-    {
-    }
-
-    public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger, ScrapeReportService? reportService)
+    public VideoLibraryService(string filePath, string legacyFilePath, ILogger? logger, ScrapeReportService reportService)
     {
         _filePath = filePath;
         _legacyFilePath = legacyFilePath;
@@ -91,7 +86,7 @@ public class VideoLibraryService
         _items = LoadWithMigration();
         _dataVersion = 1;
         _rootFolders = LoadRootFolders();
-        _reportService = reportService ?? new ScrapeReportService(logger);
+        _reportService = reportService;
         if (_rootFolders.Count == 0 && File.Exists(_legacyFilePath))
             SeedRootsFromLegacy();
         _logger?.Info($"[VideoLibrary] 已加载 {_items.Count} 条记录 ({Path.GetFileName(_filePath)})");

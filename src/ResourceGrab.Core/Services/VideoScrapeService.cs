@@ -484,36 +484,19 @@ public sealed class VideoScrapeService : IDisposable
     private readonly JavDbScraper _javDb;
     private readonly AiravScraper _airav;
     private readonly ILogger? _logger;
-    private readonly ScrapeReportService? _reportService;
+    private readonly ScrapeReportService _reportService;
     private readonly DiskJsonSnapshotCache _cache;
     /// <summary>来源快照缓存有效期：批内重试/重跑不再联网。</summary>
     private static readonly TimeSpan SnapshotTtl = TimeSpan.FromDays(7);
     public event Action<VideoItem>? ItemChanged;
     public void Dispose() => _http.Dispose();
 
-    public VideoScrapeService(VideoLibraryService library, VideoScrapeSettings settings, ILogger? logger = null)
-    {
-        _library = library;
-        _logger = logger;
-        _cache = new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, logger);
-        _http = new VideoScrapeHttpClient(settings);
-        _scraper = new JavBusScraper(_http, settings.JavBusBaseUrl ?? "");
-        _javDb = new JavDbScraper(_http, settings.JavDbBaseUrl ?? "");
-        _airav = new AiravScraper(_http);
-        _reportService = new ScrapeReportService(logger);
-    }
-
-    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger)
-        : this(library, configService, logger, null)
-    {
-    }
-
-    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger, ScrapeReportService? reportService)
+    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger, ScrapeReportService reportService)
     {
         _library = library;
         _configService = configService;
         _logger = logger;
-        _reportService = reportService ?? new ScrapeReportService(logger);
+        _reportService = reportService;
         _cache = new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, logger);
         var initial = Settings;
         _http = new VideoScrapeHttpClient(initial);
