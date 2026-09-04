@@ -3,4 +3,7 @@
     <Project Path="src/ResourceGrab.App/ResourceGrab.App.csproj" />
     <Project Path="src/ResourceGrab.Core/ResourceGrab.Core.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ResourceGrab.Core.Tests/ResourceGrab.Core.Tests.csproj" />
+  </Folder>
 </Solution>
