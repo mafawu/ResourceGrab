@@ -32,10 +32,10 @@ public sealed record FilterSection(
     IReadOnlyList<FilterOption> Options);
 
 /// <summary>当前筛选选择状态。</summary>
-public sealed record FilterSelection(
-    string Keyword = "",
-    IReadOnlyDictionary<string, FilterTriState> OptionStates = default)
+public sealed record FilterSelection
 {
+    public string Keyword { get; init; } = "";
+    public IReadOnlyDictionary<string, FilterTriState> OptionStates { get; init; } = new Dictionary<string, FilterTriState>();
     public static readonly FilterSelection Empty = new();
 }
 

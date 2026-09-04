@@ -30,7 +30,7 @@ public partial class FilterSidebar : UserControl, IFilterPanel
     public FilterSelection GetSelection()
     {
         var keyword = KeywordBox.Text?.Trim() ?? "";
-        return new FilterSelection(keyword, new Dictionary<string, FilterTriState>(_optionStates));
+        return new FilterSelection { Keyword = keyword, OptionStates = new Dictionary<string, FilterTriState>(_optionStates) };
     }
 
     public void ApplySelection(FilterSelection selection)

@@ -310,6 +310,7 @@ public partial class VideoTaskDashboard : UserControl
         if (numberText is null || metaPanel is null || metaPanel.Children.Count < 2) return;
         var typeText = metaPanel.Children[0] as TextBlock;
         var timeText = metaPanel.Children[1] as TextBlock;
+        if (typeText is null || timeText is null) return;
 
         // 番号
         numberText.Text = task.Number;

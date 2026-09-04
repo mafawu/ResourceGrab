@@ -44,7 +44,7 @@ public sealed class HlsLocalRelay : IDisposable
     private HlsLocalRelay()
     {
         _port = FindFreePort();
-        if (TryStartHttpListener(_port, out var listener))
+        if (TryStartHttpListener(_port, out var listener) && listener is not null)
         {
             _listener = listener;
             listener.Start();
