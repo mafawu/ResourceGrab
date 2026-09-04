@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Net.Http;
 using ResourceGrab.App.Controls;
 using ResourceGrab.App.Dialogs;
@@ -186,7 +187,8 @@ public partial class VideoView : CardGridViewBase
         _onlineRenderedCount = 0;
         ClosePopoutIfOpen();
         OnlinePreviewPlayer.Stop();
-        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        CloseOnlineFullDetail();
+        SetOnlineDetailVisible(false);
         ResultsScroll.Visibility = Visibility.Collapsed;
         OnlineEmptyState.Visibility = Visibility.Visible;
         OnlineEmptyHint.Text = "输入关键词开始在线搜索";
@@ -210,14 +212,16 @@ public partial class VideoView : CardGridViewBase
 
         // 切到其他子页时收起详情栏，恢复右侧本地搜索面板
         if (nav != "local" && _currentItem is not null) CloseDetail();
-        // 在线详情侧栏同样随切页收起，恢复右侧筛选面板
-        if (nav != "search" && OnlineDetailPanel.Visibility == Visibility.Visible)
+        // 在线详情侧栏与完整详情页随切页一并收起，恢复右侧筛选面板
+        if (nav != "search" && (OnlineDetailDrawer.Visibility == Visibility.Visible || OnlineFullDetailPage.Visibility == Visibility.Visible))
         {
             _onlineDetailVersion++;
+            _onlineFullDetailVersion++;
             _onlinePendingAutoPlay = false;
             ClosePopoutIfOpen();
             OnlinePreviewPlayer.Stop();
-            OnlineDetailPanel.Visibility = Visibility.Collapsed;
+            CloseOnlineFullDetail();
+            SetOnlineDetailVisible(false);
             DetailPanelToggled?.Invoke(false);
         }
 
@@ -806,10 +810,8 @@ public partial class VideoView : CardGridViewBase
         ResultsScroll.Visibility = Visibility.Collapsed;
         _onlinePendingAutoPlay = false;
         ClosePopoutIfOpen();
-        if (OnlineDetailPanel.Visibility == Visibility.Visible)
-        {
-            OnlineDetailPanel.Visibility = Visibility.Collapsed;
-        }
+        CloseOnlineFullDetail();
+        if (OnlineDetailDrawer.Visibility == Visibility.Visible) SetOnlineDetailVisible(false);
         try
         {
             // 服务端每页只有十几条：一次并发抓取本段所有页（首页 + 后续页），
@@ -893,6 +895,7 @@ public partial class VideoView : CardGridViewBase
             card.Bind(item);
             card.OnlineDetailRequested += OnlinePosterDetailRequested;
             card.OnlinePreviewRequested += OnlinePosterPreviewRequested;
+            card.OnlineFullDetailRequested += OnlinePosterFullDetailRequested;
             ResultCardsPanel.Children.Add(card);
             cards.Add((item, card));
             _onlineRenderedCount++;
@@ -984,6 +987,8 @@ public partial class VideoView : CardGridViewBase
     private OnlineVideoSummary? _onlineDetailSummary;
     private string? _onlineDetailUrl;
     private int _onlineDetailVersion;
+    /// <summary>完整详情页渲染版本号：切换影片/重搜/切页时自增，用于丢弃过期的异步详情回填。</summary>
+    private int _onlineFullDetailVersion;
     private CancellationTokenSource? _onlineEnrichCts;
 
     /// <summary>详情页内存缓存（DI 单例，应用生命周期内有效）。</summary>
@@ -1045,6 +1050,14 @@ public partial class VideoView : CardGridViewBase
     /// <summary>hover"▶ 预览"：打开详情并在流地址就绪后自动起播。</summary>
     private void OnlinePosterPreviewRequested(OnlineVideoSummary item) => OpenOnlineDetail(item, autoPlay: true);
 
+    /// <summary>双击在线海报：直接进入完整详情页（侧栏随即收起；双击的第一次单击已初始化摘要/详情）。</summary>
+    private void OnlinePosterFullDetailRequested(OnlineVideoSummary item)
+    {
+        if (_onlineDetailSummary?.Id != item.Id)
+            OpenOnlineDetail(item, autoPlay: false);
+        OpenOnlineFullDetail();
+    }
+
     /// <summary>请求自动起播的待消费标记：详情流地址就绪后消费一次，随后清除。</summary>
     private bool _onlinePendingAutoPlay;
 
@@ -1056,7 +1069,8 @@ public partial class VideoView : CardGridViewBase
         _onlineDetailUrl = null;
         _onlinePendingAutoPlay = autoPlay;
 
-        OnlineDetailPanel.Visibility = Visibility.Visible;
+        OnlineDetailFullButton.Visibility = Visibility.Collapsed;
+        SetOnlineDetailVisible(true);
         OnlineDetailPanel.ScrollToTop();
         // 与本地详情一致：顶替右侧筛选面板的位置
         DetailPanelToggled?.Invoke(true);
@@ -1075,7 +1089,7 @@ public partial class VideoView : CardGridViewBase
         OnlineDetailOpenUrlButton.Visibility = Visibility.Collapsed;
         OnlinePreviewImagesSection.Visibility = Visibility.Collapsed;
         OnlinePreviewImagesHost.Children.Clear();
-        FillOnlineMagnetList(null);
+        FillOnlineMagnetList(null, OnlineMagnetListHost, OnlineMagnetHint, OnlineTabMagnetButton);
         SelectOnlineTab(detailTab: true);
 
         var source = OnlineSource;
@@ -1133,8 +1147,8 @@ public partial class VideoView : CardGridViewBase
             OnlineDetailRating.Visibility = Visibility.Collapsed;
         }
 
-        FillOnlineInfoGrid(detail);
-        FillOnlineMagnetList(detail);
+        FillOnlineInfoGrid(detail, OnlineInfoHost);
+        FillOnlineMagnetList(detail, OnlineMagnetListHost, OnlineMagnetHint, OnlineTabMagnetButton);
 
         // 在线播放：详情带流地址（MissAV 全片 m3u8；其他源可为预览 mp4）时
         // 用播放器顶替封面图，复用同一槽位；无流则保持普通封面
@@ -1165,15 +1179,18 @@ public partial class VideoView : CardGridViewBase
             OnlineDetailTagChips.Children.Add(MakeDetailChip($"#{tag}",
                 () => RunOnlineSearch($"#{tag}"), toolTip: "点击搜索该标签"));
 
-        RenderOnlinePreviewImages(detail);
+        RenderOnlinePreviewImages(detail, OnlinePreviewImagesHost, OnlinePreviewImagesSection);
+        // 详情数据就绪后开放「完整详情 →」入口
+        OnlineDetailFullButton.Visibility = Visibility.Visible;
     }
 
-    /// <summary>预览图（剧照）横向条：点击在浏览器查看原图；详情无预览图时整段隐藏。</summary>
-    private void RenderOnlinePreviewImages(OnlineVideoDetail detail)
+    /// <summary>预览图（剧照）横向条：点击在浏览器查看原图；详情无预览图时整段隐藏。
+    /// 侧栏与完整详情页共用，host/section 分别指向各自容器。</summary>
+    private void RenderOnlinePreviewImages(OnlineVideoDetail detail, Panel host, FrameworkElement section)
     {
-        OnlinePreviewImagesHost.Children.Clear();
+        host.Children.Clear();
         var images = detail.PreviewImages.Where(u => !string.IsNullOrWhiteSpace(u)).ToList();
-        OnlinePreviewImagesSection.Visibility = images.Count > 0
+        section.Visibility = images.Count > 0
             ? Visibility.Visible : Visibility.Collapsed;
         if (images.Count == 0) return;
 
@@ -1197,7 +1214,7 @@ public partial class VideoView : CardGridViewBase
             };
             card.MouseLeftButtonUp += (_, _) =>
                 Process.Start(new ProcessStartInfo(captured) { UseShellExecute = true });
-            OnlinePreviewImagesHost.Children.Add(card);
+            host.Children.Add(card);
         }
     }
 
@@ -1218,8 +1235,9 @@ public partial class VideoView : CardGridViewBase
     /// <summary>
     /// 表格式信息行：番号/发行日期/标题/女优/类型/发行商/导演/厂商/评分/时长。
     /// 每行左侧标签、右侧值（女优、类型为可点击胶囊），行间细分隔线；无数据的行隐藏。
+    /// 侧栏与完整详情页共用，host 为各自的信息表容器。
     /// </summary>
-    private void FillOnlineInfoGrid(OnlineVideoDetail detail)
+    private void FillOnlineInfoGrid(OnlineVideoDetail detail, Panel host)
     {
         var rows = new (string Label, string Value, IReadOnlyList<string>? Chips)[]
         {
@@ -1235,7 +1253,6 @@ public partial class VideoView : CardGridViewBase
             ("时长", string.IsNullOrEmpty(detail.DurationText) ? "" : detail.DurationText, null),
         };
 
-        var host = OnlineInfoHost;
         host.Children.Clear();
         var labelBrush = (Brush)FindResource("TextSecondaryBrush");
         var valueBrush = (Brush)FindResource("TextPrimaryBrush");
@@ -1294,13 +1311,15 @@ public partial class VideoView : CardGridViewBase
         }
     }
 
-    /// <summary>磁力列表：JAVDB 表格式行——名称+日期 | 体积 | 复制，点击整行即复制。</summary>
-    private void FillOnlineMagnetList(OnlineVideoDetail? detail)
+    /// <summary>磁力列表：JAVDB 表格式行——名称+日期 | 体积 | 复制，点击整行即复制。
+    /// 侧栏与完整详情页共用；tabButton 为侧栏 Tab 按钮（完整页无 Tab，传 null）。</summary>
+    private void FillOnlineMagnetList(OnlineVideoDetail? detail, Panel host, TextBlock hint, Button? tabButton)
     {
-        OnlineMagnetListHost.Children.Clear();
+        host.Children.Clear();
         var magnets = detail?.Magnets ?? [];
-        OnlineTabMagnetButton.Content = magnets.Count > 0 ? $"磁力列表 ({magnets.Count})" : "磁力列表";
-        OnlineMagnetHint.Visibility = magnets.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (tabButton is not null)
+            tabButton.Content = magnets.Count > 0 ? $"磁力列表 ({magnets.Count})" : "磁力列表";
+        hint.Visibility = magnets.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         if (detail is null) return;
 
         var secondaryBrush = (Brush)FindResource("TextSecondaryBrush");
@@ -1356,7 +1375,7 @@ public partial class VideoView : CardGridViewBase
 
             border.Child = rowGrid;
             border.MouseLeftButtonUp += (_, _) => CopyMagnet(item.Url);
-            OnlineMagnetListHost.Children.Add(border);
+            host.Children.Add(border);
         }
     }
 
@@ -1386,7 +1405,7 @@ public partial class VideoView : CardGridViewBase
         if (string.IsNullOrWhiteSpace(keyword)) return;
         _onlinePage = 1;
         OnlinePreviewPlayer.Stop();
-        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        SetOnlineDetailVisible(false);
         OnlineSearchBox.Text = keyword;
         _onlineSearchText = keyword.Trim();
         ExecuteOnlineSearch();
@@ -1397,26 +1416,55 @@ public partial class VideoView : CardGridViewBase
     private PopoutPlayerWindow? _popoutWindow;
     private bool _suppressPopoutResume;
 
-    private void OnlineDetailPopout_Click(object sender, RoutedEventArgs e)
+    /// <summary>放大播放：把来源播放器（侧栏/完整页）当前位置与暂停态交接给小窗，从同一位置续播。
+    /// 关闭小窗时再交接回来源所在界面——两个播放器实例接力，进度与暂停状态保持同步。</summary>
+    private void OpenPopoutFor(OnlineVideoPreviewPlayer from, string title, string coverUrl)
     {
         if (_popoutWindow is not null) { _popoutWindow.Activate(); return; }
 
-        // 交接：记录主界面播放器当前位置与播放状态，暂停主界面后交给小窗续播
-        var position = OnlinePreviewPlayer.CurrentPositionMs;
-        var paused = OnlinePreviewPlayer.IsPaused;
-        OnlinePreviewPlayer.Stop();
+        var position = from.CurrentPositionMs;
+        var paused = from.IsPaused;
+        from.Stop();
         _popoutWindow = new PopoutPlayerWindow(
-            OnlineDetailTitle.Text,
-            OnlinePreviewPlayer.StreamUrl,
-            OnlinePreviewPlayer.Referer,
-            _onlineDetailSummary?.CoverUrl ?? OnlinePreviewPlayer.PosterUrl,
+            title,
+            from.StreamUrl,
+            from.Referer,
+            coverUrl,
             position, paused,
             OnPopoutClosed);
         _popoutWindow.Show();
         _logger.Info("[VideoView] 播放已交接给小窗（从同一位置续播）");
     }
 
-    /// <summary>小窗关闭：把当前位置/状态交接回主界面播放器续播；
+    private void OnlineDetailPopout_Click(object sender, RoutedEventArgs e)
+        => OpenPopoutFor(OnlinePreviewPlayer, OnlineDetailTitle.Text,
+            _onlineDetailSummary?.CoverUrl ?? OnlinePreviewPlayer.PosterUrl);
+
+    private void OnlineFullPopout_Click(object sender, RoutedEventArgs e)
+        => OpenPopoutFor(OnlineFullPreviewPlayer, OnlineFullTitle.Text,
+            _onlineDetailSummary?.CoverUrl ?? OnlineFullPreviewPlayer.PosterUrl);
+
+    /// <summary>
+    /// 播放接力：把 from 播放器的当前位置/暂停态交接给 to 播放器，从同一位置续播。
+    /// 弹窗（小窗 ↔ 主界面）、侧栏 ↔ 完整页三处共用同一套交接语义；
+    /// 无实际播放位置时停止并恢复封面+播放按钮态。
+    /// </summary>
+    private static void TransferPlayback(OnlineVideoPreviewPlayer? from, OnlineVideoPreviewPlayer? to, long positionMs, bool paused)
+    {
+        from?.Stop();
+        if (to is null) return;
+        if (positionMs > 0 && !string.IsNullOrEmpty(to.StreamUrl))
+        {
+            to.PlayFrom(positionMs, paused);
+        }
+        else
+        {
+            to.Stop();
+            to.ShowPlayButton = !string.IsNullOrEmpty(to.StreamUrl);
+        }
+    }
+
+    /// <summary>小窗关闭：把当前位置/状态交接回主界面（侧栏或完整页，看当前所在界面）续播；
     /// 程序主动关窗（切页/关详情/重搜）时抑制交接，直接停止。</summary>
     private void OnPopoutClosed()
     {
@@ -1426,16 +1474,20 @@ public partial class VideoView : CardGridViewBase
         _suppressPopoutResume = false;
         if (popout is null) return;
 
+        // 交接回当前所在界面：完整页打开则回完整页播放器，否则回侧栏播放器
+        var target = OnlineFullDetailPage.Visibility == Visibility.Visible
+            ? (OnlineVideoPreviewPlayer)OnlineFullPreviewPlayer
+            : OnlinePreviewPlayer;
         if (resume && (popout.IsPlaying || popout.IsPaused) && popout.CurrentPositionMs > 0)
         {
-            OnlinePreviewPlayer.PlayFrom(popout.CurrentPositionMs, popout.IsPaused);
+            TransferPlayback(null, target, popout.CurrentPositionMs, popout.IsPaused);
             _logger.Info("[VideoView] 播放已交接回主界面（从同一位置续播）");
         }
         else
         {
-            // 小窗里没有实际播放（或主动关窗）：主界面回到海报态
-            OnlinePreviewPlayer.Stop();
-            OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
+            // 小窗里没有实际播放（或主动关窗）：回到海报态
+            target.Stop();
+            target.ShowPlayButton = !string.IsNullOrEmpty(target.StreamUrl);
         }
     }
 
@@ -1447,7 +1499,50 @@ public partial class VideoView : CardGridViewBase
         _popoutWindow.Close();
     }
 
-    private void OnlineDetailClose_Click(object sender, RoutedEventArgs e)
+    /// <summary>侧栏抽屉与其遮罩的可见性联动（浮层化后抽屉覆盖在结果区上，遮罩拦截点击）。
+    /// 展开时带 200ms 水平滑入动画（失败不影响主功能，无动画直接切换）。</summary>
+    private void SetOnlineDetailVisible(bool visible)
+    {
+        var v = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible)
+        {
+            OnlineDetailDrawer.Visibility = Visibility.Visible;
+            AnimateDrawerIn();
+        }
+        else
+        {
+            OnlineDetailDrawer.Visibility = Visibility.Collapsed;
+        }
+        OnlineDetailMask.Visibility = v;
+    }
+
+    /// <summary>抽屉从右缘滑入；动画结束后归零 transform 以免残留偏移。</summary>
+    private void AnimateDrawerIn()
+    {
+        try
+        {
+            OnlineDetailDrawer.RenderTransform ??= new TranslateTransform();
+            var transform = (TranslateTransform)OnlineDetailDrawer.RenderTransform;
+            var anim = new DoubleAnimation(620, 0, TimeSpan.FromMilliseconds(200))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+            anim.Completed += (_, _) => transform.X = 0;
+            transform.BeginAnimation(TranslateTransform.XProperty, anim);
+        }
+        catch
+        {
+            // 动画失败不影响主功能：直接显示
+        }
+    }
+
+    private void OnlineDetailClose_Click(object sender, RoutedEventArgs e) => CloseOnlineDetail();
+
+    /// <summary>点击遮罩关闭详情：复用关闭逻辑（含停播、恢复封面态）。</summary>
+    private void OnlineDetailMask_Click(object sender, MouseButtonEventArgs e) => CloseOnlineDetail();
+
+    /// <summary>关闭侧栏详情：停播、恢复封面态、收起抽屉与遮罩。</summary>
+    private void CloseOnlineDetail()
     {
         _onlineDetailVersion++;
         _onlinePendingAutoPlay = false;
@@ -1455,7 +1550,264 @@ public partial class VideoView : CardGridViewBase
         OnlinePreviewPlayer.Stop();
         // 关闭详情恢复待播放态：封面 + 播放按钮（有流时）
         OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
-        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        SetOnlineDetailVisible(false);
+    }
+
+    // ── 完整详情页（整页子页） ──────────────────────────────────────────
+
+    /// <summary>侧栏「完整详情 →」：收起侧栏与遮罩，整页覆盖结果区；播放交接给完整页大播放器（同位置续播）。</summary>
+    private void OnlineDetailFull_Click(object sender, RoutedEventArgs e) => OpenOnlineFullDetail();
+
+    private void OpenOnlineFullDetail(bool refresh = false)
+    {
+        // refresh：完整页内推荐卡片切换影片时强制重载；否则（按钮/双击首次进入）已在页内则忽略
+        if (OnlineFullDetailPage.Visibility == Visibility.Visible && !refresh) return;
+        if (string.IsNullOrEmpty(_onlineDetailUrl)) return;
+        _onlineFullDetailVersion++;
+        var version = _onlineFullDetailVersion;
+
+        // 记录侧栏播放位置/暂停态并停掉，完整页播放器渲染就绪后同位置续播
+        var sidebarPosition = OnlinePreviewPlayer.CurrentPositionMs;
+        var sidebarPaused = OnlinePreviewPlayer.IsPaused;
+        OnlinePreviewPlayer.Stop();
+        ClosePopoutIfOpen();
+        SetOnlineDetailVisible(false);
+        // 整页子页：隐藏搜索框/结果区/分页，由完整详情页替换独占显示
+        ShowOnlineResultsArea(false);
+        OnlineFullDetailPage.Visibility = Visibility.Visible;
+        OnlineFullScroll.ScrollToTop();
+
+        // 摘要先行：番号/标题占位，其余等详情从缓存或网络补齐
+        ImageLoader.SetSource(OnlineFullPoster, _onlineDetailSummary?.CoverUrl ?? "");
+        OnlineFullNumber.Text = _onlineDetailSummary is null
+            ? ""
+            : (string.IsNullOrEmpty(_onlineDetailSummary.Number)
+                ? VideoNumberParser.Parse(_onlineDetailSummary.Title).Number
+                : _onlineDetailSummary.Number);
+        OnlineFullTitle.Text = _onlineDetailSummary?.Title ?? "";
+        OnlineFullOriginalTitle.Text = "";
+        OnlineFullRating.Visibility = Visibility.Collapsed;
+        OnlineFullInfoHost.Children.Clear();
+        OnlineFullTagChips.Children.Clear();
+        OnlineFullDescription.Text = "详情加载中…";
+        OnlineFullMagnetsHost.Children.Clear();
+        OnlineFullMagnetHint.Visibility = Visibility.Collapsed;
+        OnlineFullPreviewImagesSection.Visibility = Visibility.Collapsed;
+        OnlineFullPreviewImagesHost.Children.Clear();
+        OnlineFullRelatedSection.Visibility = Visibility.Collapsed;
+        OnlineFullRelatedHost.Children.Clear();
+        OnlineFullOpenUrlButton.Visibility = string.IsNullOrEmpty(_onlineDetailUrl) ? Visibility.Collapsed : Visibility.Visible;
+        // 完整页播放器待详情渲染后再配流；先清掉上一次的状态
+        OnlineFullPreviewPlayer.Stop();
+        OnlineFullPreviewPlayer.Visibility = Visibility.Collapsed;
+        OnlineFullPopoutButton.Visibility = Visibility.Collapsed;
+
+        var source = OnlineSource;
+        if (source is null) { OnlineFullDescription.Text = "在线源未注册"; return; }
+        var url = _onlineDetailUrl;
+
+        // 生命周期内存缓存命中：同步渲染，零等待不闪烁
+        if (_detailCache.TryGet(url, out var cached))
+        {
+            RenderOnlineFullDetail(cached);
+            TransferPlayback(null, OnlineFullPreviewPlayer, sidebarPosition, sidebarPaused);
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var detail = await source.GetDetailAsync(url);
+                if (detail is not null) _detailCache.Set(url, detail);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (version != _onlineFullDetailVersion || OnlineFullDetailPage.Visibility != Visibility.Visible) return;
+                    if (detail is null) { OnlineFullDescription.Text = "未能获取到详情"; return; }
+                    RenderOnlineFullDetail(detail);
+                    TransferPlayback(null, OnlineFullPreviewPlayer, sidebarPosition, sidebarPaused);
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (version != _onlineFullDetailVersion) return;
+                    OnlineFullDescription.Text = $"详情加载失败: {ex.Message}";
+                });
+            }
+        });
+    }
+
+    /// <summary>完整详情页渲染：与侧栏共用信息表/磁力/剧照渲染，双列布局 + 16:9 大播放器。</summary>
+    private void RenderOnlineFullDetail(OnlineVideoDetail detail)
+    {
+        if (!string.IsNullOrEmpty(detail.CoverUrl)) ImageLoader.SetSource(OnlineFullPoster, detail.CoverUrl);
+        if (!string.IsNullOrEmpty(detail.Number)) OnlineFullNumber.Text = detail.Number;
+        OnlineFullTitle.Text = detail.Title;
+        OnlineFullOriginalTitle.Text = detail.OriginalTitle != detail.Title ? detail.OriginalTitle : "";
+        if (!string.IsNullOrEmpty(detail.RatingText))
+        {
+            OnlineFullRatingText.Text = $"★ {detail.RatingText}";
+            OnlineFullRating.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            OnlineFullRating.Visibility = Visibility.Collapsed;
+        }
+
+        FillOnlineInfoGrid(detail, OnlineFullInfoHost);
+        FillOnlineMagnetList(detail, OnlineFullMagnetsHost, OnlineFullMagnetHint, null);
+
+        var hasStream = !string.IsNullOrEmpty(detail.StreamUrl);
+        OnlineFullPreviewPlayer.PosterUrl = string.IsNullOrEmpty(detail.CoverUrl)
+            ? _onlineDetailSummary?.CoverUrl ?? ""
+            : detail.CoverUrl;
+        OnlineFullPreviewPlayer.StreamUrl = detail.StreamUrl ?? "";
+        OnlineFullPreviewPlayer.Referer = detail.Referer;
+        OnlineFullPreviewPlayer.ShowPlayButton = hasStream;
+        OnlineFullPreviewPlayer.Visibility = hasStream ? Visibility.Visible : Visibility.Collapsed;
+        OnlineFullPopoutButton.Visibility = hasStream ? Visibility.Visible : Visibility.Collapsed;
+
+        OnlineFullDescription.Text = detail.Description;
+        OnlineFullOpenUrlButton.Visibility = string.IsNullOrEmpty(_onlineDetailUrl)
+            ? Visibility.Collapsed : Visibility.Visible;
+
+        // 标签胶囊（详情页 /tags/ 链接；类型已在信息行展示，不重复）
+        OnlineFullTagChips.Children.Clear();
+        foreach (var tag in detail.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Take(24))
+            OnlineFullTagChips.Children.Add(MakeDetailChip($"#{tag}",
+                () => RunOnlineSearch($"#{tag}"), toolTip: "点击搜索该标签"));
+
+        RenderOnlinePreviewImages(detail, OnlineFullPreviewImagesHost, OnlineFullPreviewImagesSection);
+        RenderOnlineFullRelated(detail);
+    }
+
+    /// <summary>
+    /// 同系列推荐：JavDB 详情里的 RelatedVideos（番号列表）后台逐番号搜索找摘要，
+    /// 命中则渲染 VideoPosterCard（单击/双击均切换当前完整页到该片）；无数据或全部未命中则整段隐藏。
+    /// </summary>
+    private void RenderOnlineFullRelated(OnlineVideoDetail detail)
+    {
+        OnlineFullRelatedHost.Children.Clear();
+        var numbers = detail.RelatedVideos
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Take(12).ToList();
+        OnlineFullRelatedSection.Visibility = numbers.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (numbers.Count == 0) return;
+
+        var source = OnlineSource;
+        if (source is null) return;
+        var version = _onlineFullDetailVersion;
+        _ = Task.Run(async () =>
+        {
+            var hits = new List<OnlineVideoSummary?>();
+            await Task.WhenAll(numbers.Select(async num =>
+            {
+                try
+                {
+                    await _onlineDetailGate.WaitAsync();
+                    OnlineVideoSummary? hit = null;
+                    try
+                    {
+                        var rs = await source.SearchAsync(num, 1);
+                        hit = rs.Items.FirstOrDefault(i =>
+                            string.Equals(OnlineDedupeKey(i), num, StringComparison.OrdinalIgnoreCase));
+                    }
+                    finally { _onlineDetailGate.Release(); }
+                    lock (hits) hits.Add(hit);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn($"[VideoView] 同系列推荐搜索失败 {num}: {ex.Message}");
+                }
+            }));
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (version != _onlineFullDetailVersion || OnlineFullDetailPage.Visibility != Visibility.Visible) return;
+                foreach (var item in hits)
+                {
+                    if (item is null) continue;
+                    var card = new VideoPosterCard { Width = 150, Margin = new Thickness(0, 0, 8, 0) };
+                    card.Bind(item);
+                    // 推荐卡在完整页内：单击/双击均切换当前完整页；hover ▶ 播放不在此响应
+                    card.OnlineDetailRequested += s => SwitchFullDetail(s);
+                    card.OnlineFullDetailRequested += s => SwitchFullDetail(s);
+                    OnlineFullRelatedHost.Children.Add(card);
+                }
+            });
+        });
+    }
+
+    /// <summary>完整页内推荐卡片点击：切换到该片的完整详情（已在完整页时强制刷新内容）。</summary>
+    private void SwitchFullDetail(OnlineVideoSummary item)
+    {
+        if (OnlineFullDetailPage.Visibility == Visibility.Visible && _onlineDetailSummary?.Id == item.Id) return;
+        if (_onlineDetailSummary?.Id != item.Id)
+        {
+            _onlineDetailSummary = item;
+            _onlineDetailUrl = OnlineSource?.GetDetailUrl(item.Id) ?? "";
+        }
+        OpenOnlineFullDetail(refresh: true);
+    }
+
+    /// <summary>完整详情页作为整页子页：显示时替换搜索页三行（搜索框/结果区/分页），隐藏时恢复。
+    /// 分页行恢复后按当前结果数重算（进入前可能本就因无结果而隐藏）。</summary>
+    private void ShowOnlineResultsArea(bool show)
+    {
+        OnlineSearchHeader.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OnlineResultsArea.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show) UpdateOnlinePagingText();
+        else OnlinePagingHost.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>「← 返回搜索结果」：完整页收起并恢复搜索页三行，播放按位置交接回侧栏（有流有位置则续播，否则停止）。</summary>
+    private void OnlineFullBack_Click(object sender, RoutedEventArgs e)
+    {
+        _onlineFullDetailVersion++;
+        var position = OnlineFullPreviewPlayer.CurrentPositionMs;
+        var paused = OnlineFullPreviewPlayer.IsPaused;
+        var hadStream = !string.IsNullOrEmpty(OnlineFullPreviewPlayer.StreamUrl);
+        OnlineFullPreviewPlayer.Stop();
+        OnlineFullDetailPage.Visibility = Visibility.Collapsed;
+        ShowOnlineResultsArea(true);
+
+        if (position > 0 && hadStream)
+        {
+            // 正在播/暂停：重新打开侧栏，从同位置续播
+            SetOnlineDetailVisible(true);
+            TransferPlayback(null, OnlinePreviewPlayer, position, paused);
+        }
+        else
+        {
+            // 无实际播放：侧栏保持收起，侧栏播放器恢复封面态
+            OnlinePreviewPlayer.Stop();
+            OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
+        }
+    }
+
+    /// <summary>收起完整详情页（换源/重搜/切页时调用）：停播完整页播放器、隐藏整页并恢复搜索页三行。</summary>
+    private void CloseOnlineFullDetail()
+    {
+        if (OnlineFullDetailPage.Visibility != Visibility.Visible) return;
+        _onlineFullDetailVersion++;
+        OnlineFullPreviewPlayer.Stop();
+        OnlineFullDetailPage.Visibility = Visibility.Collapsed;
+        ShowOnlineResultsArea(true);
+    }
+
+    private void OnlineFullOpenUrl_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_onlineDetailUrl)) return;
+        Process.Start(new ProcessStartInfo(_onlineDetailUrl) { UseShellExecute = true });
+    }
+
+    /// <summary>16:9 播放器槽高度随宽度自适应。</summary>
+    private void OnlineFullPlayerSlot_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var width = OnlineFullPlayerSlot.ActualWidth;
+        if (width > 0) OnlineFullPlayerSlot.Height = width * 9.0 / 16.0;
     }
 
     private void OnlineDetailOpenUrl_Click(object sender, RoutedEventArgs e)

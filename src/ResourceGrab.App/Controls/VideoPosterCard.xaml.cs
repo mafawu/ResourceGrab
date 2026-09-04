@@ -27,13 +27,50 @@ public class VideoPosterCard : PosterCard
     /// <summary>hover"预览"动作：打开在线详情并自动起播。</summary>
     public event Action<OnlineVideoSummary>? OnlinePreviewRequested;
 
+    /// <summary>双击海报（在线搜索结果）：直接进入完整详情页。</summary>
+    public event Action<OnlineVideoSummary>? OnlineFullDetailRequested;
+
+    /// <summary>第二次按下（ClickCount>=2）已标记双击：抬起时不再触发单击详情。</summary>
+    private bool _doubleClickArmed;
+
+    /// <summary>单击/双击判定窗口：单击延迟到窗口结束再开侧栏；窗口内第二次点击则进完整页。
+    /// 不能单击立即开侧栏——侧栏遮罩会吞掉双击的第二次点击，导致双击永远收不到。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _singleClickTimer =
+        new() { Interval = TimeSpan.FromMilliseconds(280) };
+    private OnlineVideoSummary? _pendingSingleItem;
+
     public VideoPosterCard()
     {
         HoverText = "查看详情";
+        AddHandler(MouseLeftButtonDownEvent, new MouseButtonEventHandler(OnCardMouseDown));
+        _singleClickTimer.Tick += (_, _) =>
+        {
+            _singleClickTimer.Stop();
+            var item = _pendingSingleItem;
+            _pendingSingleItem = null;
+            if (item is not null) OnlineDetailRequested?.Invoke(item);
+        };
+        // 鼠标移开或卸载后取消挂起的单击，避免离开卡片后才弹出侧栏
+        MouseLeave += (_, _) => CancelPendingSingle();
+        Unloaded += (_, _) => CancelPendingSingle();
         CardClick += (_, _) =>
         {
-            if (_item is not null) DetailRequested?.Invoke(_item);
-            else if (_onlineItem is not null) OnlineDetailRequested?.Invoke(_onlineItem);
+            if (_item is not null) { DetailRequested?.Invoke(_item); return; }
+            if (_onlineItem is null) return;
+            if (_doubleClickArmed)
+            {
+                // 双击第二击：取消单击、直接进完整详情页
+                _doubleClickArmed = false;
+                CancelPendingSingle();
+                OnlineFullDetailRequested?.Invoke(_onlineItem);
+            }
+            else
+            {
+                // 单击：进入双击判定窗口，窗口结束未再点击才开侧栏
+                _pendingSingleItem = _onlineItem;
+                _singleClickTimer.Stop();
+                _singleClickTimer.Start();
+            }
         };
         // 在线卡片宽度可调（每行个数滑杆）：横版封面高度始终跟随卡片宽度保持 1.5:1
         SizeChanged += (_, _) =>
@@ -41,6 +78,36 @@ public class VideoPosterCard : PosterCard
             if (_onlineItem is not null && _item is null && ActualWidth > 0)
                 CoverHeight = ActualWidth / 1.5;
         };
+    }
+
+    /// <summary>第二次按下标记双击；hover 动作按钮（▶ 播放 / 详情）上的双击不接管。</summary>
+    private void OnCardMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount <= 1 || _onlineItem is null) return;
+        // 命中 hover 动作按钮（位于 HoverOverlay 内容里）时不接管
+        if (e.OriginalSource is DependencyObject source
+            && HoverOverlay.Content is DependencyObject content
+            && IsDescendantOf(source, content))
+        {
+            return;
+        }
+        _doubleClickArmed = true;
+        e.Handled = true;
+    }
+
+    private void CancelPendingSingle()
+    {
+        _singleClickTimer.Stop();
+        _pendingSingleItem = null;
+    }
+
+    private static bool IsDescendantOf(DependencyObject node, DependencyObject ancestor)
+    {
+        for (var n = node; n is not null; n = VisualTreeHelper.GetParent(n) ?? LogicalTreeHelper.GetParent(n))
+        {
+            if (ReferenceEquals(n, ancestor)) return true;
+        }
+        return false;
     }
 
     /// <summary>绑定 VideoItem，自动填充所有属性和角标。</summary>
@@ -90,6 +157,7 @@ public class VideoPosterCard : PosterCard
     {
         _item = null;
         _onlineItem = item;
+        ToolTip = "单击查看侧栏详情，双击进入完整详情";
 
         // 在线封面为横版（宽:高 = 1.5:1），按卡片宽 170 换算高度，完整显示不裁切
         CoverHeight = 170 / 1.5;

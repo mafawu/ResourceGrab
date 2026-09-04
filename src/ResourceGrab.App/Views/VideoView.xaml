@@ -83,8 +83,8 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- 顶部：搜索框 + 源筛选 -->
-                    <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,14">
+                    <!-- 顶部：搜索框 + 源筛选（进入完整详情页时隐藏，整页被替换） -->
+                    <Border x:Name="OnlineSearchHeader" Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,14">
                         <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -118,42 +118,44 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 结果区域：左侧结果列表 + 右侧在线详情侧栏 -->
-                    <Grid Grid.Row="1">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0">
-                            <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-                                <StackPanel>
-                                    <WrapPanel x:Name="ResultCardsPanel" />
-                                </StackPanel>
-                            </ScrollViewer>
-                            <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
-                                    <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
-                                          StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28" />
-                                </Border>
-                                <TextBlock x:Name="OnlineEmptyHint" Text="输入关键词开始在线搜索"
-                                           FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           HorizontalAlignment="Center" Margin="0,16,0,0" />
-                            </StackPanel>
-                            <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
-                                        VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
-                                <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                           HorizontalAlignment="Center" Margin="0,12,0,0" />
-                            </StackPanel>
-                        </Grid>
-                        <!-- 在线详情侧栏：与本地详情同款（窗口右缘、无卡片框、宽 620）；
-                             打开时经 DetailPanelToggled 收起右侧筛选面板顶替其位置。
-                             布局：顶部 16:9 大播放器（封面/在线预览）→ 番号+评分+标题 → Tab 信息区 -->
-                        <ScrollViewer x:Name="OnlineDetailPanel" Grid.Column="1" Width="620"
-                                      Margin="0,0,14,0" VerticalScrollBarVisibility="Auto"
+                    <!-- 结果区域：结果卡片 + 悬浮详情抽屉（覆盖层，不挤压卡片布局；进入完整详情页时整页被替换） -->
+                    <Grid x:Name="OnlineResultsArea" Grid.Row="1">
+                        <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                            <StackPanel>
+                                <WrapPanel x:Name="ResultCardsPanel" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
+                                <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
+                                      StrokeThickness="1.8" Stretch="Uniform" Width="28" Height="28" />
+                            </Border>
+                            <TextBlock x:Name="OnlineEmptyHint" Text="输入关键词开始在线搜索"
+                                       FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,16,0,0" />
+                        </StackPanel>
+                        <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
+                            <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,12,0,0" />
+                        </StackPanel>
+
+                        <!-- 悬浮抽屉遮罩：覆盖结果区，点击关闭详情 -->
+                        <Border x:Name="OnlineDetailMask" Panel.ZIndex="9" Background="#66000000"
+                                Visibility="Collapsed" MouseLeftButtonUp="OnlineDetailMask_Click" />
+
+                        <!-- 悬浮详情抽屉：覆盖在结果区上（不参与卡片布局），Surface 卡片 + 圆角 + 阴影 -->
+                        <Border x:Name="OnlineDetailDrawer" Panel.ZIndex="10" HorizontalAlignment="Right" Width="620"
+                                Margin="0,0,14,0" Visibility="Collapsed"
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                CornerRadius="{DynamicResource RadiusXl}" Effect="{StaticResource CardShadowEffect}">
+                            <ScrollViewer x:Name="OnlineDetailPanel" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                            <!-- 布局：顶部 16:9 大播放器（封面/在线预览）→ 番号+评分+标题 → Tab 信息区 -->
                             <StackPanel>
                                 <!-- 标题栏：强调条 + 标题 + 放大播放 + 关闭 -->
                                 <Grid Margin="0,0,0,12">
@@ -164,6 +166,9 @@
                                                    Margin="8,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Button x:Name="OnlineDetailFullButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                                Content="完整详情 →" Click="OnlineDetailFull_Click"
+                                                ToolTip="打开完整详情页" Margin="0,0,6,0" Visibility="Collapsed" />
                                         <Button x:Name="OnlineDetailPopoutButton" Style="{StaticResource IconButtonStyle}"
                                                 Content="⛶" Click="OnlineDetailPopout_Click"
                                                 ToolTip="放大播放（独立窗口）" Margin="0,0,6,0" Visibility="Collapsed" />
@@ -266,7 +271,8 @@
                                     <StackPanel x:Name="OnlineMagnetListHost" />
                                 </StackPanel>
                             </StackPanel>
-                        </ScrollViewer>
+                            </ScrollViewer>
+                        </Border>
                     </Grid>
 
                     <!-- 分页 -->
@@ -278,6 +284,138 @@
                         <Button x:Name="NextPageBtn" Style="{StaticResource LibraryActionButtonStyle}"
                                 Content="下一页" Click="NextPage_Click" />
                     </StackPanel>
+
+                    <!-- 完整详情页：整页子页（同 ActorProfileView 模式），进入时替换搜索页三行（搜索框/结果区/分页），独占整个 SearchPage -->
+                    <Grid x:Name="OnlineFullDetailPage" Grid.RowSpan="3" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 标题栏：返回搜索结果 + 番号 + 评分胶囊 + 打开详情页/弹出播放 -->
+                        <Grid Grid.Row="0" Margin="0,0,0,14">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="OnlineFullBackButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                        Content="← 返回搜索结果" Click="OnlineFullBack_Click" />
+                                <TextBlock x:Name="OnlineFullNumber" FontSize="17" FontWeight="Bold"
+                                           Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
+                                           Margin="14,0,0,0" />
+                                <Border x:Name="OnlineFullRating" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        CornerRadius="999" Background="#26FFB347" Padding="9,3"
+                                        Visibility="Collapsed" Margin="10,0,0,0">
+                                    <TextBlock x:Name="OnlineFullRatingText" Text="" FontSize="12" FontWeight="Bold"
+                                               Foreground="#E8890C" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button x:Name="OnlineFullOpenUrlButton" Content="打开详情页 ↗"
+                                        Style="{StaticResource LibraryActionButtonStyle}" Visibility="Collapsed"
+                                        Click="OnlineFullOpenUrl_Click" ToolTip="在浏览器打开源站详情页" />
+                                <Button x:Name="OnlineFullPopoutButton" Style="{StaticResource IconButtonStyle}"
+                                        Content="⛶" Click="OnlineFullPopout_Click"
+                                        ToolTip="放大播放（独立窗口）" Margin="8,0,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 滚动内容区：16:9 大播放器 → 剧照 → 标题 → 双列信息 -->
+                        <ScrollViewer x:Name="OnlineFullScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="1100" HorizontalAlignment="Center">
+                                <!-- 16:9 大播放器槽：高度随宽度自适应（SizeChanged 更新） -->
+                                <Border x:Name="OnlineFullPlayerSlot" CornerRadius="{DynamicResource RadiusLg}"
+                                        Background="{DynamicResource HoverBgBrush}"
+                                        BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                        ClipToBounds="True" SizeChanged="OnlineFullPlayerSlot_SizeChanged">
+                                    <Grid>
+                                        <Image x:Name="OnlineFullPoster" Stretch="Uniform" Margin="6" />
+                                        <controls:OnlineVideoPreviewPlayer x:Name="OnlineFullPreviewPlayer"
+                                                                           Visibility="Collapsed" Margin="1" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- 剧照横滚区 -->
+                                <StackPanel x:Name="OnlineFullPreviewImagesSection" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                        <Border Width="3" Height="11" CornerRadius="1.5"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="预览图" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <StackPanel x:Name="OnlineFullPreviewImagesHost" Orientation="Horizontal" />
+                                    </ScrollViewer>
+                                </StackPanel>
+
+                                <!-- 标题信息区 -->
+                                <TextBlock x:Name="OnlineFullTitle" FontSize="18" FontWeight="Bold"
+                                           TextWrapping="Wrap" Margin="0,14,0,0" />
+                                <TextBlock x:Name="OnlineFullOriginalTitle" FontSize="12.5"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                           Margin="0,4,0,0" />
+
+                                <!-- 双列信息区：左=信息表+标签，右=简介+磁力 -->
+                                <Grid Margin="0,16,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0">
+                                        <Border Background="{DynamicResource HoverBgBrush}"
+                                                BorderBrush="{DynamicResource CardBorderBrush}"
+                                                BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}"
+                                                Padding="12,4">
+                                            <StackPanel x:Name="OnlineFullInfoHost" />
+                                        </Border>
+                                        <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                            <Border Width="3" Height="11" CornerRadius="1.5"
+                                                    Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="标签（点击搜索）" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                        <WrapPanel x:Name="OnlineFullTagChips" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <Border Width="3" Height="11" CornerRadius="1.5"
+                                                    Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="简介" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                        <Border Background="{DynamicResource HoverBgBrush}"
+                                                BorderBrush="{DynamicResource CardBorderBrush}"
+                                                BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}"
+                                                Padding="10,8" Margin="0,0,0,12">
+                                            <TextBox x:Name="OnlineFullDescription" Style="{StaticResource SelectableTextStyle}"
+                                                     VerticalScrollBarVisibility="Auto" FontSize="12" TextWrapping="Wrap"
+                                                     Foreground="{DynamicResource TextSecondaryBrush}" />
+                                        </Border>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <Border Width="3" Height="11" CornerRadius="1.5"
+                                                    Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                            <TextBlock Text="磁力列表" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="OnlineFullMagnetHint" Text="该影片暂无磁力链接" FontSize="12"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}" Visibility="Collapsed" />
+                                        <StackPanel x:Name="OnlineFullMagnetsHost" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 同系列推荐：JavDB 详情页同系列番号，后台逐番号搜索渲染卡片；点击切换完整详情 -->
+                                <StackPanel x:Name="OnlineFullRelatedSection" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Margin="0,18,0,8">
+                                        <Border Width="3" Height="13" CornerRadius="1.5"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="同系列推荐" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <StackPanel x:Name="OnlineFullRelatedHost" Orientation="Horizontal" />
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
 
                 <!-- 推荐页（占位） -->
