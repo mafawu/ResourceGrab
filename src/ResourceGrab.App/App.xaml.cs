@@ -64,7 +64,8 @@ public partial class App : Application
         // 把旧版 %APPDATA% 数据迁移到程序同目录数据文件夹
         AppPaths.MigrateLegacyData();
 
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        // 注：GBK/GB18030 等 Windows 代码页在本 net10.0-windows 目标上由 OS NLS 原生提供，
+        // 不再需要 System.Text.Encoding.CodePages 包（NU1510 警告），故移除 RegisterProvider 调用。
         ThemeManager.Initialize();
 
         var services = new ServiceCollection();
