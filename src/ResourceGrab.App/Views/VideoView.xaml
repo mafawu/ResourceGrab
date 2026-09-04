@@ -148,13 +148,14 @@
                                            HorizontalAlignment="Center" Margin="0,12,0,0" />
                             </StackPanel>
                         </Grid>
-                        <!-- 在线详情侧栏：与本地详情同款（窗口右缘、无卡片框、宽 348）；
-                             打开时经 DetailPanelToggled 收起右侧筛选面板顶替其位置 -->
-                        <ScrollViewer x:Name="OnlineDetailPanel" Grid.Column="1" Width="348"
+                        <!-- 在线详情侧栏：与本地详情同款（窗口右缘、无卡片框、宽 620）；
+                             打开时经 DetailPanelToggled 收起右侧筛选面板顶替其位置。
+                             布局：顶部 16:9 大播放器（封面/在线预览）→ 番号+评分+标题 → Tab 信息区 -->
+                        <ScrollViewer x:Name="OnlineDetailPanel" Grid.Column="1" Width="620"
                                       Margin="0,0,14,0" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
                             <StackPanel>
-                                <!-- 标题栏：强调条 + 标题 + 关闭 -->
+                                <!-- 标题栏：强调条 + 标题 + 放大播放 + 关闭 -->
                                 <Grid Margin="0,0,0,12">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="4" Height="15" CornerRadius="2"
@@ -162,21 +163,39 @@
                                         <TextBlock Text="在线详情" FontSize="15" FontWeight="Bold"
                                                    Margin="8,0,0,0" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <Button x:Name="OnlineDetailCloseButton" Style="{StaticResource IconButtonStyle}"
-                                            Content="✕" HorizontalAlignment="Right" Click="OnlineDetailClose_Click"
-                                            ToolTip="关闭详情" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Button x:Name="OnlineDetailPopoutButton" Style="{StaticResource IconButtonStyle}"
+                                                Content="⛶" Click="OnlineDetailPopout_Click"
+                                                ToolTip="放大播放（独立窗口）" Margin="0,0,6,0" Visibility="Collapsed" />
+                                        <Button x:Name="OnlineDetailCloseButton" Style="{StaticResource IconButtonStyle}"
+                                                Content="✕" Click="OnlineDetailClose_Click"
+                                                ToolTip="关闭详情" />
+                                    </StackPanel>
                                 </Grid>
 
-                                <!-- 封面 + 在线播放（详情有流地址时显示播放器，复用同一槽位） -->
-                                <Border Height="230" CornerRadius="{DynamicResource RadiusLg}"
+                                <!-- 封面 + 在线播放（详情有流地址时显示播放器，复用同一槽位；16:9 大屏便于预览） -->
+                                <Border CornerRadius="{DynamicResource RadiusLg}" Height="349"
                                         Background="{DynamicResource HoverBgBrush}"
                                         BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
-                                    <Grid ClipToBounds="True">
+                                    <Grid x:Name="OnlinePlayerSlot" ClipToBounds="True">
                                         <Image x:Name="OnlineDetailPoster" Stretch="Uniform" Margin="6" />
                                         <controls:OnlineVideoPreviewPlayer x:Name="OnlinePreviewPlayer"
                                                                            Visibility="Collapsed" Margin="1" />
                                     </Grid>
                                 </Border>
+
+                                <!-- 预览图（剧照）：紧跟播放器，打开详情即见；横向滚动，点击在浏览器看原图；无预览图时整段隐藏 -->
+                                <StackPanel x:Name="OnlinePreviewImagesSection" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                        <Border Width="3" Height="11" CornerRadius="1.5"
+                                                Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="预览图" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <StackPanel x:Name="OnlinePreviewImagesHost" Orientation="Horizontal" />
+                                    </ScrollViewer>
+                                </StackPanel>
 
                                 <!-- JAVDB/MissAV 式版式：封面 → 番号+评分胶囊 → 标题 → Tab(详情/磁力) -->
                                 <Grid Margin="0,12,0,0">
@@ -224,19 +243,6 @@
                                         <TextBlock Text="标签（点击搜索）" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
                                     </StackPanel>
                                     <WrapPanel x:Name="OnlineDetailTagChips" />
-
-                                    <!-- 预览图（剧照）：横向滚动，点击在浏览器看原图；无预览图时整段隐藏 -->
-                                    <StackPanel x:Name="OnlinePreviewImagesSection" Visibility="Collapsed">
-                                        <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
-                                            <Border Width="3" Height="11" CornerRadius="1.5"
-                                                    Background="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
-                                            <TextBlock Text="预览图" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                        <ScrollViewer HorizontalScrollBarVisibility="Hidden"
-                                                      VerticalScrollBarVisibility="Disabled">
-                                            <StackPanel x:Name="OnlinePreviewImagesHost" Orientation="Horizontal" />
-                                        </ScrollViewer>
-                                    </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
                                         <Border Width="3" Height="11" CornerRadius="1.5"

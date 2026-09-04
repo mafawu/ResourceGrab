@@ -66,8 +66,11 @@ public partial class VideoView : CardGridViewBase
     private Dictionary<string, int> _cachedActorCounts = new();
     private Dictionary<string, int> _cachedSeriesCounts = new();
     private Dictionary<string, int> _cachedStudioCounts = new();
+    /// <summary>当前选中的在线搜索源 Id（源 Tab 切换，默认 MissAV）。</summary>
+    private string _selectedOnlineSourceId = "missav";
+
     private IVideoSource? OnlineSource => App.Services.GetServices<IVideoSource>()
-        .FirstOrDefault(s => s.Info.Id == "missav");
+        .FirstOrDefault(s => s.Info.Id == _selectedOnlineSourceId);
 
     public VideoView()
     {
@@ -132,7 +135,8 @@ public partial class VideoView : CardGridViewBase
 
     public void OnShown()
     {
-        // 每次进入视频页都默认选中“搜索”子页（在线搜索），
+        BuildVideoSourceTabs();
+        // 每次进入视频页都默认选中"搜索"子页（在线搜索），
         // 避免停留在上次离开时的子页（本地/推荐/演员等）
         if (_currentNav != "search") SwitchNav("search");
         else DetailPanelToggled?.Invoke(true);
@@ -141,6 +145,56 @@ public partial class VideoView : CardGridViewBase
     private void NavSearch_Click(object sender, RoutedEventArgs e) => SwitchNav("search");
     private void NavRecommend_Click(object sender, RoutedEventArgs e) => SwitchNav("recommend");
     private void NavLocal_Click(object sender, RoutedEventArgs e) => SwitchNav("local");
+
+    /// <summary>构建在线搜索源切换 Tab（MissAV / JavDB…）。单选，切换即清空结果区并重新搜索。</summary>
+    private void BuildVideoSourceTabs()
+    {
+        if (SourceTabs is null) return;
+        SourceTabs.Children.Clear();
+        var sources = App.Services.GetServices<IVideoSource>().ToList();
+        if (sources.Count == 0) return;
+        // 当前选中的源已不可用（如配置变更）时回退到第一个
+        if (sources.All(s => s.Info.Id != _selectedOnlineSourceId))
+            _selectedOnlineSourceId = sources[0].Info.Id;
+
+        foreach (var source in sources)
+        {
+            var tab = new System.Windows.Controls.RadioButton
+            {
+                Style = (Style)FindResource("FilterTabStyle"),
+                Content = source.Info.DisplayName,
+                Tag = source.Info.Id,
+                IsChecked = source.Info.Id == _selectedOnlineSourceId,
+                Margin = new Thickness(0, 0, 6, 6),
+            };
+            tab.Click += OnlineSourceTab_Click;
+            SourceTabs.Children.Add(tab);
+        }
+    }
+
+    private void OnlineSourceTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.RadioButton { Tag: string id } || id == _selectedOnlineSourceId) return;
+        _selectedOnlineSourceId = id;
+        // 换源：取消在途搜索/详情回填，清空结果区，回到空状态
+        _onlineSearchCts?.Cancel();
+        _onlineEnrichCts?.Cancel();
+        _onlineSearchVersion++;
+        _onlinePage = 1;
+        _onlineLastPage = 1;
+        ResultCardsPanel.Children.Clear();
+        _onlineRenderedCount = 0;
+        ClosePopoutIfOpen();
+        OnlinePreviewPlayer.Stop();
+        OnlineDetailPanel.Visibility = Visibility.Collapsed;
+        ResultsScroll.Visibility = Visibility.Collapsed;
+        OnlineEmptyState.Visibility = Visibility.Visible;
+        OnlineEmptyHint.Text = "输入关键词开始在线搜索";
+        UpdateOnlinePagingText();
+        // 已有搜索词时立即用新源重新搜
+        if (!string.IsNullOrWhiteSpace(_onlineSearchText))
+            ExecuteOnlineSearch();
+    }
 
     public void SwitchNav(string nav)
     {
@@ -160,6 +214,8 @@ public partial class VideoView : CardGridViewBase
         if (nav != "search" && OnlineDetailPanel.Visibility == Visibility.Visible)
         {
             _onlineDetailVersion++;
+            _onlinePendingAutoPlay = false;
+            ClosePopoutIfOpen();
             OnlinePreviewPlayer.Stop();
             OnlineDetailPanel.Visibility = Visibility.Collapsed;
             DetailPanelToggled?.Invoke(false);
@@ -308,7 +364,9 @@ public partial class VideoView : CardGridViewBase
     private void RenderList()
     {
         DetailScroll.Visibility = Visibility.Collapsed;
-        DetailPanelToggled?.Invoke(false);
+        // 仅本地子页渲染列表时才恢复右侧筛选栏；搜索/任务等其他子页的右栏状态由 SwitchNav 统一管理。
+        // 若无条件触发，首次进入视频页时 OnLoaded → Refresh → RenderList 会把已收起的右栏重新显示出来。
+        if (_currentNav == "local") DetailPanelToggled?.Invoke(false);
         try
         {
             using (RecursionGuard.Enter("RenderList"))
@@ -746,6 +804,8 @@ public partial class VideoView : CardGridViewBase
         OnlineLoadingState.Visibility = Visibility.Visible;
         OnlineEmptyState.Visibility = Visibility.Collapsed;
         ResultsScroll.Visibility = Visibility.Collapsed;
+        _onlinePendingAutoPlay = false;
+        ClosePopoutIfOpen();
         if (OnlineDetailPanel.Visibility == Visibility.Visible)
         {
             OnlineDetailPanel.Visibility = Visibility.Collapsed;
@@ -755,7 +815,9 @@ public partial class VideoView : CardGridViewBase
             // 服务端每页只有十几条：一次并发抓取本段所有页（首页 + 后续页），
             // 首页响应一到立即上屏，不等剩余页；剩余页回来后按番号去重增量追加。
             // （旧实现串行等 3 页才渲染，再叠加 Cloudflare 降级链，首屏要十几秒。）
-            var pages = Enumerable.Range(_onlinePage, OnlineAutoMergePages).ToList();
+            // MissAV 每页条数少需合并多页；JavDB 等源单页结果充足，只抓首页。
+            var mergePages = MergePagesFor(source);
+            var pages = Enumerable.Range(_onlinePage, mergePages).ToList();
             var pageTasks = pages.ToDictionary(p => p, p => source.SearchAsync(_onlineSearchText, p, ct));
 
             var first = await pageTasks[_onlinePage];
@@ -766,8 +828,10 @@ public partial class VideoView : CardGridViewBase
             RenderOnlineResults(first.Items.Where(i => seen.Add(OnlineDedupeKey(i))).ToList(), append: false);
             if (_onlineRenderedCount == 0)
             {
-                // MissAV 没搜到：关键词是番号时按 contentRoutes 顺序换其他源兜底；仍无结果保持空状态
-                await TryOnlineFallbackSearchAsync(source, ct);
+                // 仅 MissAV 无结果时按番号换其他刮削源兜底（其搜索最可能被反爬吞结果）；
+                // 其他源（JavDB）无结果直接保持空状态
+                if (source.Info.Id == "missav")
+                    await TryOnlineFallbackSearchAsync(source, ct);
                 return;
             }
 
@@ -828,6 +892,7 @@ public partial class VideoView : CardGridViewBase
             card.Width = _onlineCardWidth;
             card.Bind(item);
             card.OnlineDetailRequested += OnlinePosterDetailRequested;
+            card.OnlinePreviewRequested += OnlinePosterPreviewRequested;
             ResultCardsPanel.Children.Add(card);
             cards.Add((item, card));
             _onlineRenderedCount++;
@@ -852,6 +917,10 @@ public partial class VideoView : CardGridViewBase
     /// <summary>在线结果跨页去重键：番号优先（同番号的 -uncensored-leak 等变体会跨页重复），无番号退回 Id。</summary>
     private static string OnlineDedupeKey(OnlineVideoSummary i)
         => string.IsNullOrEmpty(i.Number) ? i.Id : i.Number;
+
+    /// <summary>单次搜索自动合并的页数：MissAV 每页约 12 条需合并多页才够一屏；其他源（如 JavDB）单页即可。</summary>
+    private static int MergePagesFor(IVideoSource? source)
+        => source is { Info.Id: "missav" } ? OnlineAutoMergePages : 1;
 
     /// <summary>
     /// MissAV 搜索无结果时的换源兜底：关键词可解析为番号时，按 advanced.contentRoutes 的
@@ -904,7 +973,8 @@ public partial class VideoView : CardGridViewBase
         var maxFit = Math.Max(1, (int)Math.Floor((available + cardGap) / minSlot));
         columns = Math.Min(columns, maxFit);
         var slotWidth = Math.Floor(available / columns);
-        _onlineCardWidth = Math.Max(GridCellSizer.MinCardWidth, slotWidth - cardGap);
+        // 在线卡片放宽下限（200）：横版封面 + 大标题需要足够宽度才方便浏览；窄窗自动减列
+        _onlineCardWidth = Math.Max(200, slotWidth - cardGap);
         foreach (var card in ResultCardsPanel.Children.OfType<VideoPosterCard>())
             card.Width = _onlineCardWidth;
     }
@@ -970,12 +1040,21 @@ public partial class VideoView : CardGridViewBase
     }
 
     /// <summary>点击在线海报：先展示摘要并显示侧栏，随后拉取详情页补充完整信息。</summary>
-    private void OnlinePosterDetailRequested(OnlineVideoSummary item)
+    private void OnlinePosterDetailRequested(OnlineVideoSummary item) => OpenOnlineDetail(item, autoPlay: false);
+
+    /// <summary>hover"▶ 预览"：打开详情并在流地址就绪后自动起播。</summary>
+    private void OnlinePosterPreviewRequested(OnlineVideoSummary item) => OpenOnlineDetail(item, autoPlay: true);
+
+    /// <summary>请求自动起播的待消费标记：详情流地址就绪后消费一次，随后清除。</summary>
+    private bool _onlinePendingAutoPlay;
+
+    private void OpenOnlineDetail(OnlineVideoSummary item, bool autoPlay)
     {
         _onlineDetailVersion++;
         var version = _onlineDetailVersion;
         _onlineDetailSummary = item;
         _onlineDetailUrl = null;
+        _onlinePendingAutoPlay = autoPlay;
 
         OnlineDetailPanel.Visibility = Visibility.Visible;
         OnlineDetailPanel.ScrollToTop();
@@ -1067,6 +1146,14 @@ public partial class VideoView : CardGridViewBase
         OnlinePreviewPlayer.Referer = detail.Referer;
         OnlinePreviewPlayer.ShowPlayButton = hasStream;
         OnlinePreviewPlayer.Visibility = hasStream ? Visibility.Visible : Visibility.Collapsed;
+        OnlineDetailPopoutButton.Visibility = hasStream ? Visibility.Visible : Visibility.Collapsed;
+
+        // "▶ 预览"请求的自动起播：流就绪后消费标记并起播一次
+        if (_onlinePendingAutoPlay)
+        {
+            _onlinePendingAutoPlay = false;
+            if (hasStream) OnlinePreviewPlayer.Play();
+        }
 
         OnlineDetailDescription.Text = detail.Description;
         OnlineDetailOpenUrlButton.Visibility = string.IsNullOrEmpty(_onlineDetailUrl)
@@ -1305,10 +1392,69 @@ public partial class VideoView : CardGridViewBase
         ExecuteOnlineSearch();
     }
 
+    /// <summary>放大播放：主界面播放器把当前位置与播放状态交接给小窗，小窗从同一位置续播。
+    /// 关闭小窗时再交接回主界面——两个播放器实例接力，进度与暂停状态保持同步。</summary>
+    private PopoutPlayerWindow? _popoutWindow;
+    private bool _suppressPopoutResume;
+
+    private void OnlineDetailPopout_Click(object sender, RoutedEventArgs e)
+    {
+        if (_popoutWindow is not null) { _popoutWindow.Activate(); return; }
+
+        // 交接：记录主界面播放器当前位置与播放状态，暂停主界面后交给小窗续播
+        var position = OnlinePreviewPlayer.CurrentPositionMs;
+        var paused = OnlinePreviewPlayer.IsPaused;
+        OnlinePreviewPlayer.Stop();
+        _popoutWindow = new PopoutPlayerWindow(
+            OnlineDetailTitle.Text,
+            OnlinePreviewPlayer.StreamUrl,
+            OnlinePreviewPlayer.Referer,
+            _onlineDetailSummary?.CoverUrl ?? OnlinePreviewPlayer.PosterUrl,
+            position, paused,
+            OnPopoutClosed);
+        _popoutWindow.Show();
+        _logger.Info("[VideoView] 播放已交接给小窗（从同一位置续播）");
+    }
+
+    /// <summary>小窗关闭：把当前位置/状态交接回主界面播放器续播；
+    /// 程序主动关窗（切页/关详情/重搜）时抑制交接，直接停止。</summary>
+    private void OnPopoutClosed()
+    {
+        var popout = _popoutWindow;
+        _popoutWindow = null;
+        var resume = !_suppressPopoutResume;
+        _suppressPopoutResume = false;
+        if (popout is null) return;
+
+        if (resume && (popout.IsPlaying || popout.IsPaused) && popout.CurrentPositionMs > 0)
+        {
+            OnlinePreviewPlayer.PlayFrom(popout.CurrentPositionMs, popout.IsPaused);
+            _logger.Info("[VideoView] 播放已交接回主界面（从同一位置续播）");
+        }
+        else
+        {
+            // 小窗里没有实际播放（或主动关窗）：主界面回到海报态
+            OnlinePreviewPlayer.Stop();
+            OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
+        }
+    }
+
+    /// <summary>关闭详情/切页前先关小窗；主动关闭时抑制回交接续播。</summary>
+    private void ClosePopoutIfOpen()
+    {
+        if (_popoutWindow is null) return;
+        _suppressPopoutResume = true;
+        _popoutWindow.Close();
+    }
+
     private void OnlineDetailClose_Click(object sender, RoutedEventArgs e)
     {
         _onlineDetailVersion++;
+        _onlinePendingAutoPlay = false;
+        ClosePopoutIfOpen();
         OnlinePreviewPlayer.Stop();
+        // 关闭详情恢复待播放态：封面 + 播放按钮（有流时）
+        OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
         OnlineDetailPanel.Visibility = Visibility.Collapsed;
     }
 
@@ -1323,7 +1469,7 @@ public partial class VideoView : CardGridViewBase
         // 每次搜索会自动合并多页，按整段步进回退，避免与当前视图大量重叠
         if (_onlinePage > 1)
         {
-            _onlinePage = Math.Max(1, _onlinePage - OnlineAutoMergePages);
+            _onlinePage = Math.Max(1, _onlinePage - MergePagesFor(OnlineSource));
             ExecuteOnlineSearch();
         }
     }

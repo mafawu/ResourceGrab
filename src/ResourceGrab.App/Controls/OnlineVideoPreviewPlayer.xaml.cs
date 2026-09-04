@@ -62,20 +62,35 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         set => SetValue(ShowPlayButtonProperty, value);
     }
 
-    private enum PlayerState { Idle, Loading, Playing, Error }
+    private enum PlayerState { Idle, Loading, Playing, Paused, Error }
 
     private LibVLC? _libVlc;
     private MediaPlayer? _mediaPlayer;
     private Media? _currentMedia;
     private string? _currentRelayUrl;
     private bool _playPending;
+    private long _pendingSeekMs;
+    private bool _pendingPause;
+    private bool _handoffSeekApplied;
+    private bool _inPlayback;
     private static bool _libVlcInitialized;
     private readonly ILogger? _logger = App.Services.GetService<ILogger>();
+
+    /// <summary>控制条自动隐藏计时器：播放/暂停态 5 秒无操作后隐藏进度条与按钮。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _controlBarHideTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(5),
+    };
 
     public OnlineVideoPreviewPlayer()
     {
         InitializeComponent();
         Unloaded += (_, _) => DisposePlayer();
+        _controlBarHideTimer.Tick += (_, _) =>
+        {
+            _controlBarHideTimer.Stop();
+            if (_inPlayback) ControlBar.Visibility = Visibility.Collapsed;
+        };
     }
 
     // ── 状态切换 ─────────────────────────────────────────────────────
@@ -86,11 +101,49 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         PosterLayer.Visibility = state == PlayerState.Idle ? Visibility.Visible : Visibility.Collapsed;
         LoadingLayer.Visibility = state == PlayerState.Loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorLayer.Visibility = state == PlayerState.Error ? Visibility.Visible : Visibility.Collapsed;
-        PauseToggleButton.Visibility = state == PlayerState.Playing ? Visibility.Visible : Visibility.Collapsed;
-        PauseToggleButton.Content = "⏸";
-        if (state != PlayerState.Playing) SeekBar.Visibility = Visibility.Collapsed;
+        _inPlayback = state is PlayerState.Playing or PlayerState.Paused;
+        if (_inPlayback)
+        {
+            // 进入播放/暂停先显示控制条，5 秒无操作自动隐藏（鼠标进入视频区域重新显示）
+            ControlBar.Visibility = Visibility.Visible;
+            RestartControlBarTimer();
+        }
+        else
+        {
+            _controlBarHideTimer.Stop();
+            ControlBar.Visibility = Visibility.Collapsed;
+        }
+        PauseToggleButton.Content = state == PlayerState.Paused ? "►" : "❚❚";
         if (state == PlayerState.Loading) ResetSeekBar();
     }
+
+    // ── 控制条自动隐藏 ──────────────────────────────────────────────────
+
+    private void ShowControlBarTemporarily()
+    {
+        if (!_inPlayback) return;
+        ControlBar.Visibility = Visibility.Visible;
+        RestartControlBarTimer();
+    }
+
+    private void RestartControlBarTimer()
+    {
+        _controlBarHideTimer.Stop();
+        _controlBarHideTimer.Start();
+    }
+
+    private void PlayerRoot_MouseEnter(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
+
+    private void PlayerRoot_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
+
+    private void PlayerRoot_MouseLeave(object sender, MouseEventArgs e)
+    {
+        // 鼠标离开视频区域：5 秒后隐藏控制条
+        if (_inPlayback) RestartControlBarTimer();
+    }
+
+    /// <summary>鼠标在控制条上操作时保持显示并重置计时。</summary>
+    private void ControlBar_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
 
     private void UpdatePoster()
     {
@@ -108,7 +161,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         PlayHost.Visibility = ShowPlayButton ? Visibility.Visible : Visibility.Collapsed;
         // 与 StartPlayback 用同一个 IsHlsUrl 判断，避免带 query 的地址在两处结论不一致
-        PlayHintText.Text = System.Uri.TryCreate(StreamUrl, UriKind.Absolute, out var u) && IsHlsUrl(u)
+        PlayHost.ToolTip = System.Uri.TryCreate(StreamUrl, UriKind.Absolute, out var u) && IsHlsUrl(u)
             ? "播放影片" : "播放预览";
     }
 
@@ -125,6 +178,67 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _currentRelayUrl = null;
         }
         SetState(PlayerState.Idle);
+    }
+
+    /// <summary>公开播放入口：外部（详情自动起播、独立播放窗口）设好 StreamUrl 后调用。
+    /// HWND 未就绪时由 TryPlay 内部置 _playPending，宿主加载后自动起播。</summary>
+    public void Play() => TryPlay();
+
+    /// <summary>当前播放位置（毫秒）；未起播返回 0。</summary>
+    public long CurrentPositionMs => _mediaPlayer?.Time ?? 0;
+
+    /// <summary>是否正在播放。</summary>
+    public bool IsPlaying => _mediaPlayer?.State == VLCState.Playing;
+
+    /// <summary>是否处于暂停态。</summary>
+    public bool IsPaused => _mediaPlayer?.State == VLCState.Paused;
+
+    /// <summary>
+    /// 接力续播（小窗放大 / 回迁）：从指定位置起播，paused=true 时起播后立即暂停。
+    /// 主界面与小窗是两个播放器实例（LibVLCSharp.WPF 的 VideoView 不支持跨窗口迁移），
+    /// 交接时用此方法把位置与播放状态传给对方，从同一位置继续播。
+    /// 注意：定位不用 VLC 的 :start-time 输入选项（其单位是秒，传毫秒会错位到流末尾），
+    /// 而是起播后经 <see cref="ApplyHandoffSeek"/> 用 MediaPlayer.Time（毫秒）精确 seek。
+    /// </summary>
+    public void PlayFrom(long positionMs, bool paused)
+    {
+        _pendingSeekMs = Math.Max(0, positionMs);
+        _pendingPause = paused;
+        _handoffSeekApplied = false;
+        TryPlay();
+    }
+
+    /// <summary>
+    /// 接力续播的精确 seek：等时长已知（LengthChanged）后把播放定位到交接位置。
+    /// 起播即 seek 可能被 LengthChanged 重设时长干扰，故挂在 Playing/LengthChanged 上幂等执行。
+    /// </summary>
+    private void ApplyHandoffSeek()
+    {
+        if (_handoffSeekApplied) return;
+        if (_pendingSeekMs <= 0) { _handoffSeekApplied = true; return; }
+        if (_durationMs <= 0) return; // 时长未知（直播/未到 LengthChanged），等下一次
+        _handoffSeekApplied = true;
+        var target = Math.Min(_pendingSeekMs, _durationMs - 1);
+        _pendingSeekMs = 0;
+        _logger?.Info($"[OnlineVideoPreviewPlayer] 接力续播定位：{target}ms");
+        try
+        {
+            _mediaPlayer!.Time = target;
+            _sliderUpdating = true;
+            if (_durationMs > 0) SeekSlider.Value = Math.Min(target, _durationMs);
+            _sliderUpdating = false;
+            CurrentTimeText.Text = FormatTime(target);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[OnlineVideoPreviewPlayer] 接力续播 seek 失败: {ex.Message}");
+        }
+        if (_pendingPause)
+        {
+            _pendingPause = false;
+            _mediaPlayer?.Pause();
+            SetState(PlayerState.Paused);
+        }
     }
 
     private void PlayHost_Click(object sender, MouseButtonEventArgs e) => TryPlay();
@@ -255,14 +369,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         if (_mediaPlayer.State == VLCState.Playing)
         {
             _mediaPlayer.Pause();
-            PauseToggleButton.Content = "▶";
+            SetState(PlayerState.Paused); // 暂停态也常驻控制条，可继续或停止
         }
         else
         {
             _mediaPlayer.Play();
-            PauseToggleButton.Content = "⏸";
+            PauseToggleButton.Content = "❚❚";
         }
     }
+
+    /// <summary>停止播放并回到海报态（控制条"⏹"按钮）。</summary>
+    private void StopButton_Click(object sender, RoutedEventArgs e) => Stop();
 
     // ── 进度条 / 跳转 ────────────────────────────────────────────────
 
@@ -345,6 +462,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             {
                 _logger?.Info($"[OnlineVideoPreviewPlayer] VLC Playing 事件。PlayerState={_mediaPlayer.State}");
                 SetState(PlayerState.Playing);
+                ApplyHandoffSeek();
             });
             _mediaPlayer.EncounteredError += (_, _) => Dispatcher.InvokeAsync(() =>
             {
@@ -354,18 +472,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _mediaPlayer.EndReached += (_, _) => Dispatcher.InvokeAsync(() => SetState(PlayerState.Idle));
             _mediaPlayer.LengthChanged += (_, e) => Dispatcher.InvokeAsync(() =>
             {
-                // 时长已知（点播）才显示进度条；直播流 length<=0 自动隐藏
+                // 时长已知（点播）才显示进度滑条与总时长；直播流 length<=0 自动隐藏
                 _durationMs = e.Length;
                 if (_durationMs > 0 && _mediaPlayer.State is VLCState.Playing or VLCState.Paused)
                 {
                     SeekSlider.Maximum = _durationMs; // 滑条上限=时长（毫秒），否则进度会被钳在旧上限
                     DurationText.Text = FormatTime(_durationMs);
-                    SeekBar.Visibility = Visibility.Visible;
                 }
-                else if (_durationMs <= 0)
-                {
-                    SeekBar.Visibility = Visibility.Collapsed;
-                }
+                SeekSlider.Visibility = _durationMs > 0 ? Visibility.Visible : Visibility.Collapsed;
+                DurationText.Visibility = _durationMs > 0 ? Visibility.Visible : Visibility.Collapsed;
+                // 时长就绪后执行接力续播定位（起播时可能还拿不到时长，这里兜底）
+                ApplyHandoffSeek();
             });
             _mediaPlayer.TimeChanged += (_, e) => Dispatcher.InvokeAsync(() =>
             {
@@ -427,6 +544,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void DisposePlayer()
     {
         _playPending = false;
+        _controlBarHideTimer.Stop();
         try { _mediaPlayer?.Stop(); } catch { }
         if (_currentRelayUrl is not null)
         {

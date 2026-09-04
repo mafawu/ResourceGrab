@@ -94,6 +94,7 @@ public partial class SettingsDialog : Window
         JavBusUrlBox.Text = scraping.JavBusBaseUrl;
         JavDbUrlBox.Text = scraping.JavDbBaseUrl;
         JavBusCookieBox.Text = scraping.JavBusCookie;
+        JavDbCookieBox.Text = scraping.JavDbCookie;
 
         // 高级刮削设置
         ScrapeTimeoutBox.Text = scraping.TimeoutSeconds.ToString();
@@ -323,6 +324,7 @@ public partial class SettingsDialog : Window
         scraping.JavBusBaseUrl = string.IsNullOrWhiteSpace(JavBusUrlBox.Text) ? "https://www.javbus.com" : JavBusUrlBox.Text.Trim();
         scraping.JavDbBaseUrl = string.IsNullOrWhiteSpace(JavDbUrlBox.Text) ? "https://javdb.com" : JavDbUrlBox.Text.Trim();
         scraping.JavBusCookie = JavBusCookieBox.Text.Trim();
+        scraping.JavDbCookie = JavDbCookieBox.Text.Trim();
 
         // 高级刮削设置保存
         if (int.TryParse(ScrapeTimeoutBox.Text, out var timeout)) scraping.TimeoutSeconds = Math.Clamp(timeout, 3, 120);

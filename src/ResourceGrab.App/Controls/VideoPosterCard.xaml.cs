@@ -24,6 +24,9 @@ public class VideoPosterCard : PosterCard
     /// <summary>点击查看详情（在线搜索结果）。</summary>
     public event Action<OnlineVideoSummary>? OnlineDetailRequested;
 
+    /// <summary>hover"预览"动作：打开在线详情并自动起播。</summary>
+    public event Action<OnlineVideoSummary>? OnlinePreviewRequested;
+
     public VideoPosterCard()
     {
         HoverText = "查看详情";
@@ -81,6 +84,7 @@ public class VideoPosterCard : PosterCard
     /// <summary>
     /// 绑定在线搜索摘要：复用本地海报样式，封面直接走网络 URL（ImageLoader 支持 http）。
     /// 点击触发 OnlineDetailRequested（与本地条目的 DetailRequested 区分）。
+    /// 在线卡片用大横版封面 + 大标题 + hover 动作（▶ 预览 / 详情），方便快速浏览与试看。
     /// </summary>
     public void Bind(OnlineVideoSummary item)
     {
@@ -94,6 +98,7 @@ public class VideoPosterCard : PosterCard
         CoverFallback = item.Title;
 
         Title = item.Title;
+        TitleFontSize = 14;
 
         // 信息行：番号 + 内容类型；时长压在封面右下角标，不重复放
         MetaLeft = string.IsNullOrEmpty(item.Number)
@@ -102,6 +107,13 @@ public class VideoPosterCard : PosterCard
         MetaRight = "";
 
         SetTags(item.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Take(4).ToList());
+
+        // hover 动作：▶ 播放（开详情并自动起播，主色按钮）/ 详情
+        SetHoverActions(new (string, Action, bool)[]
+        {
+            ("▶ 播放", () => OnlinePreviewRequested?.Invoke(item), true),
+            ("详情", () => OnlineDetailRequested?.Invoke(item), false),
+        });
 
         // 清掉本地卡片的角标/进度/缺失态，类型压左上角标、评分压右上角标、时长压右下角标
         TopLeftContent = string.IsNullOrEmpty(item.KindLabel)

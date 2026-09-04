@@ -41,22 +41,34 @@
                                 Background="{DynamicResource PrimaryBrush}" HorizontalAlignment="Left" Width="0" />
                     </Border>
 
-                    <!-- hover 遮罩 -->
-                    <Border x:Name="HoverOverlay" Background="#80000000"
-                            Visibility="Collapsed" IsHitTestVisible="False">
-                        <TextBlock x:Name="HoverLabel" Text="查看详情"
-                                   FontSize="12" FontWeight="SemiBold" Foreground="White"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <!-- hover 遮罩：整卡可点（Button），内容（提示文字 + 动作按钮）由代码构建 -->
+                    <Button x:Name="HoverOverlay"
+                            Visibility="Collapsed"
+                            Click="HoverOverlay_Click"
+                            Cursor="Hand" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="OverlayBg" Background="#80000000">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="OverlayBg" Property="Background" Value="#99000000" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                 </Grid>
 
                 <!-- 信息区 -->
                 <Border x:Name="InfoHost" Padding="10,8,10,10">
                     <StackPanel>
                         <TextBlock x:Name="TitleText" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                   FontSize="12" FontWeight="SemiBold"
+                                   FontSize="{Binding TitleFontSize, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimaryBrush}"
-                                   TextWrapping="Wrap" MaxHeight="34"
+                                   TextWrapping="Wrap" MaxHeight="36"
                                    TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="SubtitleText" Text=""
                                    FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"

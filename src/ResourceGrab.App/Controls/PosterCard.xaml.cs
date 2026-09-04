@@ -142,6 +142,17 @@ public partial class PosterCard : UserControl
         set => SetValue(ProgressProperty, value);
     }
 
+    // ===== 标题字号（在线视频卡片用大字号突出标题，默认 12 保持漫画卡片原样） =====
+    public static readonly DependencyProperty TitleFontSizeProperty =
+        DependencyProperty.Register(nameof(TitleFontSize), typeof(double), typeof(PosterCard),
+            new PropertyMetadata(12.0));
+
+    public double TitleFontSize
+    {
+        get => (double)GetValue(TitleFontSizeProperty);
+        set => SetValue(TitleFontSizeProperty, value);
+    }
+
     // ===== Hover 文字 =====
     public static readonly DependencyProperty HoverTextProperty =
         DependencyProperty.Register(nameof(HoverText), typeof(string), typeof(PosterCard),
@@ -163,15 +174,40 @@ public partial class PosterCard : UserControl
 
     private readonly List<string> _tags = [];
 
+    /// <summary>hover 遮罩上的动作按钮容器（如在线视频卡片的"▶ 预览 / 详情"），代码构建。</summary>
+    private readonly StackPanel _hoverActionsHost = new()
+    {
+        Orientation = Orientation.Horizontal,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        Margin = new Thickness(0, 8, 0, 0),
+    };
+
     public PosterCard()
     {
         InitializeComponent();
+        // 遮罩内容在代码里构建：ControlTemplate 内的命名元素无法从代码后台访问
+        HoverOverlay.Content = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "查看详情",
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                },
+                _hoverActionsHost,
+            },
+        };
         Loaded += (_, _) => { UpdateCover(); UpdateSubtitle(); UpdateProgress(); };
     }
 
     /// <summary>设置标签列表。</summary>
-    public void SetTags(IEnumerable<string> tags)
-    {
+    public void SetTags(IEnumerable<string> tags)    {
         _tags.Clear();
         _tags.AddRange(tags);
         TagHost.Children.Clear();
@@ -193,6 +229,48 @@ public partial class PosterCard : UserControl
                 },
             };
             TagHost.Children.Add(pill);
+        }
+    }
+
+    /// <summary>
+    /// 设置 hover 遮罩上的动作按钮（如在线视频卡片的"▶ 播放 / 详情"）。
+    /// 圆角矩形样式：Primary 用主题主色底（行动号召），其余半透明白底；
+    /// 动作 click 冒泡会触发 HoverOverlay_Click，因此用 handled 标记拦下冒泡。
+    /// </summary>
+    public void SetHoverActions(IEnumerable<(string Text, Action Action, bool Primary)> actions)
+    {
+        _hoverActionsHost.Children.Clear();
+        var primaryBrush = TryFindResource("PrimaryBrush") as Brush ?? new SolidColorBrush(Color.FromRgb(0x2F, 0x6F, 0xED));
+        foreach (var (text, action, primary) in actions)
+        {
+            var pill = new Border
+            {
+                Background = primary
+                    ? new SolidColorBrush(Color.FromArgb(0xE6, 0x2F, 0x6F, 0xED))
+                    : new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(primary ? 0 : 1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(14, 5, 14, 5),
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
+                Child = new TextBlock
+                {
+                    Text = text,
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brushes.White,
+                },
+            };
+            // 悬停变亮反馈；主色按钮整体提亮，次按钮半透明白更实
+            pill.MouseEnter += (_, _) => pill.Background = primary
+                ? new SolidColorBrush(Color.FromRgb(0x4A, 0x82, 0xF5))
+                : new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+            pill.MouseLeave += (_, _) => pill.Background = primary
+                ? new SolidColorBrush(Color.FromArgb(0xE6, 0x2F, 0x6F, 0xED))
+                : new SolidColorBrush(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF));
+            pill.MouseLeftButtonUp += (_, _) => { _actionHandled = true; action(); };
+            _hoverActionsHost.Children.Add(pill);
         }
     }
 
@@ -273,8 +351,23 @@ public partial class PosterCard : UserControl
         _cardTransform?.BeginAnimation(TranslateTransform.YProperty, HoverDownAnim);
     }
 
+    /// <summary>动作按钮点击标记：动作 click 冒泡到遮罩时拦下，避免同时触发卡片点击。</summary>
+    private bool _actionHandled;
+
+    /// <summary>点击卡片本体（未 hover 时遮罩不可见，命中此处）。遮罩可见时由 HoverOverlay_Click 处理。</summary>
     private void Root_Click(object sender, MouseButtonEventArgs e)
     {
+        if (HoverOverlay.Visibility == Visibility.Visible) return;
+        CardClick?.Invoke(this, new RoutedEventArgs());
+    }
+
+    private void HoverOverlay_Click(object sender, RoutedEventArgs e)
+    {
+        if (_actionHandled)
+        {
+            _actionHandled = false;
+            return;
+        }
         CardClick?.Invoke(this, new RoutedEventArgs());
     }
 }

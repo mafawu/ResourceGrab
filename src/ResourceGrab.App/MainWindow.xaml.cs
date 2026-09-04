@@ -302,6 +302,10 @@ public partial class MainWindow : Window
                 NavigateToScrapeTools(); break;
             case "video.online":
                 ShowVideoWithNav("search"); break;
+            case "video.online-recommend":
+                // 在线推荐功能待实现；入口在导航中为禁用态，此处预留点击提示
+                try { Snackbars.Show("在线推荐功能开发中，敬请期待", Services.ToastKind.Info); } catch { }
+                break;
             case "video.local":
                 ShowVideoWithNav("local"); break;
             case "video.tasks":
@@ -811,8 +815,10 @@ private void OpenNovelLocal()
             SetPage(_videoView);
             RightPanelHost.Content = VideoSearchPanelView;
             LeftNavHost.Visibility = Visibility.Visible;
+            // 首次进入视频页默认选中"在线搜索"：右侧本地筛选栏直接隐藏（切到"本地"子页时由
+            // SwitchNav → DetailPanelToggled(false) 恢复显示），避免先显示再靠事件隐藏的闪烁。
             _rightPanelVisible = true;
-            ApplyRightPanelVisibility();
+            SetVideoDetailPanelOpen(true);
             UpdateTopBarForKind();
             _videoView.OnShown();
             App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Info($"[VideoView] OpenVideoView 总耗时 {sw.ElapsedMilliseconds} ms");

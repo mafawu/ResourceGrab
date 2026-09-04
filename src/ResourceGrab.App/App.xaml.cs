@@ -123,6 +123,12 @@ public partial class App : Application
             sp.GetRequiredService<ILogger>(),
             (configService.Current.VideoScraping ?? new VideoScrapeSettings()).Proxy));
         services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => sp.GetRequiredService<MissAvSource>());
+        // JavDB 在线搜索源：Cookie / 域名从配置实时读取，改设置无需重启
+        services.AddSingleton(sp => new JavDbSource(
+            CreateMissAvHttpClient(configService),
+            configService,
+            sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<ResourceGrab.Core.Sources.IVideoSource>(sp => sp.GetRequiredService<JavDbSource>());
         // 在线详情内存缓存：搜索回填与详情侧栏共用，应用生命周期内同一详情不重复请求
         services.AddSingleton<OnlineVideoDetailCache>();
 

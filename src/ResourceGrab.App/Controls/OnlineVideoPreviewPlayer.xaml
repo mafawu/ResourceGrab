@@ -8,7 +8,8 @@
       空域限制（airspace）：VideoView 是 HwndHost，永远浮在同级 WPF 元素之上，
       因此播放中的加载/错误/暂停覆盖层必须放在 VideoView.Content 内部。
     -->
-    <Grid Background="#FF101418">
+    <Grid x:Name="PlayerRoot" Background="#FF101418"
+          MouseEnter="PlayerRoot_MouseEnter" MouseMove="PlayerRoot_MouseMove" MouseLeave="PlayerRoot_MouseLeave">
         <!-- 播放器宿主：非播放态折叠，避免黑块挡住海报 -->
         <vlc:VideoView x:Name="VideoHost" Visibility="Collapsed" Loaded="VideoHost_Loaded">
             <Grid>
@@ -31,47 +32,95 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- 播放中的暂停/继续（左上小按钮，避免遮挡画面主体） -->
-                <Button x:Name="PauseToggleButton" Style="{StaticResource IconButtonStyle}"
-                        Content="⏸" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Top"
-                        Margin="8,8,0,0" Click="PauseToggle_Click" ToolTip="暂停 / 继续" />
-
-                <!-- 底部进度条：当前时间 | 滑条 | 总时长（直播流无时长时自动隐藏） -->
-                <Border x:Name="SeekBar" VerticalAlignment="Bottom" Background="#99000000"
-                        Padding="10,4" Visibility="Collapsed">
+                <!-- 底部控制条：暂停/继续 + 当前时间 + 进度滑条 + 总时长 + 停止（播放/暂停态显示，5 秒无操作自动隐藏） -->
+                <Border x:Name="ControlBar" VerticalAlignment="Bottom" Background="#99000000"
+                        Padding="12,8" Visibility="Collapsed" MouseMove="ControlBar_MouseMove">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="CurrentTimeText" Text="0:00" FontSize="11"
-                                   Foreground="#E6FFFFFF" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                        <!-- 暂停/继续：白色图标，hover 仅背景高亮（用 Segoe UI Symbol 的 monochrome 字形，
+                             不用 ⏸/▶ emoji 字形——那些会被 Segoe UI Emoji 彩色渲染，Foreground 无效） -->
+                        <Button x:Name="PauseToggleButton" Width="32" Height="32"
+                                Background="Transparent" BorderThickness="0"
+                                FontFamily="Segoe UI Symbol"
+                                Foreground="White" Content="❚❚" Click="PauseToggle_Click" ToolTip="暂停 / 继续">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="8" SnapsToDevicePixels="True">
+                                        <!-- TextBlock 显式绑定前景色：ContentPresenter 对字符串内容不会继承 Foreground -->
+                                        <TextBlock Text="{TemplateBinding Content}"
+                                                   FontFamily="{TemplateBinding FontFamily}"
+                                                   Foreground="{TemplateBinding Foreground}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <TextBlock x:Name="CurrentTimeText" Grid.Column="1" Text="0:00" FontSize="12"
+                                   FontWeight="SemiBold" Foreground="#F2FFFFFF"
+                                   VerticalAlignment="Center" Margin="10,0,10,0" />
+                        <Slider x:Name="SeekSlider" Grid.Column="2" Minimum="0" Maximum="100"
                                 VerticalAlignment="Center" ToolTip="拖动跳转进度"
                                 ValueChanged="SeekSlider_ValueChanged"
                                 Thumb.DragStarted="SeekSlider_DragStarted"
                                 Thumb.DragCompleted="SeekSlider_DragCompleted" />
-                        <TextBlock x:Name="DurationText" Grid.Column="2" Text="--:--" FontSize="11"
-                                   Foreground="#B3FFFFFF" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        <TextBlock x:Name="DurationText" Grid.Column="3" Text="--:--" FontSize="12"
+                                   Foreground="#B3FFFFFF" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        <!-- 停止：白色图标 -->
+                        <Button x:Name="StopButton" Grid.Column="4" Width="32" Height="32"
+                                Background="Transparent" BorderThickness="0"
+                                FontFamily="Segoe UI Symbol"
+                                Foreground="White" Content="■" Margin="10,0,0,0" Click="StopButton_Click" ToolTip="停止播放">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="8" SnapsToDevicePixels="True">
+                                        <TextBlock Text="{TemplateBinding Content}"
+                                                   FontFamily="{TemplateBinding FontFamily}"
+                                                   Foreground="{TemplateBinding Foreground}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                     </Grid>
                 </Border>
             </Grid>
         </vlc:VideoView>
 
-        <!-- 海报占位 + 播放大按钮（空闲态） -->
+        <!-- 海报占位 + 播放大按钮（空闲态）：封面全亮显示，按钮浮于其上不压暗画面 -->
         <Grid x:Name="PosterLayer">
-            <Image x:Name="PosterImage" Stretch="Uniform" Opacity="0.5" />
+            <Image x:Name="PosterImage" Stretch="Uniform" Opacity="1" />
             <StackPanel x:Name="PlayHost" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Cursor="Hand" MouseLeftButtonUp="PlayHost_Click">
-                <Border Width="56" Height="56" CornerRadius="999"
-                        Background="#B3000000" BorderBrush="#66FFFFFF" BorderThickness="1">
+                <Border Width="64" Height="64" CornerRadius="999"
+                        Background="#66000000" BorderBrush="#B3FFFFFF" BorderThickness="1.5">
                     <Path Data="M 0,0 L 16,9 L 0,18 Z" Fill="White"
-                          Stretch="Uniform" Width="18" Height="18"
+                          Stretch="Uniform" Width="20" Height="20"
                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0,0,0" />
                 </Border>
-                <TextBlock x:Name="PlayHintText" Text="播放预览" FontSize="12" FontWeight="SemiBold"
-                           Foreground="#E6FFFFFF" HorizontalAlignment="Center" Margin="0,8,0,0" />
             </StackPanel>
         </Grid>
     </Grid>

@@ -405,6 +405,12 @@
                                                      TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                                      ToolTip="从浏览器复制 JavBus 的 Cookie，用于通过年龄验证 / Cloudflare 检测。" />
                                         </Grid>
+                                        <Grid ColumnDefinitions="170,*" Margin="0,10,0,0">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="JavDB Cookie" VerticalAlignment="Top" Margin="0,8,0,0" />
+                                            <TextBox x:Name="JavDbCookieBox" Grid.Column="1" Padding="8,6" Height="58" AcceptsReturn="True"
+                                                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                                     ToolTip="从浏览器登录 javdb.com 后复制 Cookie。用于在线搜索限流放宽 / VIP 磁力链接；留空则匿名访问（公开搜索页可用）。" />
+                                        </Grid>
                                         <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,14,0,14" />
                                         <TextBlock Text="来源开关" FontSize="13" FontWeight="Bold" />
                                         <TextBlock Text="启用后刮削时会访问对应站点获取元数据" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,4,0,10" />
