@@ -455,6 +455,8 @@ public partial class VideoSearchPanel : UserControl
     private void NotifyChanged()
     {
         FilterChanged?.Invoke(BuildState());
+        _contractFilterChanged?.Invoke(this, new ResourceGrab.App.Filtering.FilterStateChangedEventArgs(
+            ((ResourceGrab.App.Filtering.IFilterPanel)this).GetSelection()));
         RebuildAll();
     }
 }

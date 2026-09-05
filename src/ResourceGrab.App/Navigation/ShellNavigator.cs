@@ -10,6 +10,7 @@ public sealed class ShellNavigator
 {
     private readonly ShellController _controller;
     private readonly Dictionary<string, Func<UserControl>> _routeFactories = new();
+    private readonly Dictionary<string, SidebarPolicy> _routePolicies = new();
     private readonly Dictionary<MediaKind, Stack<ShellRoute>> _backStacks = new();
     private readonly Dictionary<MediaKind, ShellRoute?> _lastRoutes = new();
 
@@ -29,9 +30,12 @@ public sealed class ShellNavigator
         }
     }
 
-    /// <summary>注册路由工厂。</summary>
-    public void Register(string routeId, Func<UserControl> factory)
-        => _routeFactories[routeId] = factory;
+    /// <summary>注册路由工厂；policy 声明该路由的右侧边栏策略（默认 Hidden）。</summary>
+    public void Register(string routeId, Func<UserControl> factory, SidebarPolicy? policy = null)
+    {
+        _routeFactories[routeId] = factory;
+        _routePolicies[routeId] = policy ?? new SidebarPolicy(SidebarMode.Hidden);
+    }
 
     /// <summary>跳转到已注册的路由。</summary>
     public bool GoTo(string routeId)
@@ -42,7 +46,7 @@ public sealed class ShellNavigator
         if (current != null && current.RouteId != routeId)
             _backStacks[kind].Push(current);
         var route = new ShellRoute(routeId, kind, TitleFromId(routeId), NavItemFromId(routeId), factory,
-            SidebarPolicyFor(routeId));
+            PolicyFor(routeId));
         _lastRoutes[kind] = route;
         _controller.SetKind(kind);
         RouteChanged?.Invoke(this, route);
@@ -55,7 +59,7 @@ public sealed class ShellNavigator
         if (!_routeFactories.TryGetValue(routeId, out var factory)) return false;
         var kind = InferKind(routeId);
         var route = new ShellRoute(routeId, kind, TitleFromId(routeId), NavItemFromId(routeId), factory,
-            SidebarPolicyFor(routeId));
+            PolicyFor(routeId));
         _lastRoutes[kind] = route;
         _controller.SetKind(kind);
         RouteChanged?.Invoke(this, route);
@@ -109,8 +113,7 @@ public sealed class ShellNavigator
 
     private static string? NavItemFromId(string routeId) => routeId;
 
-    private static SidebarPolicy SidebarPolicyFor(string routeId) =>
-        routeId.Contains("reader") || routeId.Contains("play")
-            ? new SidebarPolicy(SidebarMode.Hidden)
-            : new SidebarPolicy(SidebarMode.Hidden);
+    /// <summary>读取路由注册时声明的侧栏策略；未注册的路由返回 Hidden。</summary>
+    public SidebarPolicy PolicyFor(string routeId) =>
+        _routePolicies.TryGetValue(routeId, out var policy) ? policy : new SidebarPolicy(SidebarMode.Hidden);
 }

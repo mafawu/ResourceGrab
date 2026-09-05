@@ -285,9 +285,9 @@
                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           Background="Transparent" ShowsPreview="True" />
 
-            <!-- 右侧面板（兼容层保留；新代码通过 ISidebarPanel + ShellController 控制） -->
+            <!-- 右侧面板：SidebarHost 受控插槽，内容经 ISidebarPanel 注入，显隐/宽度由 ShellController 驱动 -->
             <ContentControl x:Name="RightPanelHost" Grid.Column="3">
-                <views:DownloadPanel x:Name="DownloadPanelView" />
+                <controls:SidebarHost x:Name="RightSidebarHost" />
             </ContentControl>
 
             <controls:SnackbarHost x:Name="Snackbars" Grid.Column="1"

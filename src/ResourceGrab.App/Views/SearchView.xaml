@@ -10,41 +10,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16">
-            <StackPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <controls:SearchBoxControl x:Name="KeywordSearch"
-                                               Height="{StaticResource ToolbarHeight}"
-                                               Watermark="输入漫画名称 / ID / 作者搜索"
-                                               Margin="{StaticResource ToolbarItemSpacing}" VerticalAlignment="Center"
-                                               SearchChanged="KeywordSearch_SearchChanged"
-                                               SearchSubmitted="KeywordSearch_SearchSubmitted" />
-
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <controls:CardSizeSlider Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:SearchView}}"
-                                                 VerticalAlignment="Center" />
-                        <Button Style="{StaticResource LibraryPrimaryButtonStyle}"
-                                MinWidth="96"
-                                Click="SearchButton_Click">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                <Path Data="{StaticResource IconSearch}" Stroke="White" StrokeThickness="1.8"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                      Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
-                                <TextBlock Text="搜索" FontSize="13" FontWeight="SemiBold" Foreground="White"
-                                           Margin="6,0,0,0" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-
-                <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" Margin="0,14,0,0" />
-            </StackPanel>
-        </Border>
+        <controls:BrowserToolbar Grid.Row="0"
+                                 x:Name="Toolbar"
+                                 Watermark="输入漫画名称 / ID / 作者搜索"
+                                 SearchChanged="KeywordSearch_SearchChanged"
+                                 SearchSubmitted="KeywordSearch_SearchSubmitted"
+                                 SearchButtonClick="SearchButton_Click" />
 
         <controls:StateHostControl Grid.Row="1"
                                    State="{Binding CurrentState, RelativeSource={RelativeSource AncestorType=views:SearchView}}"

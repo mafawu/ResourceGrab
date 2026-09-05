@@ -1,0 +1,39 @@
+<UserControl x:Class="ResourceGrab.App.Controls.BrowserToolbar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+    <Border Style="{StaticResource CardPanelStyle}" Padding="16">
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ContentPresenter x:Name="PART_Title" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <controls:SearchBoxControl x:Name="PART_SearchBox" Grid.Column="1"
+                                           Height="{StaticResource ToolbarHeight}"
+                                           VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ContentPresenter x:Name="PART_Sort" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ContentPresenter x:Name="PART_Actions" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <controls:CardSizeSlider x:Name="PART_SizeSlider" VerticalAlignment="Center" />
+                    <Button x:Name="PART_SearchButton" Style="{StaticResource LibraryPrimaryButtonStyle}"
+                            MinWidth="96" Margin="10,0,0,0" Click="SearchButton_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Path Data="{StaticResource IconSearch}" Stroke="White" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                            <TextBlock Text="搜索" FontSize="13" FontWeight="SemiBold" Foreground="White"
+                                       Margin="6,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <WrapPanel x:Name="PART_Chips" Orientation="Horizontal" Margin="0,14,0,0" />
+        </StackPanel>
+    </Border>
+</UserControl>

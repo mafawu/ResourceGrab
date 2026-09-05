@@ -39,9 +39,7 @@
             </Grid>
         </Border>
 
-        <!-- Body -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <ContentPresenter x:Name="BodyHost" />
-        </ScrollViewer>
+        <!-- Body：面板自带滚动区，这里不做二次滚动 -->
+        <ContentPresenter x:Name="BodyHost" Grid.Row="1" />
     </Grid>
 </UserControl>

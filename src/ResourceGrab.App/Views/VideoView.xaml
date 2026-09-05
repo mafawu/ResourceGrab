@@ -83,40 +83,13 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- 顶部：搜索框 + 源筛选（进入完整详情页时隐藏，整页被替换） -->
-                    <Border x:Name="OnlineSearchHeader" Grid.Row="0" Style="{StaticResource CardPanelStyle}" Padding="16" Margin="0,0,0,14">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <controls:SearchBoxControl x:Name="OnlineSearchBox"
-                                                           Height="{StaticResource ToolbarHeight}"
-                                                           Watermark="输入番号 / 标题 / 演员；#标签名 按标签搜索"
-                                                           SearchSubmitted="OnlineSearch_Submitted" />
-                                <Button Grid.Column="1" Style="{StaticResource LibraryPrimaryButtonStyle}"
-                                        MinWidth="96" Margin="10,0,0,0" Click="SearchButton_Click">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Path Data="{StaticResource IconSearch}" Stroke="White" StrokeThickness="1.8"
-                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                              Stretch="Uniform" Width="14" Height="14" />
-                                        <TextBlock Text="搜索" FontSize="13" FontWeight="SemiBold" Foreground="White" Margin="6,0,0,0" />
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <WrapPanel x:Name="SourceTabs" Orientation="Horizontal" />
-                                <controls:CardSizeSlider Grid.Column="1"
-                                                         Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
-                                                         VerticalAlignment="Center" Margin="10,0,0,0" />
-                            </Grid>
-                        </StackPanel>
-                    </Border>
+                    <!-- 顶部：统一工具栏（搜索框 + 源筛选 + 卡片尺寸；进入完整详情页时隐藏，整页被替换） -->
+                    <controls:BrowserToolbar x:Name="OnlineToolbar" Grid.Row="0"
+                                             Watermark="输入番号 / 标题 / 演员；#标签名 按标签搜索"
+                                             SearchSubmitted="OnlineSearch_Submitted"
+                                             SearchButtonClick="SearchButton_Click"
+                                             SizeSliderColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
+                                             Margin="0,0,0,14" />
 
                     <!-- 结果区域：结果卡片 + 悬浮详情抽屉（覆盖层，不挤压卡片布局；进入完整详情页时整页被替换） -->
                     <Grid x:Name="OnlineResultsArea" Grid.Row="1">
@@ -559,32 +532,9 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,14">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock x:Name="TitleText" Text="本地视频" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-                                <Border Style="{StaticResource CountBadgeStyle}" Margin="8,0,0,0">
-                                    <TextBlock x:Name="VideoCountText" FontSize="11" Foreground="{DynamicResource PrimaryBrush}" />
-                                </Border>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <ComboBox x:Name="SortBox" Style="{StaticResource LibrarySortComboBoxStyle}" SelectedIndex="0"
-                                          SelectionChanged="SortBox_SelectionChanged">
-                                    <ComboBoxItem Content="最近添加" Tag="AddedDesc" />
-                                    <ComboBoxItem Content="最早添加" Tag="AddedAsc" />
-                                    <ComboBoxItem Content="标题 A → Z" Tag="TitleAsc" />
-                                    <ComboBoxItem Content="发行日期 ↓" Tag="ReleaseDateDesc" />
-                                    <ComboBoxItem Content="评分最高" Tag="ScoreDesc" />
-                                    <ComboBoxItem Content="我的评分" Tag="UserRatingDesc" />
-                                </ComboBox>
-                                <controls:CardSizeSlider Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
-                                         VerticalAlignment="Center" />
-                                <Button x:Name="RescanButton" Style="{StaticResource LibraryActionButtonStyle}" Click="RescanRoots_Click"
-                                        ToolTip="重新扫描" Margin="8,0,0,0">
-                                    <TextBlock Text="重新扫描" FontSize="12" FontWeight="SemiBold" />
-                                </Button>
-                                <Button Style="{StaticResource LibraryPrimaryButtonStyle}" Content="添加文件夹" Margin="8,0,0,0" Click="AddFolder_Click" />
-                            </StackPanel>
-                        </Grid>
+                        <!-- 本地页工具栏：标题/排序/动作在代码后置组装（内容属性元素内不能注册 x:Name） -->
+                        <controls:BrowserToolbar x:Name="LocalToolbar" Grid.Row="0" Margin="0,0,0,14"
+                                                 ShowSearchBox="False" ShowSearchButton="False" />
 
                         <controls:VirtualizedCardGrid x:Name="VideoItems" Grid.Row="1" Visibility="Collapsed"
                                                        SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=views:VideoView}}"

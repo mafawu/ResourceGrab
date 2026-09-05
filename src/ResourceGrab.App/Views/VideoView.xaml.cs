@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
@@ -88,11 +88,77 @@ public partial class VideoView : CardGridViewBase
         _chipCountStyle = (Style)FindResource("VideoChipCountStyle");
         _taskQueue = App.Services.GetService(typeof(VideoScrapeTaskQueue)) as VideoScrapeTaskQueue;
         ResultsScroll.SizeChanged += (_, _) => UpdateOnlineCardWidth();
+        BuildLocalToolbar();
         _logger.Info($"[VideoView] 构造函数其余部分耗时 {sw.ElapsedMilliseconds} ms");
         Loaded += OnLoaded;
         Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
+    }
+
+    /// <summary>本地页计数徽标（BrowserToolbar 内容在代码后置组装，代码后置需要写它的 Text）。</summary>
+    private readonly TextBlock _videoCountText = new() { FontSize = 11 };
+    private ComboBox? _sortBox;
+    private Button _rescanButton = null!;
+
+    /// <summary>组装本地页统一工具栏：标题 + 计数 + 排序 + 重新扫描/添加文件夹。</summary>
+    private void BuildLocalToolbar()
+    {
+        var titleText = new TextBlock
+        {
+            Text = "本地视频",
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var countBadge = new Border
+        {
+            Style = (Style)FindResource("CountBadgeStyle"),
+            Margin = new Thickness(8, 0, 0, 0),
+            Child = _videoCountText,
+        };
+        LocalToolbar.TitleContent.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { titleText, countBadge },
+        };
+
+        _sortBox = new ComboBox
+        {
+            Style = (Style)FindResource("LibrarySortComboBoxStyle"),
+            SelectedIndex = 0,
+        };
+        foreach (var (label, tag) in new[]
+        {
+            ("最近添加", "AddedDesc"), ("最早添加", "AddedAsc"), ("标题 A → Z", "TitleAsc"),
+            ("发行日期 ↓", "ReleaseDateDesc"), ("评分最高", "ScoreDesc"), ("我的评分", "UserRatingDesc"),
+        })
+        {
+            _sortBox.Items.Add(new ComboBoxItem { Content = label, Tag = tag });
+        }
+        _sortBox.SelectionChanged += SortBox_SelectionChanged;
+        LocalToolbar.SortContent.Content = _sortBox;
+
+        var rescanButton = _rescanButton = new Button
+        {
+            Style = (Style)FindResource("LibraryActionButtonStyle"),
+            ToolTip = "重新扫描",
+            Margin = new Thickness(8, 0, 0, 0),
+            Content = new TextBlock { Text = "重新扫描", FontSize = 12, FontWeight = FontWeights.SemiBold },
+        };
+        rescanButton.Click += RescanRoots_Click;
+        var addFolderButton = new Button
+        {
+            Style = (Style)FindResource("LibraryPrimaryButtonStyle"),
+            Content = "添加文件夹",
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        addFolderButton.Click += AddFolder_Click;
+        LocalToolbar.Actions.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { rescanButton, addFolderButton },
+        };
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -151,8 +217,8 @@ public partial class VideoView : CardGridViewBase
     /// <summary>构建在线搜索源切换 Tab（MissAV / JavDB…）。单选，切换即清空结果区并重新搜索。</summary>
     private void BuildVideoSourceTabs()
     {
-        if (SourceTabs is null) return;
-        SourceTabs.Children.Clear();
+        if (OnlineToolbar.Chips is null) return;
+        OnlineToolbar.Chips.Children.Clear();
         var sources = App.Services.GetServices<IVideoSource>().ToList();
         if (sources.Count == 0) return;
         // 当前选中的源已不可用（如配置变更）时回退到第一个
@@ -170,7 +236,7 @@ public partial class VideoView : CardGridViewBase
                 Margin = new Thickness(0, 0, 6, 6),
             };
             tab.Click += OnlineSourceTab_Click;
-            SourceTabs.Children.Add(tab);
+            OnlineToolbar.Chips.Children.Add(tab);
         }
     }
 
@@ -320,7 +386,7 @@ public partial class VideoView : CardGridViewBase
         FavoritesOnly = _filterState?.FavoritesOnly ?? false,
         WatchedOnly = _filterState?.WatchedOnly ?? false,
         ScrapeStatus = _filterState is { ScrapeStatus.Count: > 0 } f12 ? f12.ScrapeStatus : null,
-        SortBy = SortBox.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse(tag, out VideoSortBy sortBy) ? sortBy : VideoSortBy.AddedDesc,
+        SortBy = _sortBox?.SelectedItem is ComboBoxItem { Tag: string tag } && Enum.TryParse(tag, out VideoSortBy sortBy) ? sortBy : VideoSortBy.AddedDesc,
     };
 
     private VideoSearchPanel.VideoFilterState? _filterState;
@@ -381,7 +447,7 @@ public partial class VideoView : CardGridViewBase
         EmptyPanel.Visibility = _filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _library.Items.Count > 0 ? "没有符合筛选条件的视频" : "还没有视频文件";
         EmptyAddButton.Visibility = _library.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-        VideoCountText.Text = $"共 {_filtered.Count} 个";
+        _videoCountText.Text = $"共 {_filtered.Count} 个";
 
         var pageItems = _filtered
             .Skip((_page - 1) * _pageSize)
@@ -783,7 +849,7 @@ public partial class VideoView : CardGridViewBase
 
     private void SearchButton_Click(object sender, RoutedEventArgs e)
     {
-        _onlineSearchText = OnlineSearchBox.Text.Trim();
+        _onlineSearchText = OnlineToolbar.SearchBox.Text.Trim();
         _onlinePage = 1;
         ExecuteOnlineSearch();
     }
@@ -1404,7 +1470,7 @@ public partial class VideoView : CardGridViewBase
         _onlinePage = 1;
         OnlinePreviewPlayer.Stop();
         SetOnlineDetailVisible(false);
-        OnlineSearchBox.Text = keyword;
+        OnlineToolbar.SearchBox.Text = keyword;
         _onlineSearchText = keyword.Trim();
         ExecuteOnlineSearch();
     }
@@ -1754,7 +1820,7 @@ public partial class VideoView : CardGridViewBase
     /// 分页行恢复后按当前结果数重算（进入前可能本就因无结果而隐藏）。</summary>
     private void ShowOnlineResultsArea(bool show)
     {
-        OnlineSearchHeader.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OnlineToolbar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         OnlineResultsArea.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show) UpdateOnlinePagingText();
         else OnlinePagingHost.Visibility = Visibility.Collapsed;
@@ -2189,7 +2255,7 @@ public partial class VideoView : CardGridViewBase
             return;
         }
         if (_rescanBusy) return;
-        RescanButton.IsEnabled = false;
+        _rescanButton.IsEnabled = false;
         _rescanBusy = true;
         _rescanCts = new CancellationTokenSource();
         var ct = _rescanCts.Token;
@@ -2247,7 +2313,7 @@ public partial class VideoView : CardGridViewBase
             _rescanBusy = false;
             _rescanCts?.Dispose();
             _rescanCts = null;
-            RescanButton.IsEnabled = true;
+            _rescanButton.IsEnabled = true;
             TaskProgress.IsIndeterminate = false;
             // 无活动刮削任务时收起任务条；有则交还刮削进度显示。
             if (!HasActiveScrapeTask) TaskBar.Visibility = Visibility.Collapsed;

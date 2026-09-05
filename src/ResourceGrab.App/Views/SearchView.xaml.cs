@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -62,7 +62,7 @@ public partial class SearchView : CardGridViewBase
     private void BuildSourceTabs()
     {
         _sourceTabs.Clear();
-        SourceTabs.Children.Clear();
+        Toolbar.Chips.Children.Clear();
         _allTab = new System.Windows.Controls.Primitives.ToggleButton
         {
             Style = (Style)FindResource("FilterMultiTabStyle"),
@@ -71,7 +71,7 @@ public partial class SearchView : CardGridViewBase
             Margin = new Thickness(0, 0, 6, 6),
         };
         _allTab.Click += AllTab_Click;
-        SourceTabs.Children.Add(_allTab);
+        Toolbar.Chips.Children.Add(_allTab);
         foreach (var source in _sourceManager.Sources)
         {
             var tab = new System.Windows.Controls.Primitives.ToggleButton
@@ -83,7 +83,7 @@ public partial class SearchView : CardGridViewBase
                 Margin = new Thickness(0, 0, 6, 6),
             };
             tab.Click += SourceToggle_Click;
-            SourceTabs.Children.Add(tab);
+            Toolbar.Chips.Children.Add(tab);
             _sourceTabs.Add(tab);
         }
     }
@@ -93,7 +93,7 @@ public partial class SearchView : CardGridViewBase
         var isChecked = _allTab.IsChecked == true;
         foreach (var t in _sourceTabs)
             t.IsChecked = isChecked;
-        if (!string.IsNullOrWhiteSpace(KeywordSearch.Text))
+        if (!string.IsNullOrWhiteSpace(Toolbar.SearchBox.Text))
             _ = SearchAsync(_page);
     }
 
@@ -101,7 +101,7 @@ public partial class SearchView : CardGridViewBase
     {
         var allChecked = _sourceTabs.All(t => t.IsChecked == true);
         _allTab.IsChecked = allChecked;
-        if (!string.IsNullOrWhiteSpace(KeywordSearch.Text))
+        if (!string.IsNullOrWhiteSpace(Toolbar.SearchBox.Text))
             _ = SearchAsync(_page);
     }
 
@@ -120,7 +120,7 @@ public partial class SearchView : CardGridViewBase
 
     public void Search(string keyword)
     {
-        KeywordSearch.Text = keyword;
+        Toolbar.SearchBox.Text = keyword;
         _ = SearchAsync(1, force: true);
     }
 
@@ -163,7 +163,7 @@ public partial class SearchView : CardGridViewBase
 
     private async Task SearchAsync(long page, bool force = false)
     {
-        var keyword = KeywordSearch.Text.Trim();
+        var keyword = Toolbar.SearchBox.Text.Trim();
         if (string.IsNullOrEmpty(keyword))
         {
             ToastService.Show("请输入搜索关键词", ToastKind.Info);

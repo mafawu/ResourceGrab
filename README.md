@@ -104,6 +104,17 @@ dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true 
 }
 ```
 
+## UI 架构规则（贡献者必读）
+
+新增界面代码必须遵循以下规则，完整说明见 `docs/UI统一重构合并执行计划.md`：
+
+- **新页面必须走路由**：经 `ShellNavigator` 注册（`Shell/Routes/`），禁止直接给 `PageHost.Content` 赋值。
+- **新列表必须用统一结果区**：优先复用 `MediaResultHost` / `StateHostControl` + `VirtualizedCardGrid`，禁止手写 Loading/Empty/Error 面板逐个切 `Visibility`。
+- **新卡片必须继承 `MediaCardViewModel`**：经 `MediaCardAdapters` 适配，由 `MediaCard` 按 `MediaVisualKind` 渲染，不复制整张卡片 XAML。
+- **新筛选必须实现 `IFilterPanel`**：挂到 `SidebarHost`，事件收敛到 `FilterSelection`。
+- **新图标必须用矢量资源**：`Themes/Icons.xaml` 中的命名 Path，禁止 emoji 表达功能图标。
+- **视觉值必须走 token**：圆角/间距/字号/侧栏宽度引用 `Themes/Tokens.xaml`，视图 XAML 不写硬编码 `CornerRadius`。
+
 ## 免责声明
 
 本工具仅作学习、研究、交流使用，请勿用于任何商业用途；使用本工具产生的 一切风险由用户自行承担，与开发者无关。

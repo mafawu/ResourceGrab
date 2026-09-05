@@ -1,4 +1,4 @@
-﻿﻿﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -297,5 +297,7 @@ public partial class LocalSearchPanel : UserControl
         var kw = KeywordBox.Text.Trim();
         SearchChanged?.Invoke(kw, _includedTags.ToList());
         FilterChanged?.Invoke(new LocalFilterState(kw, _includedTags.ToList(), _excludedTags.ToList(), _includedAuthors.ToList(), _excludedAuthors.ToList(), _includedRatings.ToList(), _excludedRatings.ToList()));
+        _contractFilterChanged?.Invoke(this, new ResourceGrab.App.Filtering.FilterStateChangedEventArgs(
+            ((ResourceGrab.App.Filtering.IFilterPanel)this).GetSelection()));
     }
 }

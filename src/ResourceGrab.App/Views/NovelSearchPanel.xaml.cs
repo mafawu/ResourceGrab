@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -32,7 +32,7 @@ public partial class NovelSearchPanel : UserControl
             TreeHost.Children.Clear();
             if (_tree.Count==0)
             {
-                TreeHost.Children.Add(new TextBlock{ Text="暂无标签", Foreground=TryFindBrush("TextDisabledBrush")});
+                TreeHost.Children.Add(new TextBlock{ Text="閺嗗倹妫ら弽鍥╊劮", Foreground=TryFindBrush("TextDisabledBrush")});
                 return;
             }
             foreach (var kv in _tree.OrderBy(k=>k.Key))
@@ -79,7 +79,7 @@ public partial class NovelSearchPanel : UserControl
         try { style = TryFindResource("LocalTagToggleStyle") as Style; } catch { }
         var btn = new ToggleButton
         {
-            Content = $"{(isInc?"✓ ":isExc?"∅ ":"")}{name} {(count>0?$"({count})":"")}",
+            Content = $"{(isInc?"閴?":isExc?"閳?":"")}{name} {(count>0?$"({count})":"")}",
             IsChecked = isInc,
             Tag = isExc?"excluded":null,
             Style = style,
@@ -117,6 +117,11 @@ public partial class NovelSearchPanel : UserControl
         }catch{}
     }
     private void Notify(){
-        try{ FilterChanged?.Invoke(KeywordBox.Text?.Trim() ?? "", _included.ToList(), _excluded.ToList()); }catch{}
+        try{
+            FilterChanged?.Invoke(KeywordBox.Text?.Trim() ?? "", _included.ToList(), _excluded.ToList());
+            _contractFilterChanged?.Invoke(this, new ResourceGrab.App.Filtering.FilterStateChangedEventArgs(
+                ((ResourceGrab.App.Filtering.IFilterPanel)this).GetSelection()));
+        }catch{}
     }
 }
+

@@ -32,6 +32,7 @@
     <sys:Double x:Key="RightSidebarMinWidth">300</sys:Double>
     <sys:Double x:Key="RightSidebarDefaultWidth">348</sys:Double>
     <sys:Double x:Key="RightSidebarMaxWidth">440</sys:Double>
+    <sys:Double x:Key="DetailDrawerWidth">620</sys:Double>
 
     <!-- Font Size Aliases -->
     <sys:Double x:Key="FontCaption">11</sys:Double>
