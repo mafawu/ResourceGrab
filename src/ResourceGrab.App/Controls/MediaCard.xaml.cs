@@ -1,8 +1,30 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using ResourceGrab.App.ViewModels;
 
 namespace ResourceGrab.App.Controls;
+
+/// <summary>字符串非空（非 null、非 ""）时返回 Visible。</summary>
+public sealed class NonEmptyToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is string s && s.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>bool → ♥ / ♡。</summary>
+public sealed class FavoriteTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true ? "♥" : "♡";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
 
 /// <summary>根据 MediaVisualKind 选择卡片渲染模板。</summary>
 public sealed class MediaCardTemplateSelector : DataTemplateSelector
@@ -41,5 +63,15 @@ public partial class MediaCard : UserControl
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Card = DataContext as MediaCardViewModel;
+        // 点卡片 = OpenCommand（详情）；框选模式下由适配器切换为选中。
+        // 浮层按钮/徽章通过 MouseBinding 消费点击并标记 Handled，不会冒泡到这里。
+        MouseLeftButtonUp += (_, e) =>
+        {
+            if (Card?.OpenCommand is { } cmd && cmd.CanExecute(null))
+            {
+                cmd.Execute(null);
+                e.Handled = true;
+            }
+        };
     }
 }

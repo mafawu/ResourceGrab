@@ -255,10 +255,11 @@ public sealed class JavBusScraper : IVideoScraper
                 case "發行商": metadata.Publisher = value; break;
                 case "系列":
                     var seriesLink = p.QuerySelector("a");
+                    var seriesHref = seriesLink?.GetAttribute("href");
                     metadata.Series = WebUtility.HtmlDecode(seriesLink?.TextContent.Trim() ?? "");
-                    if (!string.IsNullOrEmpty(seriesLink?.GetAttribute("href")))
+                    if (!string.IsNullOrEmpty(seriesHref))
                     {
-                        metadata.SeriesUrl = ResolveUrl(_baseUrl, seriesLink.GetAttribute("href"));
+                        metadata.SeriesUrl = ResolveUrl(_baseUrl, seriesHref);
                         metadata.SourceUrls[$"{Id}-series"] = metadata.SeriesUrl;
                     }
                     break;
@@ -491,7 +492,8 @@ public sealed class VideoScrapeService : IDisposable
     public event Action<VideoItem>? ItemChanged;
     public void Dispose() => _http.Dispose();
 
-    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger, ScrapeReportService reportService)
+    public VideoScrapeService(VideoLibraryService library, ConfigService configService, ILogger? logger, ScrapeReportService reportService,
+        JavBusScraper? scraper = null, JavDbScraper? javDb = null, AiravScraper? airav = null)
     {
         _library = library;
         _configService = configService;
@@ -500,9 +502,11 @@ public sealed class VideoScrapeService : IDisposable
         _cache = new DiskJsonSnapshotCache(AppPaths.VideoSourceCacheDir, logger);
         var initial = Settings;
         _http = new VideoScrapeHttpClient(initial);
-        _scraper = new JavBusScraper(_http, initial.JavBusBaseUrl);
-        _javDb = new JavDbScraper(_http, initial.JavDbBaseUrl);
-        _airav = new AiravScraper(_http);
+        // legacy 源优先取 DI 单例（与 Legacy*Source 图引擎适配器共用，消除两套构造漂移）；
+        // 未注入时（如测试直连构造）回退到自建。
+        _scraper = scraper ?? new JavBusScraper(_http, initial.JavBusBaseUrl);
+        _javDb = javDb ?? new JavDbScraper(_http, initial.JavDbBaseUrl);
+        _airav = airav ?? new AiravScraper(_http);
     }
 
     private VideoScrapeSettings Settings => _configService?.Current.VideoScraping ?? new VideoScrapeSettings();

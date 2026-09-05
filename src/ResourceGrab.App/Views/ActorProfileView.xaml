@@ -37,10 +37,7 @@
                                           CardWidth="180" SlotWidth="194">
                 <controls:VirtualizedCardGrid.ItemTemplate>
                     <DataTemplate>
-                        <controls:VideoFileCard Item="{Binding}"
-                                                Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}"
-                                                HorizontalAlignment="Center"
-                                                Loaded="ActorWorkCard_Loaded" />
+                        <controls:MediaCard HorizontalAlignment="Center" Margin="0,0,14,14" />
                     </DataTemplate>
                 </controls:VirtualizedCardGrid.ItemTemplate>
             </controls:VirtualizedCardGrid>

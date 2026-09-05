@@ -113,7 +113,10 @@ public partial class App : Application
             sp.GetRequiredService<VideoLibraryService>(),
             sp.GetRequiredService<ConfigService>(),
             sp.GetRequiredService<ILogger>(),
-            sp.GetRequiredService<ScrapeReportService>()));
+            sp.GetRequiredService<ScrapeReportService>(),
+            sp.GetRequiredService<JavBusScraper>(),
+            sp.GetRequiredService<JavDbScraper>(),
+            sp.GetRequiredService<AiravScraper>()));
         services.AddSingleton<VideoScrapeTaskQueue>(sp => new VideoScrapeTaskQueue(
             Math.Clamp((sp.GetRequiredService<ConfigService>().Current.VideoScraping ?? new VideoScrapeSettings()).Concurrency, 1, 8),
             sp.GetRequiredService<ILogger>()));
@@ -156,8 +159,8 @@ public partial class App : Application
             sp.GetRequiredService<CurlImpersonateClient>(),
             sp.GetRequiredService<DomainCookieJar>(),
             sp.GetRequiredService<ILogger>()));
-        // 老三样刮削源经 Legacy 适配器进图（与 VideoScrapeService 内部自建的实例并存：
-        // 引擎切到 graph 时用这里的适配器，legacy 时用服务内建的，互不干扰）。
+        // 老三样刮削源单例：legacy 路径（VideoScrapeService）与 graph 路径（Legacy*Source 适配器）
+        // 共用同一批实例，避免两套构造方式漂移。
         services.AddSingleton<VideoScrapeHttpClient>(sp => new VideoScrapeHttpClient(
             configService.Current.VideoScraping ?? new VideoScrapeSettings()));
         services.AddSingleton(sp => new JavBusScraper(sp.GetRequiredService<VideoScrapeHttpClient>(),

@@ -185,7 +185,7 @@ public class VideoLibraryService
         var replacedOldPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in fresh)
         {
-            var parsed = VideoNumberParser.Parse(item.FileName);
+            var parsed = VideoNumberParser.Parse(item.FileName ?? "");
             if (old.TryGetValue(StateKey(item.FilePath, item.FileSizeBytes), out var previous))
             {
                 CopyItemState(previous, item);

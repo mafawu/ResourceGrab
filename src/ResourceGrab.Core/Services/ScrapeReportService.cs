@@ -228,7 +228,9 @@ public sealed class ScrapeReportService
         {
             var path = Path.Combine(Path.GetDirectoryName(_filePath) ?? "", "video-scrape-path-cache.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(store, JsonOpts));
+            var temp = path + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(store, JsonOpts));
+            File.Move(temp, path, true);
         }
         catch (Exception ex)
         {
@@ -242,7 +244,9 @@ public sealed class ScrapeReportService
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
             var json = JsonSerializer.Serialize(store, JsonOpts);
-            File.WriteAllText(_filePath, json);
+            var temp = _filePath + ".tmp";
+            File.WriteAllText(temp, json);
+            File.Move(temp, _filePath, true);
         }
         catch (Exception ex)
         {

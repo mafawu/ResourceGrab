@@ -157,7 +157,10 @@ public class ConfigService
             VideoPlayback = playback,
             General = general,
         };
-        File.WriteAllText(_configPath, JsonSerializer.Serialize(persisted, JsonOptions));
+        // 临时文件 + 原子替换：崩溃时序不当不会写坏唯一一份配置
+        var temp = _configPath + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(persisted, JsonOptions));
+        File.Move(temp, _configPath, true);
     }
 
     public static double NormalizeScrollSpeed(double v)

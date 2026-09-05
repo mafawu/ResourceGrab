@@ -253,7 +253,6 @@ public sealed class MissAvSource : IVideoSource
         // 各站行名措辞不一，按同义词归一化后覆盖正则兜底值
         var info = ParseInfoRows(html);
         string Field(string key) => info.TryGetValue(key, out var v) && v.Count > 0 ? v[0] : "";
-        string FieldJoined(string key) => info.TryGetValue(key, out var v) ? string.Join(", ", v) : "";
 
         if (Field("title") is { Length: > 0 } infoTitle) title = infoTitle;
         if (Field("number") is { Length: > 0 } infoNumber) number = infoNumber;

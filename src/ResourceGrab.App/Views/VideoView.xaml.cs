@@ -11,6 +11,7 @@ using ResourceGrab.App.Controls;
 using ResourceGrab.App.Dialogs;
 using ResourceGrab.App.Services;
 using ResourceGrab.App.Common;
+using ResourceGrab.App.ViewModels;
 using ResourceGrab.Core.Utils;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Sources;
@@ -396,7 +397,13 @@ public partial class VideoView : CardGridViewBase
         _lastRenderedPageIds = pageIds;
         var savedOffset = unchanged ? VideoItems.VerticalOffset : 0;
 
-        VideoItems.ItemsSource = pageItems;
+        VideoItems.ItemsSource = pageItems
+            .Select(i => new VideoCardAdapter(i, VideoCard_DetailRequested, VideoCard_SelectedChanged)
+            {
+                IsSelectable = _selectionMode,
+                IsSelected = _selectedIds.Contains(i.Id),
+            })
+            .ToList();
         if (savedOffset > 0) VideoItems.RestoreOffset(savedOffset);
         else VideoItems.ScrollToTop();
         RenderPaging();
@@ -408,15 +415,6 @@ public partial class VideoView : CardGridViewBase
         {
             _logger.Error("[VideoView] RenderList 异常（疑似无限递归，已拦截）", ex);
         }
-    }
-
-    private void VideoCard_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not VideoFileCard card) return;
-        card.DetailRequested -= VideoCard_DetailRequested;
-        card.SelectedChanged -= VideoCard_SelectedChanged;
-        card.DetailRequested += VideoCard_DetailRequested;
-        card.SelectedChanged += VideoCard_SelectedChanged;
     }
 
     private void VideoCard_DetailRequested(VideoItem item)
@@ -1111,7 +1109,7 @@ public partial class VideoView : CardGridViewBase
             {
                 var detail = await source.GetDetailAsync(url);
                 if (detail is not null) _detailCache.Set(url, detail);
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     if (version != _onlineDetailVersion) return;
                     if (detail is null) { OnlineDetailDescription.Text = "未能获取到详情"; return; }
@@ -1120,7 +1118,7 @@ public partial class VideoView : CardGridViewBase
             }
             catch (Exception ex)
             {
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     if (version != _onlineDetailVersion) return;
                     OnlineDetailDescription.Text = $"详情加载失败: {ex.Message}";
@@ -1620,7 +1618,7 @@ public partial class VideoView : CardGridViewBase
             {
                 var detail = await source.GetDetailAsync(url);
                 if (detail is not null) _detailCache.Set(url, detail);
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     if (version != _onlineFullDetailVersion || OnlineFullDetailPage.Visibility != Visibility.Visible) return;
                     if (detail is null) { OnlineFullDescription.Text = "未能获取到详情"; return; }
@@ -1630,7 +1628,7 @@ public partial class VideoView : CardGridViewBase
             }
             catch (Exception ex)
             {
-                Dispatcher.BeginInvoke(() =>
+                _ = Dispatcher.BeginInvoke(() =>
                 {
                     if (version != _onlineFullDetailVersion) return;
                     OnlineFullDescription.Text = $"详情加载失败: {ex.Message}";
@@ -1723,7 +1721,7 @@ public partial class VideoView : CardGridViewBase
                 }
             }));
 
-            Dispatcher.BeginInvoke(() =>
+            _ = Dispatcher.BeginInvoke(() =>
             {
                 if (version != _onlineFullDetailVersion || OnlineFullDetailPage.Visibility != Visibility.Visible) return;
                 foreach (var item in hits)
@@ -1874,10 +1872,10 @@ public partial class VideoView : CardGridViewBase
                 if ((DateTime.UtcNow - lastRefreshAt).TotalMilliseconds >= 2000)
                 {
                     lastRefreshAt = DateTime.UtcNow;
-                    Dispatcher.BeginInvoke(new Action(ApplyAndRender));
+                    _ = Dispatcher.BeginInvoke(new Action(ApplyAndRender));
                 }
             }
-            Dispatcher.BeginInvoke(new Action(ApplyAndRender));
+            _ = Dispatcher.BeginInvoke(new Action(ApplyAndRender));
         }, ct);
             }
         }

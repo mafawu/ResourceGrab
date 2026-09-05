@@ -592,10 +592,9 @@
                                                        CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=views:VideoView}}">
                             <controls:VirtualizedCardGrid.ItemTemplate>
                                 <DataTemplate>
-                                    <controls:VideoFileCard Item="{Binding}"
-                                                            Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}"
-                                                            HorizontalAlignment="Center"
-                                                            Loaded="VideoCard_Loaded" />
+                                    <controls:MediaCard Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}"
+                                                        Margin="0,0,14,14"
+                                                        HorizontalAlignment="Center" />
                                 </DataTemplate>
                             </controls:VirtualizedCardGrid.ItemTemplate>
                         </controls:VirtualizedCardGrid>
