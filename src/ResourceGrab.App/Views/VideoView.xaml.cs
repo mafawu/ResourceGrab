@@ -201,13 +201,20 @@ public partial class VideoView : CardGridViewBase
         ApplyAndRender();
     }
 
+    /// <summary>是否已经显示过（首次进入默认在线搜索并隐藏右侧筛选栏；非首次保留原子页状态）。</summary>
+    private bool _shownOnce;
+
     public void OnShown()
     {
         BuildVideoSourceTabs();
-        // 每次进入视频页都默认选中"搜索"子页（在线搜索），
-        // 避免停留在上次离开时的子页（本地/推荐/演员等）
-        if (_currentNav != "search") SwitchNav("search");
-        else DetailPanelToggled?.Invoke(true);
+        // 仅首次进入时落到默认子页（在线搜索 + 隐藏侧栏）；之后切回视频页保留上次状态，
+        // 由 MainWindow 的 ShellNavigator.RestoreLast 恢复最近路由。
+        if (!_shownOnce)
+        {
+            _shownOnce = true;
+            if (_currentNav != "search") SwitchNav("search");
+            else DetailPanelToggled?.Invoke(true);
+        }
     }
 
     private void NavSearch_Click(object sender, RoutedEventArgs e) => SwitchNav("search");
@@ -1745,6 +1752,7 @@ public partial class VideoView : CardGridViewBase
 
         RenderOnlinePreviewImages(detail, OnlineFullPreviewImagesHost, OnlineFullPreviewImagesSection);
         RenderOnlineFullRelated(detail);
+        EnrichFullDetailFromSecondarySource(detail);
     }
 
     /// <summary>
@@ -1814,6 +1822,100 @@ public partial class VideoView : CardGridViewBase
             _onlineDetailUrl = OnlineSource?.GetDetailUrl(item.Id) ?? "";
         }
         OpenOnlineFullDetail(refresh: true);
+    }
+
+    /// <summary>
+    /// 二级详情源：当前源详情通常缺磁力/同系列（MissAV 详情页不带），优先选 JavDB
+    /// （详情含磁力列表与同系列番号，且自带 Cloudflare curl 降级），排除当前源。
+    /// </summary>
+    private IVideoSource? FindDetailEnrichmentSource(string currentSourceId)
+        => App.Services.GetServices<IVideoSource>()
+            .Where(s => s.Info.Id != currentSourceId)
+            .OrderByDescending(s => s.Info.Id == "javdb")
+            .FirstOrDefault();
+
+    /// <summary>把二级源详情里的磁力/同系列合并进当前详情；两者都已有时原样返回。</summary>
+    private static OnlineVideoDetail MergeDetailExtras(OnlineVideoDetail baseDetail, OnlineVideoDetail extra)
+    {
+        if (baseDetail.Magnets.Count > 0 && baseDetail.RelatedVideos.Count > 0) return baseDetail;
+        var magnets = baseDetail.Magnets.Count > 0 ? baseDetail.Magnets : extra.Magnets;
+        var related = baseDetail.RelatedVideos.Count > 0 ? baseDetail.RelatedVideos : extra.RelatedVideos;
+        if (magnets == baseDetail.Magnets && related == baseDetail.RelatedVideos) return baseDetail;
+        return new OnlineVideoDetail
+        {
+            SourceId = baseDetail.SourceId,
+            VideoUrl = baseDetail.VideoUrl,
+            Title = baseDetail.Title,
+            OriginalTitle = baseDetail.OriginalTitle,
+            CoverUrl = baseDetail.CoverUrl,
+            DurationText = baseDetail.DurationText,
+            Actors = baseDetail.Actors,
+            Tags = baseDetail.Tags,
+            Description = baseDetail.Description,
+            Number = baseDetail.Number,
+            ReleaseDateText = baseDetail.ReleaseDateText,
+            StreamUrl = baseDetail.StreamUrl,
+            Referer = baseDetail.Referer,
+            MagnetUri = baseDetail.MagnetUri ?? (magnets.Count > 0 ? magnets[0].Url : null),
+            Genres = baseDetail.Genres,
+            PreviewImages = baseDetail.PreviewImages,
+            Maker = baseDetail.Maker,
+            Label = baseDetail.Label,
+            Director = baseDetail.Director,
+            RatingText = baseDetail.RatingText,
+            Magnets = magnets,
+            RelatedVideos = related,
+        };
+    }
+
+    /// <summary>
+    /// 完整详情跨源补充：详情缺磁力或同系列数据时，按番号向二级源搜索同番号影片并拉取其
+    /// 详情，把磁力列表与同系列推荐补进当前完整页。20 秒超时，失败静默记日志，不打断浏览。
+    /// </summary>
+    private void EnrichFullDetailFromSecondarySource(OnlineVideoDetail detail)
+    {
+        if (detail.Magnets.Count > 0 && detail.RelatedVideos.Count > 0) return;
+        if (string.IsNullOrWhiteSpace(detail.Number)) return;
+
+        var version = _onlineFullDetailVersion;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var secondary = FindDetailEnrichmentSource(detail.SourceId);
+                if (secondary is null) return;
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                var ct = cts.Token;
+
+                OnlineVideoDetail? extra;
+                await _onlineDetailGate.WaitAsync(ct);
+                try
+                {
+                    var search = await secondary.SearchAsync(detail.Number, 1, ct);
+                    var hit = search.Items.FirstOrDefault(i =>
+                        string.Equals(OnlineDedupeKey(i), detail.Number, StringComparison.OrdinalIgnoreCase));
+                    var url = hit is null ? null : secondary.GetDetailUrl(hit.Id);
+                    extra = url is null ? null : await secondary.GetDetailAsync(url, ct);
+                }
+                finally { _onlineDetailGate.Release(); }
+
+                if (extra is null) return;
+
+                _ = Dispatcher.BeginInvoke(() =>
+                {
+                    if (version != _onlineFullDetailVersion || OnlineFullDetailPage.Visibility != Visibility.Visible) return;
+                    var merged = MergeDetailExtras(detail, extra);
+                    if (ReferenceEquals(merged, detail)) return;
+                    FillOnlineMagnetList(merged, OnlineFullMagnetsHost, OnlineFullMagnetHint, null);
+                    RenderOnlineFullRelated(merged);
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[VideoView] 完整详情跨源补充失败 {detail.Number}: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>完整详情页作为整页子页：显示时替换搜索页三行（搜索框/结果区/分页），隐藏时恢复。

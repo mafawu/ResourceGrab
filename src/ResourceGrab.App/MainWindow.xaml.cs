@@ -248,14 +248,21 @@ public partial class MainWindow : Window
             UpdateNavCapabilities();
             if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
             if (IsVideoMode && kind == ResourceKind.Manga) { ExitVideoMode(); return; }
-            if (kind == ResourceKind.Novel && !IsNovelMode) { OpenNovelLocal(); return; }
-            if (kind == ResourceKind.Video && !IsVideoMode) { OpenVideoView(); return; }
-            UpdateTopBarForKind();
-            if (kind != ResourceKind.Manga)
+            if (kind == ResourceKind.Novel && !IsNovelMode)
             {
-                var name = kind == ResourceKind.Novel ? "小说" : "视频";
-                try { Snackbars.Show($"{name}源整合开发中，已预留UI", Services.ToastKind.Info); } catch {}
+                // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
+                if (!_navigator.RestoreLast(MediaKind.Novel))
+                    _navigator.GoTo("novel.index");
+                return;
             }
+            if (kind == ResourceKind.Video && !IsVideoMode)
+            {
+                // 首次进入视频走默认路由（在线搜索 + 隐藏边栏）；非首次恢复最近的子页
+                if (!_navigator.RestoreLast(MediaKind.Video))
+                    _navigator.GoTo("video.online");
+                return;
+            }
+            UpdateTopBarForKind();
         }
     }
 
@@ -856,10 +863,8 @@ private void OpenNovelLocal()
             SetPage(_videoView);
             ShowSidebarPanel(VideoSearchPanelView);
             LeftNavHost.Visibility = Visibility.Visible;
-            // 首次进入视频页默认选中"在线搜索"：右侧本地筛选栏直接隐藏（切到"本地"子页时由
-            // SwitchNav → DetailPanelToggled(false) 恢复显示），避免先显示再靠事件隐藏的闪烁。
-            _rightPanelVisible = true;
-            SetVideoDetailPanelOpen(true);
+            // 侧栏显隐不再在此强制：首次进入由 OnShown 首次分支触发 DetailPanelToggled(true)
+            // 隐藏；非首次进入由路由工厂 SwitchNav(子页) 按目标子页状态恢复。
             UpdateTopBarForKind();
             _videoView.OnShown();
             App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Info($"[VideoView] OpenVideoView 总耗时 {sw.ElapsedMilliseconds} ms");
