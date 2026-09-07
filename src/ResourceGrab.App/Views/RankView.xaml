@@ -43,7 +43,7 @@
                        RetryText="重新加载"
                        RetryCommand="{Binding RetryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
     <StackPanel Name="PagingPanel" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
-      <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusPill}" Padding="4">
+      <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource ControlCornerRadius}" Padding="4">
         <StackPanel Orientation="Horizontal">
           <Button Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页" Click="PrevButton_Click" Padding="12,5" />
           <TextBlock Name="PageText" FontSize="12" VerticalAlignment="Center"

@@ -135,9 +135,32 @@ public interface IVideoSource
     Task<OnlineVideoDetail?> GetDetailAsync(string videoUrl, CancellationToken ct = default);
 
     /// <summary>
+    /// 获取站内榜单/推荐列表（如今日热门、本周热门、新作上市），复用搜索摘要模型。
+    /// 返回 null 表示该源不支持此榜单（默认实现）；在线推荐页据此决定是否展示该源。
+    /// </summary>
+    Task<OnlineVideoSearchResult?> GetListingAsync(VideoListingKind kind, int page, CancellationToken ct = default)
+        => Task.FromResult<OnlineVideoSearchResult?>(null);
+
+    /// <summary>
     /// 由搜索摘要的 Id 构造详情页 URL。
     /// 默认实现：Id 本身是完整 URL 则直接用，否则返回 null（源未提供拼URL规则）。
     /// </summary>
     string? GetDetailUrl(string videoId)
         => videoId.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? videoId : null;
+}
+
+/// <summary>在线榜单/推荐列表种类（对应源站服务端渲染的热门与更新列表页）。</summary>
+public enum VideoListingKind
+{
+    /// <summary>今日热门。</summary>
+    TodayHot,
+
+    /// <summary>本周热门。</summary>
+    WeeklyHot,
+
+    /// <summary>本月热门。</summary>
+    MonthlyHot,
+
+    /// <summary>新作上市。</summary>
+    NewRelease,
 }

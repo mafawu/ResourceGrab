@@ -257,9 +257,6 @@
         <Setter Property="HorizontalContentAlignment" Value="Left" />
     </Style>
 
-    <Style x:Key="SidebarCategoryPillStyle" TargetType="RadioButton"
-           BasedOn="{StaticResource NavigationChipRadioStyle}" />
-
     <!-- 分段 Tab 使用圆角矩形，选中/悬停颜色与所有 Chip 一致。 -->
     <Style x:Key="SegmentedTabStyle" TargetType="RadioButton">
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
@@ -421,10 +418,6 @@
     </Style>
 
     <!-- 兼容既有页面调用点；新代码优先使用上面的语义化名称。 -->
-    <Style x:Key="ThemePillRadioStyle" TargetType="RadioButton"
-           BasedOn="{StaticResource NavigationChipRadioStyle}" />
-    <Style x:Key="ThemePillButtonStyle" TargetType="Button"
-           BasedOn="{StaticResource ChipButtonStyle}" />
     <Style x:Key="CategoryPillStyle" TargetType="RadioButton"
            BasedOn="{StaticResource NavigationChipRadioStyle}" />
     <Style x:Key="RankTabStyle" TargetType="RadioButton"

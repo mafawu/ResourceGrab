@@ -42,7 +42,10 @@ public class VideoPosterCard : PosterCard
     public VideoPosterCard()
     {
         HoverText = "查看详情";
-        AddHandler(MouseLeftButtonDownEvent, new MouseButtonEventHandler(OnCardMouseDown));
+        // hover 遮罩是 Button，会把 MouseLeftButtonDown 标记为已处理：
+        // 不加 handledEventsToo 的 AddHandler 永远收不到第二次按下，ClickCount>=2 永不成立，
+        // 双击就会退化成两次单击（只开侧栏）。必须显式接收已处理事件。
+        AddHandler(MouseLeftButtonDownEvent, new MouseButtonEventHandler(OnCardMouseDown), true);
         _singleClickTimer.Tick += (_, _) =>
         {
             _singleClickTimer.Stop();

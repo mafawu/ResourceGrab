@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -53,8 +54,10 @@ public partial class VideoView : CardGridViewBase
     private int _onlineLastPage = 1;
     private CancellationTokenSource? _onlineSearchCts;
     private int _onlineSearchVersion;
-    /// <summary>在线搜索卡片宽度：按结果区宽度与每行个数换算（与本地结果同一套规则），默认 170。</summary>
-    private double _onlineCardWidth = 170;
+    /// <summary>在线结果卡片宽度下限：横版封面 + 大标题需要足够宽度才方便浏览。</summary>
+    private const double OnlineMinCardWidth = 200;
+    /// <summary>在线卡片间距（PosterCard 右侧 Margin），需与 VirtualizedCardGrid 的 Spacing 一致。</summary>
+    private const double OnlineCardGap = 10;
 
     /// <summary>单次搜索自动续抓的页数上限。MissAV 服务端每页仅返回约 12 条，需合并多页才够一屏。</summary>
     private const int OnlineAutoMergePages = 3;
@@ -70,6 +73,12 @@ public partial class VideoView : CardGridViewBase
     private Dictionary<string, int> _cachedStudioCounts = new();
     /// <summary>当前选中的在线搜索源 Id（源 Tab 切换，默认 MissAV）。</summary>
     private string _selectedOnlineSourceId = "missav";
+    /// <summary>在线结果适配器集合（VirtualizedCardGrid 的 ItemsSource，卡片惰性实例化）。</summary>
+    private readonly ObservableCollection<OnlineCardAdapter> _onlineAdapters = new();
+    /// <summary>在线推荐模式当前榜单；null 表示普通搜索模式。</summary>
+    private VideoListingKind? _onlineListingKind;
+    /// <summary>已成功加载过的榜单（同源同榜单进入推荐页不重复请求）。</summary>
+    private (string SourceId, VideoListingKind Kind)? _listingLoadedFor;
 
     private IVideoSource? OnlineSource => App.Services.GetServices<IVideoSource>()
         .FirstOrDefault(s => s.Info.Id == _selectedOnlineSourceId);
@@ -87,8 +96,13 @@ public partial class VideoView : CardGridViewBase
         _chipTextStyle = (Style)FindResource("VideoChipTextStyle");
         _chipCountStyle = (Style)FindResource("VideoChipCountStyle");
         _taskQueue = App.Services.GetService(typeof(VideoScrapeTaskQueue)) as VideoScrapeTaskQueue;
-        ResultsScroll.SizeChanged += (_, _) => UpdateOnlineCardWidth();
+        OnlineCards.ItemsSource = _onlineAdapters;
+        // 列宽由 VirtualizedCardGrid 视口重算（自带合帧去抖）；变化后同步到已实例化的卡片
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+                VirtualizedCardGrid.CardWidthProperty, typeof(VirtualizedCardGrid))
+            .AddValueChanged(OnlineCards, (_, _) => ApplyOnlineCardWidth());
         BuildLocalToolbar();
+        BuildOnlineListingTabs();
         _logger.Info($"[VideoView] 构造函数其余部分耗时 {sw.ElapsedMilliseconds} ms");
         Loaded += OnLoaded;
         Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
@@ -257,25 +271,164 @@ public partial class VideoView : CardGridViewBase
         _onlineSearchVersion++;
         _onlinePage = 1;
         _onlineLastPage = 1;
-        ResultCardsPanel.Children.Clear();
+        _onlineAdapters.Clear();
         _onlineRenderedCount = 0;
         ClosePopoutIfOpen();
         OnlinePreviewPlayer.Stop();
         CloseOnlineFullDetail();
         SetOnlineDetailVisible(false);
-        ResultsScroll.Visibility = Visibility.Collapsed;
+        OnlineCards.Visibility = Visibility.Collapsed;
         OnlineEmptyState.Visibility = Visibility.Visible;
-        OnlineEmptyHint.Text = "输入关键词开始在线搜索";
+        OnlineEmptyHint.Text = _onlineListingKind is not null ? "正在加载榜单…" : "输入关键词开始在线搜索";
         UpdateOnlinePagingText();
-        // 已有搜索词时立即用新源重新搜
-        if (!string.IsNullOrWhiteSpace(_onlineSearchText))
+        // 已有搜索词/榜单时立即用新源重新加载
+        if (_onlineListingKind is { } kind)
+            ExecuteOnlineListing(kind);
+        else if (!string.IsNullOrWhiteSpace(_onlineSearchText))
             ExecuteOnlineSearch();
     }
+
+    // ── 在线推荐（榜单模式）──────────────────────────────────────────
+
+    /// <summary>榜单 Tab 的展示文案。</summary>
+    private static readonly (VideoListingKind Kind, string Label)[] ListingTabs =
+    [
+        (VideoListingKind.TodayHot, "今日热门"),
+        (VideoListingKind.WeeklyHot, "本周热门"),
+        (VideoListingKind.MonthlyHot, "本月热门"),
+        (VideoListingKind.NewRelease, "新作上市"),
+    ];
+
+    /// <summary>组装榜单 Tab 条（与在线源 Tab 同一套 FilterTabStyle）。</summary>
+    private void BuildOnlineListingTabs()
+    {
+        OnlineListingBar.Children.Clear();
+        foreach (var (kind, label) in ListingTabs)
+        {
+            var tab = new System.Windows.Controls.RadioButton
+            {
+                Style = (Style)FindResource("FilterTabStyle"),
+                Content = label,
+                Tag = kind,
+                GroupName = "OnlineListingGroup",
+                Margin = new Thickness(0, 0, 6, 6),
+            };
+            tab.Click += OnlineListingTab_Click;
+            OnlineListingBar.Children.Add(tab);
+        }
+    }
+
+    private void OnlineListingTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.RadioButton { Tag: VideoListingKind kind }
+            || kind == _onlineListingKind) return;
+        _onlineListingKind = kind;
+        _onlinePage = 1;
+        ExecuteOnlineListing();
+    }
+
+    /// <summary>高亮指定榜单的 Tab（进入推荐页/换源时同步选中态）。</summary>
+    private void MarkListingTab(VideoListingKind kind)
+    {
+        foreach (var tab in OnlineListingBar.Children.OfType<System.Windows.Controls.RadioButton>())
+            tab.IsChecked = tab.Tag is VideoListingKind k && k == kind;
+    }
+
+    /// <summary>加载当前源的榜单：请求/渲染/续页合并逻辑与在线搜索同构，但不做换源兜底。</summary>
+    private async void ExecuteOnlineListing() => await ExecuteOnlineListingAsync(_onlineListingKind!.Value);
+
+    private async void ExecuteOnlineListing(VideoListingKind kind) => await ExecuteOnlineListingAsync(kind);
+
+    private async Task ExecuteOnlineListingAsync(VideoListingKind kind)
+    {
+        var source = OnlineSource;
+        if (source is null) { OnlineEmptyHint.Text = "在线源未注册"; return; }
+
+        _onlineSearchCts?.Cancel();
+        _onlineSearchCts = new CancellationTokenSource();
+        var ct = _onlineSearchCts.Token;
+        var version = ++_onlineSearchVersion;
+
+        OnlineLoadingText.Text = "加载中…";
+        OnlineLoadingState.Visibility = Visibility.Visible;
+        OnlineEmptyState.Visibility = Visibility.Collapsed;
+        OnlineCards.Visibility = Visibility.Collapsed;
+        _onlinePendingAutoPlay = false;
+        ClosePopoutIfOpen();
+        CloseOnlineFullDetail();
+        if (OnlineDetailDrawer.Visibility == Visibility.Visible) SetOnlineDetailVisible(false);
+
+        try
+        {
+            // 与搜索一致：MissAV 每页条数少，一次并发抓本段所有页，首页先上屏、续页去重追加
+            var mergePages = MergePagesFor(source);
+            var pages = Enumerable.Range(_onlinePage, mergePages).ToList();
+            var pageTasks = pages.ToDictionary(p => p, p => source.GetListingAsync(kind, p, ct));
+
+            var first = await pageTasks[_onlinePage];
+            if (version != _onlineSearchVersion || ct.IsCancellationRequested) return;
+            if (first is null)
+            {
+                OnlineLoadingState.Visibility = Visibility.Collapsed;
+                OnlineEmptyState.Visibility = Visibility.Visible;
+                OnlineEmptyHint.Text = $"当前源（{source.Info.DisplayName}）不支持在线推荐";
+                return;
+            }
+
+            _onlineLastPage = _onlinePage;
+            _listingLoadedFor = (source.Info.Id, kind);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            RenderOnlineResults(first.Items.Where(i => seen.Add(OnlineDedupeKey(i))).ToList(), append: false);
+            if (_onlineRenderedCount == 0)
+            {
+                OnlineEmptyHint.Text = "榜单暂无内容";
+                return;
+            }
+
+            var added = new List<OnlineVideoSummary>();
+            var lastPageWithNew = _onlinePage;
+            foreach (var page in pages.Skip(1))
+            {
+                OnlineVideoSearchResult? next;
+                try { next = await pageTasks[page]; }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (Exception ex)
+                {
+                    // 单页续抓失败不拖垮整体：已上屏的首页保留，只少这一页的结果
+                    _logger.Warn($"[VideoView] 在线榜单第 {page} 页续抓失败: {ex.Message}");
+                    continue;
+                }
+                if (next is null || version != _onlineSearchVersion || ct.IsCancellationRequested) return;
+
+                var newItems = next.Items.Where(i => seen.Add(OnlineDedupeKey(i))).ToList();
+                if (newItems.Count == 0) continue;
+                added.AddRange(newItems);
+                lastPageWithNew = page;
+            }
+
+            if (added.Count > 0)
+            {
+                _onlineLastPage = lastPageWithNew;
+                RenderOnlineResults(added, append: true);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (version == _onlineSearchVersion)
+            {
+                OnlineLoadingState.Visibility = Visibility.Collapsed;
+                OnlineEmptyState.Visibility = Visibility.Visible;
+                OnlineEmptyHint.Text = $"加载失败: {ex.Message}";
+            }
+        }
+    }
+
 
     public void SwitchNav(string nav)
     {
         _currentNav = nav;
-        SearchPage.Visibility = nav == "search" ? Visibility.Visible : Visibility.Collapsed;
+        SearchPage.Visibility = nav is "search" or "online-recommend" ? Visibility.Visible : Visibility.Collapsed;
         RecommendPage.Visibility = nav == "recommend" ? Visibility.Visible : Visibility.Collapsed;
         LocalPage.Visibility = nav == "local" ? Visibility.Visible : Visibility.Collapsed;
         TaskPage.Visibility = nav == "tasks" ? Visibility.Visible : Visibility.Collapsed;
@@ -287,7 +440,8 @@ public partial class VideoView : CardGridViewBase
         // 切到其他子页时收起详情栏，恢复右侧本地搜索面板
         if (nav != "local" && _currentItem is not null) CloseDetail();
         // 在线详情侧栏与完整详情页随切页一并收起，恢复右侧筛选面板
-        if (nav != "search" && (OnlineDetailDrawer.Visibility == Visibility.Visible || OnlineFullDetailPage.Visibility == Visibility.Visible))
+        if (nav is not ("search" or "online-recommend")
+            && (OnlineDetailDrawer.Visibility == Visibility.Visible || OnlineFullDetailPage.Visibility == Visibility.Visible))
         {
             _onlineDetailVersion++;
             _onlineFullDetailVersion++;
@@ -300,10 +454,46 @@ public partial class VideoView : CardGridViewBase
         }
 
         // 搜索页不使用本地筛选侧栏：进入搜索页自动隐藏，切回其他子页时恢复
-        DetailPanelToggled?.Invoke(nav == "search");
+        DetailPanelToggled?.Invoke(nav is "search" or "online-recommend");
+
+        // 在线推荐/普通搜索模式的切换：进入推荐页展示榜单 Tab 并加载，回搜索页退出榜单模式
+        if (nav == "online-recommend")
+            EnterListingMode();
+        else if (nav == "search" && _onlineListingKind is not null)
+            ExitListingMode();
 
         if (nav == "local") Refresh();
         if (nav == "actors") ActorListPage.Refresh();
+    }
+
+    /// <summary>进入在线推荐模式：展示榜单 Tab，默认（或继续上次的）榜单；同源同榜单已加载过则不重复请求。</summary>
+    private void EnterListingMode()
+    {
+        OnlineListingBar.Visibility = Visibility.Visible;
+        _onlineListingKind ??= VideoListingKind.TodayHot;
+        MarkListingTab(_onlineListingKind.Value);
+        // 同源同榜单且结果还在（如去了本地页再回来）才跳过重复请求；搜索模式退出时结果已清空，必须重拉
+        if (_listingLoadedFor == (_selectedOnlineSourceId, _onlineListingKind.Value) && _onlineAdapters.Count > 0)
+            return;
+        _onlinePage = 1;
+        ExecuteOnlineListing();
+    }
+
+    /// <summary>退出在线推荐模式（回普通搜索）：隐藏榜单 Tab，清空榜单结果回到空状态。</summary>
+    private void ExitListingMode()
+    {
+        _onlineListingKind = null;
+        OnlineListingBar.Visibility = Visibility.Collapsed;
+        _onlineSearchCts?.Cancel();
+        ClosePopoutIfOpen();
+        CloseOnlineFullDetail();
+        if (OnlineDetailDrawer.Visibility == Visibility.Visible) SetOnlineDetailVisible(false);
+        _onlineAdapters.Clear();
+        _onlineRenderedCount = 0;
+        OnlineCards.Visibility = Visibility.Collapsed;
+        OnlineEmptyState.Visibility = Visibility.Visible;
+        OnlineEmptyHint.Text = "输入关键词开始在线搜索";
+        UpdateOnlinePagingText();
     }
 
     private bool HasActiveScrapeTask =>
@@ -851,6 +1041,8 @@ public partial class VideoView : CardGridViewBase
     {
         _onlineSearchText = e.Trim();
         _onlinePage = 1;
+        _onlineListingKind = null; // 用户主动搜索即退出榜单模式
+        OnlineListingBar.Visibility = Visibility.Collapsed;
         ExecuteOnlineSearch();
     }
 
@@ -858,6 +1050,8 @@ public partial class VideoView : CardGridViewBase
     {
         _onlineSearchText = OnlineToolbar.SearchBox.Text.Trim();
         _onlinePage = 1;
+        _onlineListingKind = null;
+        OnlineListingBar.Visibility = Visibility.Collapsed;
         ExecuteOnlineSearch();
     }
 
@@ -876,9 +1070,10 @@ public partial class VideoView : CardGridViewBase
         var ct = _onlineSearchCts.Token;
         var version = ++_onlineSearchVersion;
 
+        OnlineLoadingText.Text = "搜索中…";
         OnlineLoadingState.Visibility = Visibility.Visible;
         OnlineEmptyState.Visibility = Visibility.Collapsed;
-        ResultsScroll.Visibility = Visibility.Collapsed;
+        OnlineCards.Visibility = Visibility.Collapsed;
         _onlinePendingAutoPlay = false;
         ClosePopoutIfOpen();
         CloseOnlineFullDetail();
@@ -952,32 +1147,28 @@ public partial class VideoView : CardGridViewBase
         OnlineLoadingState.Visibility = Visibility.Collapsed;
         if (!append)
         {
-            ResultCardsPanel.Children.Clear();
+            _onlineAdapters.Clear();
             _onlineRenderedCount = 0;
         }
         UpdateOnlineCardWidth();
-        var cards = new List<(OnlineVideoSummary Item, VideoPosterCard Card)>();
+        var adapters = new List<OnlineCardAdapter>();
         foreach (var item in items)
         {
             if (_onlineRenderedCount >= OnlineMaxResults) break;
-            // 与本地库一致的海报卡片（封面为在线图片 URL，ImageLoader 支持网络加载）
-            var card = new VideoPosterCard();
-            card.Width = _onlineCardWidth;
-            card.Bind(item);
-            card.OnlineDetailRequested += OnlinePosterDetailRequested;
-            card.OnlinePreviewRequested += OnlinePosterPreviewRequested;
-            card.OnlineFullDetailRequested += OnlinePosterFullDetailRequested;
-            ResultCardsPanel.Children.Add(card);
-            cards.Add((item, card));
+            // 与本地库一致的海报卡片（封面为在线图片 URL，ImageLoader 支持网络加载）；
+            // 适配器惰性创建卡片：VirtualizedCardGrid 只实例化可视行，未滚到的条目不建卡
+            var adapter = new OnlineCardAdapter(this, item);
+            _onlineAdapters.Add(adapter);
+            adapters.Add(adapter);
             _onlineRenderedCount++;
         }
-        ResultsScroll.Visibility = _onlineRenderedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        OnlineCards.Visibility = _onlineRenderedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
         OnlineEmptyState.Visibility = _onlineRenderedCount > 0 ? Visibility.Collapsed : Visibility.Visible;
         OnlineEmptyHint.Text = _onlineRenderedCount > 0 ? "" : "没有找到匹配的视频";
         UpdateOnlinePagingText();
 
         // 搜索页摘要信息有限，后台逐卡片拉详情回填（发行日期/演员/标签），低并发渐进显示
-        if (cards.Count > 0) StartOnlineDetailEnrichment(cards);
+        if (adapters.Count > 0) StartOnlineDetailEnrichment(adapters);
     }
 
     private void UpdateOnlinePagingText()
@@ -1029,28 +1220,79 @@ public partial class VideoView : CardGridViewBase
     }
 
     /// <summary>
-    /// 按结果区可用宽度与每行个数换算在线卡片宽度并应用到已有卡片：
-    /// 卡片 + 右侧 10px 间距恰好铺满整行（不设上限，宽屏下拖动滑杆变化明显）；
-    /// 详情侧栏展开等挤压视口导致可用宽度放不下目标列数时，自动减少列数，避免卡片横向溢出。
-    /// （详情侧栏开合、拖动滑杆、窗口缩放都会触发重算。）
+    /// 在线结果区列数：按视口宽度与用户设定列数换算后交给 VirtualizedCardGrid，
+    /// 卡片宽度由其按视口自适应计算（侧栏开合、窗口缩放自带合帧去抖，不会逐帧重排）。
+    /// 关键点：可容纳列数的估算必须用在线卡片实际下限（200px + 间距），否则窄视口下
+    /// 按 90px 最小卡宽估出的列数放不下 200px 的卡片，导致每行放不满、右侧留白。
     /// </summary>
     private void UpdateOnlineCardWidth()
     {
-        if (ResultCardsPanel is null || ResultsScroll.ActualWidth <= 0) return;
+        if (OnlineCards is null) return;
+        var available = OnlineCards.ActualWidth;
+        if (available <= 0) return;
         const double scrollbarReserve = 16;
-        const double cardGap = 10; // PosterCard 右侧 Margin
-        var available = ResultsScroll.ActualWidth > scrollbarReserve
-            ? ResultsScroll.ActualWidth - scrollbarReserve
-            : ResultsScroll.ActualWidth;
-        var columns = Math.Clamp(Columns, 1, GridCellSizer.MaxColumns);
-        var minSlot = GridCellSizer.MinCardWidth + cardGap;
-        var maxFit = Math.Max(1, (int)Math.Floor((available + cardGap) / minSlot));
-        columns = Math.Min(columns, maxFit);
-        var slotWidth = Math.Floor(available / columns);
-        // 在线卡片放宽下限（200）：横版封面 + 大标题需要足够宽度才方便浏览；窄窗自动减列
-        _onlineCardWidth = Math.Max(200, slotWidth - cardGap);
-        foreach (var card in ResultCardsPanel.Children.OfType<VideoPosterCard>())
-            card.Width = _onlineCardWidth;
+        if (available > scrollbarReserve) available -= scrollbarReserve;
+        var columns = Math.Clamp(Columns, GridCellSizer.MinColumns, GridCellSizer.MaxColumns);
+        var maxFit = Math.Max(1, (int)Math.Floor((available + OnlineCardGap) / (OnlineMinCardWidth + OnlineCardGap)));
+        var target = Math.Min(columns, maxFit);
+        if (OnlineCards.DesiredColumns != target)
+            OnlineCards.DesiredColumns = target;
+    }
+
+    /// <summary>列宽重算后同步到已实例化的卡片；未实例化的在惰性创建时直接取当前值。差值检查避免无谓重排。</summary>
+    private void ApplyOnlineCardWidth()
+    {
+        var width = OnlineCards.CardWidth;
+        foreach (var adapter in _onlineAdapters)
+            adapter.SyncWidth(width);
+    }
+
+    /// <summary>
+    /// 在线结果卡片适配器：VirtualizedCardGrid 按需实例化行容器，模板绑定 Card 惰性创建
+    /// VideoPosterCard 并接线事件；未滚到的条目不实例化卡片（原 WrapPanel 一次性全建）。
+    /// 详情回填写入 PendingDetail，后实例化的卡片在创建时补上。
+    /// </summary>
+    private sealed class OnlineCardAdapter
+    {
+        private readonly VideoView _view;
+        private VideoPosterCard? _card;
+
+        public OnlineCardAdapter(VideoView view, OnlineVideoSummary item)
+        {
+            _view = view;
+            Item = item;
+        }
+
+        public OnlineVideoSummary Item { get; }
+
+        private OnlineVideoDetail? PendingDetail { get; set; }
+
+        /// <summary>模板绑定入口：首次被行容器 realization 触发时才创建卡片。</summary>
+        public VideoPosterCard Card => _card ??= Create();
+
+        public void SyncWidth(double width)
+        {
+            if (_card is not null && Math.Abs(_card.Width - width) > 0.5)
+                _card.Width = width;
+        }
+
+        /// <summary>后台详情回填：已实例化的卡片立即更新；未实例化的暂存，创建时补上。</summary>
+        public void ApplyDetail(OnlineVideoDetail detail)
+        {
+            PendingDetail = detail;
+            _card?.UpdateOnlineDetail(detail);
+        }
+
+        private VideoPosterCard Create()
+        {
+            var card = new VideoPosterCard { Width = _view.OnlineCards.CardWidth };
+            card.Bind(Item);
+            card.OnlineDetailRequested += _view.OnlinePosterDetailRequested;
+            card.OnlinePreviewRequested += _view.OnlinePosterPreviewRequested;
+            card.OnlineFullDetailRequested += _view.OnlinePosterFullDetailRequested;
+            if (PendingDetail is { } detail) card.UpdateOnlineDetail(detail);
+            return card;
+        }
     }
 
     // ── 在线详情侧栏 ─────────────────────────────────────────────────
@@ -1072,7 +1314,7 @@ public partial class VideoView : CardGridViewBase
     /// 后台为每张搜索卡片拉取详情并回填（并发 2，避免触发站点反爬）。
     /// 新搜索/页面切换会取消上一轮回填；详情同时写入会话缓存供侧栏复用。
     /// </summary>
-    private void StartOnlineDetailEnrichment(IReadOnlyList<(OnlineVideoSummary Item, VideoPosterCard Card)> cards)
+    private void StartOnlineDetailEnrichment(IReadOnlyList<OnlineCardAdapter> adapters)
     {
         _onlineEnrichCts?.Cancel();
         _onlineEnrichCts = new CancellationTokenSource();
@@ -1083,7 +1325,7 @@ public partial class VideoView : CardGridViewBase
 
         _ = Task.Run(async () =>
         {
-            await Task.WhenAll(cards.Select(async entry =>
+            await Task.WhenAll(adapters.Select(async entry =>
             {
                 try
                 {
@@ -1102,8 +1344,7 @@ public partial class VideoView : CardGridViewBase
                     await Dispatcher.InvokeAsync(() =>
                     {
                         if (version != _onlineSearchVersion || ct.IsCancellationRequested) return;
-                        if (ReferenceEquals(entry.Card.Parent, ResultCardsPanel))
-                            entry.Card.UpdateOnlineDetail(detail);
+                        entry.ApplyDetail(detail);
                     });
                 }
                 catch (OperationCanceledException) { }
@@ -1479,6 +1720,8 @@ public partial class VideoView : CardGridViewBase
         SetOnlineDetailVisible(false);
         OnlineToolbar.SearchBox.Text = keyword;
         _onlineSearchText = keyword.Trim();
+        _onlineListingKind = null;
+        OnlineListingBar.Visibility = Visibility.Collapsed;
         ExecuteOnlineSearch();
     }
 
@@ -1919,11 +2162,16 @@ public partial class VideoView : CardGridViewBase
     }
 
     /// <summary>完整详情页作为整页子页：显示时替换搜索页三行（搜索框/结果区/分页），隐藏时恢复。
-    /// 分页行恢复后按当前结果数重算（进入前可能本就因无结果而隐藏）。</summary>
+    /// 分页行恢复后按当前结果数重算（进入前可能本就因无结果而隐藏）。
+    /// 榜单 Tab 与结果区同属搜索页顶栏，完整页独占时必须一并隐藏（否则会透出在完整页标题栏后面），
+    /// 返回时按当前是否处于在线推荐模式还原。</summary>
     private void ShowOnlineResultsArea(bool show)
     {
         OnlineToolbar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         OnlineResultsArea.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OnlineListingBar.Visibility = show && _onlineListingKind is not null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         if (show) UpdateOnlinePagingText();
         else OnlinePagingHost.Visibility = Visibility.Collapsed;
     }
@@ -1988,7 +2236,7 @@ public partial class VideoView : CardGridViewBase
         if (_onlinePage > 1)
         {
             _onlinePage = Math.Max(1, _onlinePage - MergePagesFor(OnlineSource));
-            ExecuteOnlineSearch();
+            ReloadOnlineFeed();
         }
     }
 
@@ -1996,7 +2244,14 @@ public partial class VideoView : CardGridViewBase
     {
         // 从上一次实际抓取的最后一页之后继续
         _onlinePage = Math.Max(_onlineLastPage, _onlinePage) + 1;
-        ExecuteOnlineSearch();
+        ReloadOnlineFeed();
+    }
+
+    /// <summary>按当前模式重新加载在线结果：榜单模式重拉榜单，否则执行关键词搜索。</summary>
+    private void ReloadOnlineFeed()
+    {
+        if (_onlineListingKind is { } kind) ExecuteOnlineListing(kind);
+        else ExecuteOnlineSearch();
     }
 
     private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

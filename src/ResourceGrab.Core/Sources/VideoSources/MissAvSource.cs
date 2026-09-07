@@ -60,6 +60,33 @@ public sealed class MissAvSource : IVideoSource
     public string? GetDetailUrl(string videoId)
         => videoId.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? videoId : $"{BaseUrl}/{videoId}";
 
+    // ── 榜单/推荐 ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 榜单种类 → 站内列表页路径（2026-09-06 实测均为服务端直出 HTML，
+    /// 卡片结构与搜索页一致，ParseSearchCards 可直接解析；首页"推荐给你"为
+    /// Recombee 前端渲染，抓不到，故不提供个性化推荐只提供榜单）。
+    /// </summary>
+    private static readonly Dictionary<VideoListingKind, string> ListingPaths = new()
+    {
+        [VideoListingKind.TodayHot] = "/dm301/cn/today-hot",
+        [VideoListingKind.WeeklyHot] = "/dm170/cn/weekly-hot",
+        [VideoListingKind.MonthlyHot] = "/dm273/cn/monthly-hot",
+        [VideoListingKind.NewRelease] = "/dm635/cn/release",
+    };
+
+    public async Task<OnlineVideoSearchResult?> GetListingAsync(VideoListingKind kind, int page, CancellationToken ct = default)
+    {
+        if (!ListingPaths.TryGetValue(kind, out var path)) return null;
+
+        var pageSuffix = page <= 1 ? "" : $"?page={page}";
+        _logger?.Info($"[MissAV] GetListingAsync 开始: kind={kind} page={page}");
+        var html = await GetStringWithMirrorsAsync(path + pageSuffix, ct);
+        var items = ParseSearchCards(html);
+        _logger?.Info($"[MissAV] GetListingAsync 完成: 返回 {items.Count} 条结果");
+        return new OnlineVideoSearchResult { Page = page, Items = items };
+    }
+
     // ── 搜索 ──────────────────────────────────────────────────────────
 
     public async Task<OnlineVideoSearchResult> SearchAsync(string keyword, int page, CancellationToken ct = default)

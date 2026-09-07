@@ -32,6 +32,16 @@ public partial class VirtualizedCardGrid : UserControl
         nameof(DesiredColumns), typeof(int), typeof(VirtualizedCardGrid),
         new PropertyMetadata(0, OnLayoutPropertyChanged));
 
+    /// <summary>单张卡片允许的最小宽度：列数自适应时按它估算可容纳列数并做下限钳制（默认 90）。</summary>
+    public static readonly DependencyProperty MinCardWidthProperty = DependencyProperty.Register(
+        nameof(MinCardWidth), typeof(double), typeof(VirtualizedCardGrid),
+        new PropertyMetadata(GridCellSizer.MinCardWidth, OnLayoutPropertyChanged));
+
+    /// <summary>卡片间距：与卡片自身 Margin 保持一致，用于列宽换算（默认 14，与 GridCellSizer 一致）。</summary>
+    public static readonly DependencyProperty SpacingProperty = DependencyProperty.Register(
+        nameof(Spacing), typeof(double), typeof(VirtualizedCardGrid),
+        new PropertyMetadata(GridCellSizer.Spacing, OnLayoutPropertyChanged));
+
     public IEnumerable? ItemsSource
     {
         get => (IEnumerable?)GetValue(ItemsSourceProperty);
@@ -60,6 +70,18 @@ public partial class VirtualizedCardGrid : UserControl
     {
         get => (int)GetValue(DesiredColumnsProperty);
         set => SetValue(DesiredColumnsProperty, value);
+    }
+
+    public double MinCardWidth
+    {
+        get => (double)GetValue(MinCardWidthProperty);
+        set => SetValue(MinCardWidthProperty, value);
+    }
+
+    public double Spacing
+    {
+        get => (double)GetValue(SpacingProperty);
+        set => SetValue(SpacingProperty, value);
     }
 
     public int Columns { get; private set; } = 1;
@@ -198,12 +220,12 @@ public partial class VirtualizedCardGrid : UserControl
             if (width > 0)
             {
                 // 详情侧栏展开等挤压视口时自动减少列数（每列至少保留最小卡片宽度），避免行宽超出视口被裁切
-                var maxFit = Math.Max(1, (int)Math.Floor((width + GridCellSizer.Spacing) / (GridCellSizer.MinCardWidth + GridCellSizer.Spacing)));
+                var maxFit = Math.Max(1, (int)Math.Floor((width + Spacing) / (MinCardWidth + Spacing)));
                 columns = Math.Min(columns, maxFit);
                 var newSlot = width / columns;
-                var newCard = newSlot - GridCellSizer.Spacing;
-                newCard = Math.Max(80, newCard);
-                newSlot = newCard + GridCellSizer.Spacing;
+                var newCard = newSlot - Spacing;
+                newCard = Math.Max(MinCardWidth, newCard);
+                newSlot = newCard + Spacing;
                 if (Math.Abs(newCard - CardWidth) > 0.5 || Math.Abs(newSlot - SlotWidth) > 0.5)
                 {
                     SetCurrentValue(CardWidthProperty, newCard);

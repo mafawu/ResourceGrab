@@ -10,7 +10,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Border x:Name="ChipBorder"
-                                CornerRadius="{DynamicResource RadiusPill}"
+                                CornerRadius="{DynamicResource RadiusSm}"
                                 Background="{DynamicResource HoverBgBrush}"
                                 BorderBrush="{DynamicResource DividerBrush}"
                                 BorderThickness="1" Padding="{TemplateBinding Padding}">

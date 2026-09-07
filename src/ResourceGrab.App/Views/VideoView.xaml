@@ -84,21 +84,28 @@
                     </Grid.RowDefinitions>
 
                     <!-- 顶部：统一工具栏（搜索框 + 源筛选 + 卡片尺寸；进入完整详情页时隐藏，整页被替换） -->
-                    <controls:BrowserToolbar x:Name="OnlineToolbar" Grid.Row="0"
-                                             Watermark="输入番号 / 标题 / 演员；#标签名 按标签搜索"
-                                             SearchSubmitted="OnlineSearch_Submitted"
-                                             SearchButtonClick="SearchButton_Click"
-                                             SizeSliderColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
-                                             Margin="0,0,0,14" />
+                    <StackPanel Grid.Row="0">
+                        <controls:BrowserToolbar x:Name="OnlineToolbar"
+                                                 Watermark="输入番号 / 标题 / 演员；#标签名 按标签搜索"
+                                                 SearchSubmitted="OnlineSearch_Submitted"
+                                                 SearchButtonClick="SearchButton_Click"
+                                                 SizeSliderColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}}"
+                                                 Margin="0,0,0,14" />
+                        <!-- 榜单切换（在线推荐模式）：今日/本周/本月热门 + 新作上市；搜索模式下隐藏 -->
+                        <WrapPanel x:Name="OnlineListingBar" Visibility="Collapsed" Margin="0,0,0,12" />
+                    </StackPanel>
 
-                    <!-- 结果区域：结果卡片 + 悬浮详情抽屉（覆盖层，不挤压卡片布局；进入完整详情页时整页被替换） -->
+                    <!-- 结果区域：虚拟化卡片网格（按需实例化海报卡） + 悬浮详情抽屉（覆盖层，不挤压卡片布局；进入完整详情页时整页被替换） -->
                     <Grid x:Name="OnlineResultsArea" Grid.Row="1">
-                        <ScrollViewer x:Name="ResultsScroll" VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-                            <StackPanel>
-                                <WrapPanel x:Name="ResultCardsPanel" />
-                            </StackPanel>
-                        </ScrollViewer>
+                        <controls:VirtualizedCardGrid x:Name="OnlineCards" Visibility="Collapsed"
+                                                      MinCardWidth="200" Spacing="10"
+                                                      CardWidth="200" SlotWidth="210" DesiredColumns="5">
+                            <controls:VirtualizedCardGrid.ItemTemplate>
+                                <DataTemplate>
+                                    <ContentPresenter Content="{Binding Card}" />
+                                </DataTemplate>
+                            </controls:VirtualizedCardGrid.ItemTemplate>
+                        </controls:VirtualizedCardGrid>
                         <StackPanel x:Name="OnlineEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}" Background="{DynamicResource HoverBgBrush}">
                                 <Path Data="{StaticResource IconSearch}" Stroke="{DynamicResource TextSecondaryBrush}"
@@ -180,7 +187,7 @@
                                     <TextBlock x:Name="OnlineDetailNumber" FontSize="17" FontWeight="Bold"
                                                Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
                                     <Border x:Name="OnlineDetailRating" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                            CornerRadius="999" Background="#26FFB347" Padding="9,3" Visibility="Collapsed">
+                                            CornerRadius="{DynamicResource RadiusXs}" Background="#26FFB347" Padding="9,3" Visibility="Collapsed">
                                         <TextBlock x:Name="OnlineDetailRatingText" Text="" FontSize="12" FontWeight="Bold"
                                                    Foreground="#E8890C" />
                                     </Border>
@@ -195,7 +202,7 @@
                                 <Grid Margin="0,12,0,0">
                                     <Border HorizontalAlignment="Left" Background="{DynamicResource HoverBgBrush}"
                                             BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                                            CornerRadius="999" Padding="3">
+                                            CornerRadius="{DynamicResource ControlCornerRadius}" Padding="3">
                                         <StackPanel Orientation="Horizontal">
                                             <Button x:Name="OnlineTabDetailButton" Content="视频详情" Click="OnlineTabDetail_Click" />
                                             <Button x:Name="OnlineTabMagnetButton" Content="磁力列表" Margin="2,0,0,0" Click="OnlineTabMagnet_Click" />
@@ -259,7 +266,9 @@
                     </StackPanel>
 
                     <!-- 完整详情页：整页子页（同 ActorProfileView 模式），进入时替换搜索页三行（搜索框/结果区/分页），独占整个 SearchPage -->
-                    <Grid x:Name="OnlineFullDetailPage" Grid.RowSpan="3" Visibility="Collapsed">
+                    <!-- 背景与窗口一致：整页子页需不透明，避免被它覆盖的搜索页元素透出来 -->
+                    <Grid x:Name="OnlineFullDetailPage" Grid.RowSpan="3" Visibility="Collapsed"
+                          Background="{DynamicResource AppBackgroundBrush}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -274,7 +283,7 @@
                                            Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
                                            Margin="14,0,0,0" />
                                 <Border x:Name="OnlineFullRating" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                        CornerRadius="999" Background="#26FFB347" Padding="9,3"
+                                        CornerRadius="{DynamicResource RadiusXs}" Background="#26FFB347" Padding="9,3"
                                         Visibility="Collapsed" Margin="10,0,0,0">
                                     <TextBlock x:Name="OnlineFullRatingText" Text="" FontSize="12" FontWeight="Bold"
                                                Foreground="#E8890C" />

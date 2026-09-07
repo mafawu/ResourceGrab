@@ -42,7 +42,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Background="{DynamicResource PrimarySubtleBrush}"
-                                                CornerRadius="{DynamicResource RadiusPill}"
+                                                CornerRadius="{DynamicResource RadiusXs}"
                                                 Padding="6,2" Margin="0,0,4,0">
                                             <TextBlock Text="{Binding Text}" FontSize="10"
                                                        Foreground="{DynamicResource PrimaryBrush}" />

@@ -218,7 +218,7 @@ public partial class PosterCard : UserControl
                 Background = (Brush)FindResource("HoverBgBrush"),
                 BorderBrush = (Brush)FindResource("CardBorderBrush"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(999),
+                CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(8, 1, 8, 1),
                 Margin = new Thickness(0, 0, 4, 4),
                 Child = new TextBlock
@@ -280,7 +280,7 @@ public partial class PosterCard : UserControl
         return new Border
         {
             Background = background ?? new SolidColorBrush(Color.FromArgb(0xB3, 0, 0, 0)),
-            CornerRadius = new CornerRadius(999),
+            CornerRadius = new CornerRadius(6),
             Padding = new Thickness(8, 2, 8, 2),
             Child = new TextBlock
             {

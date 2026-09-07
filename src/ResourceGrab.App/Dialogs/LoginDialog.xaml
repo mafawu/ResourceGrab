@@ -45,7 +45,7 @@
                          KeyDown="PasswordBox_KeyDown" />
 
             <Border x:Name="ErrorCapsule" Background="{DynamicResource DangerBrush}"
-                    CornerRadius="999" Padding="14,6" Margin="0,12,0,0"
+                    CornerRadius="{DynamicResource RadiusSm}" Padding="14,6" Margin="0,12,0,0"
                     Visibility="Collapsed">
                 <TextBlock x:Name="ErrorText" FontSize="12" Foreground="White"
                            TextWrapping="Wrap" HorizontalAlignment="Center" />

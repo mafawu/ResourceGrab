@@ -12,8 +12,8 @@ public sealed class VideoNavSectionProvider : INavSectionProvider
         new("发现",
         [
             new NavItem("video.online", "在线搜索", Icons.Search),
-            // 在线推荐：功能待实现，入口先置灰占位
-            new NavItem("video.online-recommend", "在线推荐（待实现）", Icons.Rank, IsEnabled: false),
+            // 在线推荐：MissAV 榜单（今日/本周/本月热门、新作上市）
+            new NavItem("video.online-recommend", "在线推荐", Icons.Rank),
         ]),
         new("我的",
         [

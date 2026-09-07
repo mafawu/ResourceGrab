@@ -93,7 +93,7 @@
         <Setter Property="Background" Value="{DynamicResource PrimarySubtleBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="6,2" />
         <Setter Property="Margin" Value="0,0,4,4" />
     </Style>

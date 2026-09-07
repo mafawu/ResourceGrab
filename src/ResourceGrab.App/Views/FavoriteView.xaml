@@ -91,7 +91,7 @@
         <!-- 分页 -->
         <StackPanel x:Name="FavoritePaging" Grid.Row="2" Orientation="Horizontal"
                     HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
-            <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusPill}" Padding="4">
+            <Border Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource ControlCornerRadius}" Padding="4">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="FavPrevButton" Style="{StaticResource PaginationButtonStyle}"
                             ToolTip="上一页" Click="FavPrevButton_Click">

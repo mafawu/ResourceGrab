@@ -18,7 +18,6 @@
     <CornerRadius x:Key="RadiusMd">10</CornerRadius>
     <CornerRadius x:Key="RadiusLg">12</CornerRadius>
     <CornerRadius x:Key="RadiusXl">16</CornerRadius>
-    <CornerRadius x:Key="RadiusPill">999</CornerRadius>
 
     <!-- Spacing Scale -->
     <Thickness x:Key="SpacingXs">4</Thickness>

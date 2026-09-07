@@ -292,12 +292,6 @@ public partial class MainWindow : Window
     private void OnNavItemClicked(object? sender, NavItem item)
     {
         if (!item.IsEnabled) return;
-        if (item.Id == "video.online-recommend")
-        {
-            // 在线推荐功能待实现；入口在导航中为禁用态，此处预留点击提示
-            try { Snackbars.Show("在线推荐功能开发中，敬请期待", Services.ToastKind.Info); } catch { }
-            return;
-        }
         if (!_navigator.GoTo(item.Id))
         {
             // 未注册的路由：回退搜索页并记录，避免静默失败
@@ -395,6 +389,12 @@ public partial class MainWindow : Window
         {
             OpenVideoView();
             _videoView?.SwitchNav("search");
+            return _videoView!;
+        });
+        _navigator.Register("video.online-recommend", () =>
+        {
+            OpenVideoView();
+            _videoView?.SwitchNav("online-recommend");
             return _videoView!;
         });
         _navigator.Register("video.local", () =>

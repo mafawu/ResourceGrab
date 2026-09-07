@@ -13,7 +13,7 @@
                     <DataTemplate>
                         <Border Background="{DynamicResource PrimarySubtleBrush}"
                                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                                CornerRadius="{DynamicResource RadiusPill}" Padding="8,2" Margin="0,2,4,2">
+                                CornerRadius="{DynamicResource RadiusXs}" Padding="8,2" Margin="0,2,4,2">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding}" FontSize="11"
                                            Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
