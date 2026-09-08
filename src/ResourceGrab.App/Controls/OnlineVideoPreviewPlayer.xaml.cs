@@ -74,13 +74,50 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private bool _handoffSeekApplied;
     private bool _inPlayback;
     private static bool _libVlcInitialized;
+    private static readonly object _libVlcInitLock = new();
     private readonly ILogger? _logger = App.Services.GetService<ILogger>();
+
+    /// <summary>后台预热 LibVLC（原生库加载 + 插件扫描首次很慢，不能留到用户第一次点播放时在 UI 线程上等）。
+    /// 预热实例用完即弃，只为把 DLL 与插件缓存装进进程；各播放器仍按原逻辑创建自己的实例。</summary>
+    public static Task PreWarmAsync() => Task.Run(() =>
+    {
+        try
+        {
+            lock (_libVlcInitLock)
+            {
+                if (_libVlcInitialized) return;
+                var dir = FindLibVlcDirectory();
+                if (dir is null) return;
+                LibVLCSharp.Shared.Core.Initialize(dir);
+                using var lib = new LibVLC();
+                using var mp = new MediaPlayer(lib);
+                _libVlcInitialized = true;
+            }
+        }
+        catch
+        {
+            // 预热失败不影响：首次播放时走原同步初始化路径
+        }
+    });
 
     /// <summary>控制条自动隐藏计时器：播放/暂停态 5 秒无操作后隐藏进度条与按钮。</summary>
     private readonly System.Windows.Threading.DispatcherTimer _controlBarHideTimer = new()
     {
         Interval = TimeSpan.FromSeconds(5),
     };
+
+    /// <summary>悬浮轮询：VLC 画面是原生子窗口（空域），画面区域的 WPF 鼠标事件收不到，
+    /// 靠 250ms 轮询光标位置判断是否悬浮在播放区上，悬浮即唤出控制条。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _hoverPollTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(250),
+    };
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
 
     public OnlineVideoPreviewPlayer()
     {
@@ -91,13 +128,31 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _controlBarHideTimer.Stop();
             if (_inPlayback) ControlBar.Visibility = Visibility.Collapsed;
         };
+        _hoverPollTimer.Tick += (_, _) => PollHover();
     }
 
     // ── 状态切换 ─────────────────────────────────────────────────────
 
+    /// <summary>按状态应显示画面（非空闲态）；实际显示还要过滚动抑制开关。</summary>
+    private bool _surfaceWantedVisible;
+
+    /// <summary>滚动期间隐藏原生画面（HWND 不跟滚动、不被裁剪，会盖住其他区域；只藏画面不止声音）。</summary>
+    private bool _surfaceHiddenForScroll;
+
+    public void SetVideoSurfaceVisible(bool visible)
+    {
+        _surfaceHiddenForScroll = !visible;
+        ApplySurfaceVisibility();
+    }
+
+    private void ApplySurfaceVisibility() =>
+        VideoHost.Visibility = _surfaceWantedVisible && !_surfaceHiddenForScroll
+            ? Visibility.Visible : Visibility.Collapsed;
+
     private void SetState(PlayerState state)
     {
-        VideoHost.Visibility = state == PlayerState.Idle ? Visibility.Collapsed : Visibility.Visible;
+        _surfaceWantedVisible = state != PlayerState.Idle;
+        ApplySurfaceVisibility();
         PosterLayer.Visibility = state == PlayerState.Idle ? Visibility.Visible : Visibility.Collapsed;
         LoadingLayer.Visibility = state == PlayerState.Loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorLayer.Visibility = state == PlayerState.Error ? Visibility.Visible : Visibility.Collapsed;
@@ -115,6 +170,30 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
         PauseToggleButton.Content = state == PlayerState.Paused ? "►" : "❚❚";
         if (state == PlayerState.Loading) ResetSeekBar();
+        // 轮询只在播放/暂停态跑，其他状态停掉省电
+        if (_inPlayback) _hoverPollTimer.Start();
+        else _hoverPollTimer.Stop();
+    }
+
+    /// <summary>悬浮轮询实现：光标在播放区内即视为活动，唤出控制条并重置隐藏计时。
+    /// GetCursorPos 是物理像素，PointToScreen 也是物理像素，两边都除以 DPI 缩放换算回 DIP 再比较。</summary>
+    private void PollHover()
+    {
+        if (!_inPlayback || !IsVisible) return;
+        try
+        {
+            if (!GetCursorPos(out var pt)) return;
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(PlayerRoot);
+            var cursor = new Point(pt.X / dpi.DpiScaleX, pt.Y / dpi.DpiScaleY);
+            var originPx = PlayerRoot.PointToScreen(new Point(0, 0));
+            var origin = new Point(originPx.X / dpi.DpiScaleX, originPx.Y / dpi.DpiScaleY);
+            if (new Rect(origin, new Size(PlayerRoot.ActualWidth, PlayerRoot.ActualHeight)).Contains(cursor))
+                ShowControlBarOnHover();
+        }
+        catch
+        {
+            // 轮询失败不影响播放
+        }
     }
 
     // ── 控制条自动隐藏 ──────────────────────────────────────────────────
@@ -144,6 +223,14 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     /// <summary>鼠标在控制条上操作时保持显示并重置计时。</summary>
     private void ControlBar_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
+
+    /// <summary>轮询命中时唤出控制条：已显示则只续计时，避免重复触发布局。</summary>
+    private void ShowControlBarOnHover()
+    {
+        if (ControlBar.Visibility != Visibility.Visible)
+            ControlBar.Visibility = Visibility.Visible;
+        RestartControlBarTimer();
+    }
 
     private void UpdatePoster()
     {
@@ -440,15 +527,18 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         if (_mediaPlayer is not null) return;
         try
         {
-            if (!_libVlcInitialized)
+            lock (_libVlcInitLock)
             {
-                var libvlcDir = FindLibVlcDirectory();
-                if (libvlcDir is null)
-                    throw new FileNotFoundException(
-                        "找不到 LibVLC 原生库（libvlc.dll）。请确认 libvlc 目录（含 win-x64/win-x86 子目录）随程序一起部署。");
-                _logger?.Info($"[OnlineVideoPreviewPlayer] 使用 LibVLC 目录: {libvlcDir}");
-                LibVLCSharp.Shared.Core.Initialize(libvlcDir);
-                _libVlcInitialized = true;
+                if (!_libVlcInitialized)
+                {
+                    var libvlcDir = FindLibVlcDirectory();
+                    if (libvlcDir is null)
+                        throw new FileNotFoundException(
+                            "找不到 LibVLC 原生库（libvlc.dll）。请确认 libvlc 目录（含 win-x64/win-x86 子目录）随程序一起部署。");
+                    _logger?.Info($"[OnlineVideoPreviewPlayer] 使用 LibVLC 目录: {libvlcDir}");
+                    LibVLCSharp.Shared.Core.Initialize(libvlcDir);
+                    _libVlcInitialized = true;
+                }
             }
             _libVlc = new LibVLC();
             _libVlc.Log += (_, e) =>
@@ -544,6 +634,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void DisposePlayer()
     {
         _playPending = false;
+        _hoverPollTimer.Stop();
         _controlBarHideTimer.Stop();
         try { _mediaPlayer?.Stop(); } catch { }
         if (_currentRelayUrl is not null)

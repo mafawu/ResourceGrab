@@ -3,6 +3,7 @@ using System.Threading;
 using System.Text;
 using System.Windows;
 using ResourceGrab.App.Common;
+using ResourceGrab.App.Controls;
 using ResourceGrab.App.Services;
 using ResourceGrab.App.Themes;
 using ResourceGrab.App.ViewModels;
@@ -299,6 +300,20 @@ public partial class App : Application
                 // 静默失败，不打扰用户
             }
         });
+
+        // 后台预热 HLS 本地中继（HttpListener 绑定/可能的 netsh 提权很慢，
+        // 不能留到用户第一次点播放时在 UI 线程上等）
+        _ = Task.Run(() =>
+        {
+            try { _ = HlsLocalRelay.Instance; }
+            catch (Exception ex)
+            {
+                Services.GetService<ILogger>()?.Warn($"[App] HLS 中继预热失败（播放时再建）: {ex.Message}");
+            }
+        });
+
+        // 后台预热 LibVLC（原生库加载 + 插件扫描首次很慢，同上）
+        _ = OnlineVideoPreviewPlayer.PreWarmAsync();
 
         var window = new MainWindow();
         MainWindow = window;

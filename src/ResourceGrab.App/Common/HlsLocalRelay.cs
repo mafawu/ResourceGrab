@@ -150,7 +150,8 @@ public sealed class HlsLocalRelay : IDisposable
                 RedirectStandardError = true,
             };
             using var p = Process.Start(psi)!;
-            p.WaitForExit();
+            // netsh 提权/无响应时不能无限等（调用方常在 UI 线程），8 秒超时即放弃回退 TcpListener
+            if (!p.WaitForExit(8000)) { try { p.Kill(true); } catch { } return false; }
             return p.ExitCode == 0;
         }
         catch (Exception ex) { _logger?.Warn($"[HlsLocalRelay] netsh add urlacl 失败: {ex.Message}"); return false; }

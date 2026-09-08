@@ -77,6 +77,19 @@ public partial class VideoView : CardGridViewBase
     private readonly ObservableCollection<OnlineCardAdapter> _onlineAdapters = new();
     /// <summary>在线推荐模式当前榜单；null 表示普通搜索模式。</summary>
     private VideoListingKind? _onlineListingKind;
+    /// <summary>滚动停稳计时：滚动期间隐藏 VLC 原生画面，停稳后恢复。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _scrollSettleTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(350),
+    };
+
+    private void SuppressVideoSurfaceDuringScroll()
+    {
+        OnlineFullPreviewPlayer.SetVideoSurfaceVisible(false);
+        OnlinePreviewPlayer.SetVideoSurfaceVisible(false);
+        _scrollSettleTimer.Stop();
+        _scrollSettleTimer.Start();
+    }
     /// <summary>已成功加载过的榜单（同源同榜单进入推荐页不重复请求）。</summary>
     private (string SourceId, VideoListingKind Kind)? _listingLoadedFor;
 
@@ -107,6 +120,15 @@ public partial class VideoView : CardGridViewBase
         Loaded += OnLoaded;
         if (_taskQueue != null) _taskQueue.TaskCompleted += OnQueueTaskCompleted;
         Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) { _taskQueue.ProgressChanged -= OnQueueProgressChanged; _taskQueue.TaskCompleted -= OnQueueTaskCompleted; } };
+        // 滚动时藏 VLC 原生画面（HWND 不跟滚、不被裁剪会盖住其他区域甚至超出窗口）；停稳 350ms 恢复
+        _scrollSettleTimer.Tick += (_, _) =>
+        {
+            _scrollSettleTimer.Stop();
+            OnlineFullPreviewPlayer.SetVideoSurfaceVisible(true);
+            OnlinePreviewPlayer.SetVideoSurfaceVisible(true);
+        };
+        OnlineFullScroll.ScrollChanged += (_, _) => SuppressVideoSurfaceDuringScroll();
+        OnlineDetailPanel.ScrollChanged += (_, _) => SuppressVideoSurfaceDuringScroll();
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
     }
@@ -276,6 +298,8 @@ public partial class VideoView : CardGridViewBase
         _onlineRenderedCount = 0;
         ClosePopoutIfOpen();
         OnlinePreviewPlayer.Stop();
+        // 换源后旧详情失效：清除钉住标记
+        _restoreFullDetail = false;
         CloseOnlineFullDetail();
         SetOnlineDetailVisible(false);
         OnlineCards.Visibility = Visibility.Collapsed;
@@ -465,6 +489,15 @@ public partial class VideoView : CardGridViewBase
 
         if (nav == "local") Refresh();
         if (nav == "actors") ActorListPage.Refresh();
+
+        // 钉住恢复：切子页/切媒体类型回来时，完整详情页自动回到打开时的样子（缓存渲染，无闪烁）
+        if ((nav is "search" or "online-recommend")
+            && _restoreFullDetail
+            && _onlineDetailSummary is not null
+            && OnlineFullDetailPage.Visibility != Visibility.Visible)
+        {
+            OpenOnlineFullDetail();
+        }
     }
 
     /// <summary>进入在线推荐模式：展示榜单 Tab，默认（或继续上次的）榜单；同源同榜单已加载过则不重复请求。</summary>
@@ -1301,6 +1334,9 @@ public partial class VideoView : CardGridViewBase
     private OnlineVideoSummary? _onlineDetailSummary;
     private string? _onlineDetailUrl;
     private int _onlineDetailVersion;
+    /// <summary>完整详情页钉住标记：用户主动进入后置位，切子页/切媒体类型再回来时自动恢复；
+    /// 点「返回搜索结果」或换源时清除。</summary>
+    private bool _restoreFullDetail;
     /// <summary>侧栏最后一次渲染成功的在线详情（下载按钮的输入）。</summary>
     private OnlineVideoDetail? _onlineDetail;
     /// <summary>完整页最后一次渲染成功的在线详情（含跨源补充的磁力/同系列）。</summary>
@@ -2045,6 +2081,7 @@ public partial class VideoView : CardGridViewBase
         // refresh：完整页内推荐卡片切换影片时强制重载；否则（按钮/双击首次进入）已在页内则忽略
         if (OnlineFullDetailPage.Visibility == Visibility.Visible && !refresh) return;
         if (string.IsNullOrEmpty(_onlineDetailUrl)) return;
+        _restoreFullDetail = true;
         _onlineFullDetailVersion++;
         var version = _onlineFullDetailVersion;
 
@@ -2351,6 +2388,8 @@ public partial class VideoView : CardGridViewBase
     /// <summary>「← 返回搜索结果」：完整页收起并恢复搜索页三行，播放按位置交接回侧栏（有流有位置则续播，否则停止）。</summary>
     private void OnlineFullBack_Click(object sender, RoutedEventArgs e)
     {
+        // 用户主动返回：清除钉住标记，切页回来不再自动恢复
+        _restoreFullDetail = false;
         _onlineFullDetailVersion++;
         var position = OnlineFullPreviewPlayer.CurrentPositionMs;
         var paused = OnlineFullPreviewPlayer.IsPaused;
