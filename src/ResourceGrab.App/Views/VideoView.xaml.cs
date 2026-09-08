@@ -77,19 +77,7 @@ public partial class VideoView : CardGridViewBase
     private readonly ObservableCollection<OnlineCardAdapter> _onlineAdapters = new();
     /// <summary>在线推荐模式当前榜单；null 表示普通搜索模式。</summary>
     private VideoListingKind? _onlineListingKind;
-    /// <summary>滚动停稳计时：滚动期间隐藏 VLC 原生画面，停稳后恢复。</summary>
-    private readonly System.Windows.Threading.DispatcherTimer _scrollSettleTimer = new()
-    {
-        Interval = TimeSpan.FromMilliseconds(350),
-    };
-
-    private void SuppressVideoSurfaceDuringScroll()
-    {
-        OnlineFullPreviewPlayer.SetVideoSurfaceVisible(false);
-        OnlinePreviewPlayer.SetVideoSurfaceVisible(false);
-        _scrollSettleTimer.Stop();
-        _scrollSettleTimer.Start();
-    }
+    
     /// <summary>已成功加载过的榜单（同源同榜单进入推荐页不重复请求）。</summary>
     private (string SourceId, VideoListingKind Kind)? _listingLoadedFor;
 
@@ -120,15 +108,6 @@ public partial class VideoView : CardGridViewBase
         Loaded += OnLoaded;
         if (_taskQueue != null) _taskQueue.TaskCompleted += OnQueueTaskCompleted;
         Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) { _taskQueue.ProgressChanged -= OnQueueProgressChanged; _taskQueue.TaskCompleted -= OnQueueTaskCompleted; } };
-        // 滚动时藏 VLC 原生画面（HWND 不跟滚、不被裁剪会盖住其他区域甚至超出窗口）；停稳 350ms 恢复
-        _scrollSettleTimer.Tick += (_, _) =>
-        {
-            _scrollSettleTimer.Stop();
-            OnlineFullPreviewPlayer.SetVideoSurfaceVisible(true);
-            OnlinePreviewPlayer.SetVideoSurfaceVisible(true);
-        };
-        OnlineFullScroll.ScrollChanged += (_, _) => SuppressVideoSurfaceDuringScroll();
-        OnlineDetailPanel.ScrollChanged += (_, _) => SuppressVideoSurfaceDuringScroll();
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
     }
@@ -2385,31 +2364,18 @@ public partial class VideoView : CardGridViewBase
         else OnlinePagingHost.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>「← 返回搜索结果」：完整页收起并恢复搜索页三行，播放按位置交接回侧栏（有流有位置则续播，否则停止）。</summary>
+    /// <summary>「← 返回搜索结果」：完整页收起并恢复搜索页三行，不回侧栏（侧栏关闭同样回到结果区）。</summary>
     private void OnlineFullBack_Click(object sender, RoutedEventArgs e)
     {
         // 用户主动返回：清除钉住标记，切页回来不再自动恢复
         _restoreFullDetail = false;
         _onlineFullDetailVersion++;
-        var position = OnlineFullPreviewPlayer.CurrentPositionMs;
-        var paused = OnlineFullPreviewPlayer.IsPaused;
-        var hadStream = !string.IsNullOrEmpty(OnlineFullPreviewPlayer.StreamUrl);
         OnlineFullPreviewPlayer.Stop();
         OnlineFullDetailPage.Visibility = Visibility.Collapsed;
         ShowOnlineResultsArea(true);
-
-        if (position > 0 && hadStream)
-        {
-            // 正在播/暂停：重新打开侧栏，从同位置续播
-            SetOnlineDetailVisible(true);
-            TransferPlayback(null, OnlinePreviewPlayer, position, paused);
-        }
-        else
-        {
-            // 无实际播放：侧栏保持收起，侧栏播放器恢复封面态
-            OnlinePreviewPlayer.Stop();
-            OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
-        }
+        // 侧栏保持收起，播放器恢复封面态
+        OnlinePreviewPlayer.Stop();
+        OnlinePreviewPlayer.ShowPlayButton = !string.IsNullOrEmpty(OnlinePreviewPlayer.StreamUrl);
     }
 
     /// <summary>收起完整详情页（换源/重搜/切页时调用）：停播完整页播放器、隐藏整页并恢复搜索页三行。</summary>

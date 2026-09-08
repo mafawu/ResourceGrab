@@ -1,21 +1,22 @@
 using System.IO;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using LibVLCSharp.Shared;
+using FlyleafLib;
+using FlyleafLib.MediaPlayer;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Common;
 using ResourceGrab.Core.Logging;
 using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Services.VideoScrape;
 
 namespace ResourceGrab.App.Controls;
 
 /// <summary>
-/// 在线视频预览/全片播放器（源无关）：任何源只要在 OnlineVideoDetail 里填了
-/// StreamUrl（m3u8 / mp4 直链）+ Referer，即可复用此控件播放。
-/// 源不感知播放器；播放失败、重试、暂停等均在本控件内闭环。
+/// 在线视频预览/全片播放器（源无关）：吃 OnlineVideoDetail 的 StreamUrl + Referer 契约。
+/// 基于 Flyleaf（FFmpeg/DirectComposition）：无空域问题，鼠标事件/滚动/裁剪全部走 WPF；
+/// Referer/UA 经 Demuxer.FormatOpt 直接透传给每个分片请求，不再需要 HLS 本地中继。
+/// 对外接口与旧 VLC 版一致，VideoView/Popout 零改动。
 /// </summary>
 public partial class OnlineVideoPreviewPlayer : UserControl
 {
@@ -41,7 +42,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         set => SetValue(StreamUrlProperty, value);
     }
 
-    /// <summary>播放该流需要的 Referer 头（经 libvlc :http-referrer 传入）。</summary>
+    /// <summary>播放该流需要的 Referer 头（经 Demuxer headers 透传给 playlist 与每个分片）。</summary>
     public string Referer
     {
         get => (string)GetValue(RefererProperty);
@@ -64,41 +65,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     private enum PlayerState { Idle, Loading, Playing, Paused, Error }
 
-    private LibVLC? _libVlc;
-    private MediaPlayer? _mediaPlayer;
-    private Media? _currentMedia;
-    private string? _currentRelayUrl;
-    private bool _playPending;
+    private const string BrowserUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+    private Player? _player;
+    private PlayerState _state = PlayerState.Idle;
+    private bool _pausedGuess;
     private long _pendingSeekMs;
     private bool _pendingPause;
     private bool _handoffSeekApplied;
     private bool _inPlayback;
-    private static bool _libVlcInitialized;
-    private static readonly object _libVlcInitLock = new();
     private readonly ILogger? _logger = App.Services.GetService<ILogger>();
-
-    /// <summary>后台预热 LibVLC（原生库加载 + 插件扫描首次很慢，不能留到用户第一次点播放时在 UI 线程上等）。
-    /// 预热实例用完即弃，只为把 DLL 与插件缓存装进进程；各播放器仍按原逻辑创建自己的实例。</summary>
-    public static Task PreWarmAsync() => Task.Run(() =>
-    {
-        try
-        {
-            lock (_libVlcInitLock)
-            {
-                if (_libVlcInitialized) return;
-                var dir = FindLibVlcDirectory();
-                if (dir is null) return;
-                LibVLCSharp.Shared.Core.Initialize(dir);
-                using var lib = new LibVLC();
-                using var mp = new MediaPlayer(lib);
-                _libVlcInitialized = true;
-            }
-        }
-        catch
-        {
-            // 预热失败不影响：首次播放时走原同步初始化路径
-        }
-    });
 
     /// <summary>控制条自动隐藏计时器：播放/暂停态 5 秒无操作后隐藏进度条与按钮。</summary>
     private readonly System.Windows.Threading.DispatcherTimer _controlBarHideTimer = new()
@@ -106,18 +83,11 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         Interval = TimeSpan.FromSeconds(5),
     };
 
-    /// <summary>悬浮轮询：VLC 画面是原生子窗口（空域），画面区域的 WPF 鼠标事件收不到，
-    /// 靠 250ms 轮询光标位置判断是否悬浮在播放区上，悬浮即唤出控制条。</summary>
-    private readonly System.Windows.Threading.DispatcherTimer _hoverPollTimer = new()
+    /// <summary>播放状态同步计时器：500ms 读一次 CurTime/Duration/IsPlaying，驱动进度条与状态机。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _uiSyncTimer = new()
     {
-        Interval = TimeSpan.FromMilliseconds(250),
+        Interval = TimeSpan.FromMilliseconds(500),
     };
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int X; public int Y; }
 
     public OnlineVideoPreviewPlayer()
     {
@@ -128,31 +98,15 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _controlBarHideTimer.Stop();
             if (_inPlayback) ControlBar.Visibility = Visibility.Collapsed;
         };
-        _hoverPollTimer.Tick += (_, _) => PollHover();
+        _uiSyncTimer.Tick += (_, _) => SyncPlaybackUi();
     }
 
     // ── 状态切换 ─────────────────────────────────────────────────────
 
-    /// <summary>按状态应显示画面（非空闲态）；实际显示还要过滚动抑制开关。</summary>
-    private bool _surfaceWantedVisible;
-
-    /// <summary>滚动期间隐藏原生画面（HWND 不跟滚动、不被裁剪，会盖住其他区域；只藏画面不止声音）。</summary>
-    private bool _surfaceHiddenForScroll;
-
-    public void SetVideoSurfaceVisible(bool visible)
-    {
-        _surfaceHiddenForScroll = !visible;
-        ApplySurfaceVisibility();
-    }
-
-    private void ApplySurfaceVisibility() =>
-        VideoHost.Visibility = _surfaceWantedVisible && !_surfaceHiddenForScroll
-            ? Visibility.Visible : Visibility.Collapsed;
-
     private void SetState(PlayerState state)
     {
-        _surfaceWantedVisible = state != PlayerState.Idle;
-        ApplySurfaceVisibility();
+        _state = state;
+        VideoHost.Visibility = state == PlayerState.Idle ? Visibility.Collapsed : Visibility.Visible;
         PosterLayer.Visibility = state == PlayerState.Idle ? Visibility.Visible : Visibility.Collapsed;
         LoadingLayer.Visibility = state == PlayerState.Loading ? Visibility.Visible : Visibility.Collapsed;
         ErrorLayer.Visibility = state == PlayerState.Error ? Visibility.Visible : Visibility.Collapsed;
@@ -170,33 +124,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
         PauseToggleButton.Content = state == PlayerState.Paused ? "►" : "❚❚";
         if (state == PlayerState.Loading) ResetSeekBar();
-        // 轮询只在播放/暂停态跑，其他状态停掉省电
-        if (_inPlayback) _hoverPollTimer.Start();
-        else _hoverPollTimer.Stop();
     }
 
-    /// <summary>悬浮轮询实现：光标在播放区内即视为活动，唤出控制条并重置隐藏计时。
-    /// GetCursorPos 是物理像素，PointToScreen 也是物理像素，两边都除以 DPI 缩放换算回 DIP 再比较。</summary>
-    private void PollHover()
-    {
-        if (!_inPlayback || !IsVisible) return;
-        try
-        {
-            if (!GetCursorPos(out var pt)) return;
-            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(PlayerRoot);
-            var cursor = new Point(pt.X / dpi.DpiScaleX, pt.Y / dpi.DpiScaleY);
-            var originPx = PlayerRoot.PointToScreen(new Point(0, 0));
-            var origin = new Point(originPx.X / dpi.DpiScaleX, originPx.Y / dpi.DpiScaleY);
-            if (new Rect(origin, new Size(PlayerRoot.ActualWidth, PlayerRoot.ActualHeight)).Contains(cursor))
-                ShowControlBarOnHover();
-        }
-        catch
-        {
-            // 轮询失败不影响播放
-        }
-    }
-
-    // ── 控制条自动隐藏 ──────────────────────────────────────────────────
+    // ── 控制条自动隐藏（DirectComposition 无空域，WPF 鼠标事件正常送达） ──
 
     private void ShowControlBarTemporarily()
     {
@@ -224,14 +154,6 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     /// <summary>鼠标在控制条上操作时保持显示并重置计时。</summary>
     private void ControlBar_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
 
-    /// <summary>轮询命中时唤出控制条：已显示则只续计时，避免重复触发布局。</summary>
-    private void ShowControlBarOnHover()
-    {
-        if (ControlBar.Visibility != Visibility.Visible)
-            ControlBar.Visibility = Visibility.Visible;
-        RestartControlBarTimer();
-    }
-
     private void UpdatePoster()
     {
         var poster = PosterUrl;
@@ -247,45 +169,54 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void UpdatePlayButton()
     {
         PlayHost.Visibility = ShowPlayButton ? Visibility.Visible : Visibility.Collapsed;
-        // 与 StartPlayback 用同一个 IsHlsUrl 判断，避免带 query 的地址在两处结论不一致
-        PlayHost.ToolTip = System.Uri.TryCreate(StreamUrl, UriKind.Absolute, out var u) && IsHlsUrl(u)
+        PlayHost.ToolTip = StreamUrl.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)
             ? "播放影片" : "播放预览";
     }
 
     // ── 播放控制 ─────────────────────────────────────────────────────
 
-    /// <summary>停止播放并回到海报态（切换详情、关闭侧栏、切页时调用）。保留 LibVLC 实例供下次播放。</summary>
+    /// <summary>停止播放并回到海报态（切换详情、关闭侧栏、切页时调用）。</summary>
     public void Stop()
     {
-        _playPending = false;
-        try { _mediaPlayer?.Stop(); } catch { /* 已停止/未初始化 */ }
-        if (_currentRelayUrl is not null)
-        {
-            HlsLocalRelay.Instance.Unregister(_currentRelayUrl);
-            _currentRelayUrl = null;
-        }
+        _openGeneration++; // 作废在途打开
+        _pausedGuess = false;
+        _pendingSeekMs = 0;
+        _pendingPause = false;
+        try { _player?.Stop(); } catch { /* 已停止/未初始化 */ }
+        _uiSyncTimer.Stop();
         SetState(PlayerState.Idle);
     }
 
-    /// <summary>公开播放入口：外部（详情自动起播、独立播放窗口）设好 StreamUrl 后调用。
-    /// HWND 未就绪时由 TryPlay 内部置 _playPending，宿主加载后自动起播。</summary>
+    /// <summary>公开播入口：外部（详情自动起播、独立播放窗口）设好 StreamUrl 后调用。</summary>
     public void Play() => TryPlay();
 
     /// <summary>当前播放位置（毫秒）；未起播返回 0。</summary>
-    public long CurrentPositionMs => _mediaPlayer?.Time ?? 0;
+    public long CurrentPositionMs
+    {
+        get
+        {
+            try { return (_player?.CurTime ?? 0) / 10000; }
+            catch { return 0; }
+        }
+    }
 
     /// <summary>是否正在播放。</summary>
-    public bool IsPlaying => _mediaPlayer?.State == VLCState.Playing;
+    public bool IsPlaying
+    {
+        get
+        {
+            try { return _player?.IsPlaying == true; }
+            catch { return false; }
+        }
+    }
 
-    /// <summary>是否处于暂停态。</summary>
-    public bool IsPaused => _mediaPlayer?.State == VLCState.Paused;
+    /// <summary>是否处于暂停态（本地跟踪：Flyleaf 未暴露 IsPaused，以用户暂停意图为准）。</summary>
+    public bool IsPaused => _pausedGuess && !IsPlaying && (_player?.Video.IsOpened == true);
 
     /// <summary>
     /// 接力续播（小窗放大 / 回迁）：从指定位置起播，paused=true 时起播后立即暂停。
-    /// 主界面与小窗是两个播放器实例（LibVLCSharp.WPF 的 VideoView 不支持跨窗口迁移），
-    /// 交接时用此方法把位置与播放状态传给对方，从同一位置继续播。
-    /// 注意：定位不用 VLC 的 :start-time 输入选项（其单位是秒，传毫秒会错位到流末尾），
-    /// 而是起播后经 <see cref="ApplyHandoffSeek"/> 用 MediaPlayer.Time（毫秒）精确 seek。
+    /// 主界面与小窗是两个播放器实例，交接时用此方法把位置与播放状态传给对方，
+    /// 起播时长就绪后经 ApplyHandoffSeek 用 CurTime（毫秒）精确 seek。
     /// </summary>
     public void PlayFrom(long positionMs, bool paused)
     {
@@ -296,21 +227,20 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     }
 
     /// <summary>
-    /// 接力续播的精确 seek：等时长已知（LengthChanged）后把播放定位到交接位置。
-    /// 起播即 seek 可能被 LengthChanged 重设时长干扰，故挂在 Playing/LengthChanged 上幂等执行。
+    /// 接力续播的精确 seek：等时长已知后把播放定位到交接位置（幂等）。
     /// </summary>
     private void ApplyHandoffSeek()
     {
         if (_handoffSeekApplied) return;
         if (_pendingSeekMs <= 0) { _handoffSeekApplied = true; return; }
-        if (_durationMs <= 0) return; // 时长未知（直播/未到 LengthChanged），等下一次
+        if (_durationMs <= 0 || _player is null) return; // 时长未知，等下一次
         _handoffSeekApplied = true;
         var target = Math.Min(_pendingSeekMs, _durationMs - 1);
         _pendingSeekMs = 0;
-        _logger?.Info($"[OnlineVideoPreviewPlayer] 接力续播定位：{target}ms");
+        _logger?.Info($"[FlyPlayer] 接力续播定位：{target}ms");
         try
         {
-            _mediaPlayer!.Time = target;
+            _player.CurTime = target * 10000;
             _sliderUpdating = true;
             if (_durationMs > 0) SeekSlider.Value = Math.Min(target, _durationMs);
             _sliderUpdating = false;
@@ -318,13 +248,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
         catch (Exception ex)
         {
-            _logger?.Warn($"[OnlineVideoPreviewPlayer] 接力续播 seek 失败: {ex.Message}");
+            _logger?.Warn($"[FlyPlayer] 接力续播 seek 失败: {ex.Message}");
         }
         if (_pendingPause)
         {
             _pendingPause = false;
-            _mediaPlayer?.Pause();
-            SetState(PlayerState.Paused);
+            PauseInternal();
         }
     }
 
@@ -334,138 +263,214 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     private void TryPlay()
     {
-        _logger?.Info($"[OnlineVideoPreviewPlayer] TryPlay: StreamUrl={(string.IsNullOrEmpty(StreamUrl) ? "(空)" : StreamUrl)}, VideoHost.IsLoaded={VideoHost.IsLoaded}");
+        var generation = ++_openGeneration;
+        _logger?.Info($"[FlyPlayer] TryPlay: StreamUrl={(string.IsNullOrEmpty(StreamUrl) ? "(空)" : StreamUrl)}");
         if (string.IsNullOrEmpty(StreamUrl)) return;
-        if (!VideoHost.IsLoaded)
+        if (!Uri.TryCreate(StreamUrl, UriKind.Absolute, out var streamUri))
         {
-            // VideoView 的 HWND 尚未创建：先亮出宿主，Loaded 后再起播。
-            // 注意 Visibility 折叠不会卸载元素，只有首次显示才走这条路。
-            _playPending = true;
-            SetState(PlayerState.Loading);
-            _logger?.Info("[OnlineVideoPreviewPlayer] VideoHost 尚未加载，等待 Loaded 后再起播");
-            return;
-        }
-        StartPlayback();
-    }
-
-    private void VideoHost_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (_playPending)
-        {
-            _playPending = false;
-            StartPlayback();
-        }
-    }
-
-    private void StartPlayback()
-    {
-        if (string.IsNullOrEmpty(StreamUrl)) return;
-        _logger?.Info($"[OnlineVideoPreviewPlayer] StartPlayback: StreamUrl={StreamUrl}, Referer={(string.IsNullOrEmpty(Referer) ? "(空)" : Referer)}");
-        EnsurePlayer();
-        if (_mediaPlayer is null || _libVlc is null)
-        {
-            _logger?.Error("[OnlineVideoPreviewPlayer] StartPlayback 中止：MediaPlayer 或 LibVLC 未初始化（详见上方初始化日志）");
-            return;
-        }
-
-        _currentMedia?.Dispose();
-        // 远程 URL 必须用 Uri 重载；字符串重载会被 LibVLCSharp 当作本地文件路径，
-        // 导致 VLC 去本地找 "bin\Release\https:\host\..." 而打不开。
-        if (!System.Uri.TryCreate(StreamUrl, UriKind.Absolute, out var mediaUri))
-        {
-            _logger?.Error($"[OnlineVideoPreviewPlayer] 无效的流地址（无法构造 Uri）: {StreamUrl}");
+            _logger?.Error($"[FlyPlayer] 无效的流地址（无法构造 Uri）: {StreamUrl}");
             SetState(PlayerState.Error);
             return;
         }
-
-        // 切换/重试时清理上一次可能残留的中继注册，避免映射堆积
-        if (_currentRelayUrl is not null)
+        if (!FlyleafEngine.EnsureStarted(_logger))
         {
-            HlsLocalRelay.Instance.Unregister(_currentRelayUrl);
-            _currentRelayUrl = null;
+            SetState(PlayerState.Error);
+            return;
         }
-
-        Media media;
-        if (IsHlsUrl(mediaUri))
+        EnsurePlayer();
+        if (_player is null)
         {
-            // HLS：LibVLC 3.x 的 adaptive 模块在拉子播放列表/分片时不会继承 media 级的
-            // :http-referrer，强制校验 Referer 的 CDN（如 surrit.com）会对子请求返回 403，
-            // 表现为 "Failed to create demuxer"。改用本地中继代发请求并注入 Referer/代理。
-            try
-            {
-                var proxy = GetProxyUrl();
-                _currentRelayUrl = HlsLocalRelay.Instance.Register(mediaUri, Referer, proxy);
-                _logger?.Info($"[OnlineVideoPreviewPlayer] HLS 走本地中继: {_currentRelayUrl} (原 {StreamUrl})");
-                media = new Media(_libVlc, new Uri(_currentRelayUrl));
-                media.AddOption(":network-caching=1500");
-                // 强制解复用器解析本地 m3u8：VLC 对 localhost http 的 .m3u8 会因 Content-Type/嗅探
-                // 误选 mjpeg/avcodec 等解复用器而报 "cannot peek"，显式指定可避免。
-                // 注意 VLC 3.x 的 HLS 由 adaptive 模块处理，模块名是 "adaptive" 而非 "hls"，
-                // 写 :demux=hls 会因找不到该模块直接报 "Your input can't be opened"。
-                media.AddOption(":demux=adaptive");
-            }
-            catch (Exception ex)
-            {
-                _logger?.Warn($"[OnlineVideoPreviewPlayer] 本地中继不可用，回退直连 HLS: {ex.Message}");
-                _currentRelayUrl = null;
-                media = BuildDirectMedia(_libVlc, mediaUri);
-            }
+            _logger?.Error("[FlyPlayer] 播放器实例创建失败");
+            SetState(PlayerState.Error);
+            return;
         }
-        else
-        {
-            media = BuildDirectMedia(_libVlc, mediaUri);
-        }
-
-        _currentMedia = media;
-        _logger?.Info($"[OnlineVideoPreviewPlayer] 已创建 Media（State={media.State}），准备 Play。VideoHost.MediaPlayer 已绑定={ReferenceEquals(VideoHost.MediaPlayer, _mediaPlayer)}");
-
-        VideoHost.MediaPlayer = _mediaPlayer;
+        ApplyRequestHeaders();
+        VideoHost.Player = _player;
         SetState(PlayerState.Loading);
-        _mediaPlayer.Play(media);
-        _logger?.Info($"[OnlineVideoPreviewPlayer] 已调用 Play()。PlayerState={_mediaPlayer.State}");
+        _openStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _uiSyncTimer.Start();
+        _ = OpenAndPlayAsync(generation, streamUri);
     }
 
     /// <summary>
-    /// 是否 HLS 流。用 Uri 的 AbsolutePath 判断而非字符串后缀：带 query string 的地址
-    /// （如 ?token=xxx）字符串不以 .m3u8 结尾，用后缀判断会漏，进而错误地走直连分支。
+    /// 打开并起播：HLS 主 playlist 先探一次档位，直接打开最高档，跳过播放器逐档探测的十几秒；
+    /// 探测失败/单档/MP4 则用原地址。中途被新打开或 Stop 超过的代际直接丢弃。
     /// </summary>
+    private async Task OpenAndPlayAsync(int generation, Uri streamUri)
+    {
+        var openUrl = StreamUrl;
+        if (VideoDownloadService.IsHls(StreamUrl))
+        {
+            var fresh = await ProbeBestVariantAsync();
+            if (generation != _openGeneration) return; // 已被超车
+            if (fresh is not null) openUrl = fresh;
+        }
+        if (generation != _openGeneration || _player is null) return;
+        _activeOpenGeneration = generation;
+        try
+        {
+            _player.OpenAsync(openUrl);
+            _player.Play();
+            _logger?.Info($"[FlyPlayer] 已调用 OpenAsync + Play() {(openUrl == StreamUrl ? "（主 playlist）" : "（直连最高档）")}");
+        }
+        catch (Exception ex)
+        {
+            if (generation != _openGeneration) return;
+            _logger?.Error("[FlyPlayer] 起播失败", ex);
+            await Dispatcher.InvokeAsync(() => SetState(PlayerState.Error));
+        }
+    }
+
+    /// <summary>探测最高档位地址；失败返回 null（调用方用主 playlist）。</summary>
+    private async Task<string?> ProbeBestVariantAsync()
+    {
+        try
+        {
+            var svc = App.Services.GetService<VideoDownloadService>();
+            if (svc is null) return null;
+            var proxy = GetProxyUrl();
+            var variants = await svc.ProbeVariantsAsync(StreamUrl, Referer, proxy, "");
+            var best = variants.FirstOrDefault();
+            if (best is null) return null;
+            _logger?.Info($"[FlyPlayer] 直连最高档: {best.Label}");
+            return best.Uri;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 档位探测失败，用主 playlist 打开: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>按当前 StreamUrl/Referer/代理组装 Demuxer 请求头（playlist 与每个分片请求都会带上）。</summary>
+    private void ApplyRequestHeaders()
+    {
+        if (_player is null) return;
+        try
+        {
+            var opt = _player.Config.Demuxer.FormatOpt;
+            var headers = "";
+            if (!string.IsNullOrEmpty(Referer)) headers += $"Referer: {Referer}\r\n";
+            headers += $"User-Agent: {BrowserUserAgent}\r\n";
+            opt["headers"] = headers;
+            // 部分站点分片伪装成图片扩展名，必须放行（仅作用于本次播放）
+            opt["allowed_extensions"] = "ALL";
+            opt["allowed_segment_extensions"] = "ALL";
+            opt["extension_picky"] = "0";
+            // 流分析只取开头：TS 流结构规整，2 秒/2MB 足够定编码参数，不必全量探测
+            opt["analyzeduration"] = "2000000";
+            opt["probesize"] = "2097152";
+            if (GetProxyUrl() is { } proxy) opt["http_proxy"] = proxy;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 请求头组装失败（继续用默认头播放）: {ex.Message}");
+        }
+    }
+
+    /// <summary>是否 HLS 流（AbsolutePath 判断，带 query 的地址也不漏）。</summary>
     private static bool IsHlsUrl(Uri uri) =>
         uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>直连式 Media（mp4 直链或 HLS 回退）：直接把 Referer/UA/代理传给 LibVLC。</summary>
-    private Media BuildDirectMedia(LibVLC libVlc, Uri mediaUri)
+    private void EnsurePlayer()
     {
-        var media = new Media(libVlc, mediaUri);
-        if (!string.IsNullOrEmpty(Referer))
-            media.AddOption($":http-referrer={Referer}");
-        media.AddOption(":network-caching=1500");
-        // 部分在线源会拦截 VLC 默认 UA，带浏览器 UA 提高兼容性
-        media.AddOption(":http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-        // 在线源通常经代理访问外网；LibVLC 默认不走应用/系统代理，必须显式传入，
-        // 否则 VLC 直连被墙会立刻 EncounteredError。
-        var proxy = GetProxyUrl();
-        if (!string.IsNullOrEmpty(proxy))
-            media.AddOption($":http-proxy={proxy}");
-        _logger?.Info($"[OnlineVideoPreviewPlayer] 使用代理: {(string.IsNullOrEmpty(proxy) ? "(无)" : proxy)}");
-        return media;
+        if (_player is not null) return;
+        var player = new Player(new Config());
+        player.OpenCompleted += (_, e) =>
+        {
+            // 非当前代际（切走/重播后旧打开的回执）：直接丢弃，不刷状态
+            if (_activeOpenGeneration != _openGeneration) return;
+            if (!e.Success)
+            {
+                _logger?.Error($"[FlyPlayer] 打开失败: {e.Error}");
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (_activeOpenGeneration == _openGeneration && _state == PlayerState.Loading)
+                        SetState(PlayerState.Error);
+                });
+            }
+            else if (_openStopwatch is not null)
+            {
+                _logger?.Info($"[FlyPlayer] 打开完成（解复用就绪）: {_openStopwatch.ElapsedMilliseconds}ms");
+            }
+        };
+        player.PlaybackStopped += (_, _) =>
+        {
+            // Stop() 已同步切到 Idle，这里只处理自然播完
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_state is PlayerState.Playing or PlayerState.Paused)
+                    SetState(PlayerState.Idle);
+            });
+        };
+        _player = player;
+    }
+
+    /// <summary>500ms 同步：时长/位置/播放态 → 滑条与时间文本；首个 Playing 触发接力 seek。</summary>
+    private void SyncPlaybackUi()
+    {
+        if (_player is null) return;
+        try
+        {
+            if (_player.Video.IsOpened && _player.Duration > 0)
+            {
+                _durationMs = _player.Duration / 10000;
+                SeekSlider.Maximum = _durationMs;
+                DurationText.Text = FormatTime(_durationMs);
+                SeekSlider.Visibility = Visibility.Visible;
+                DurationText.Visibility = Visibility.Visible;
+            }
+            if (_player.IsPlaying && _state == PlayerState.Loading)
+            {
+                SetState(PlayerState.Playing);
+                if (_openStopwatch is not null)
+                {
+                    _logger?.Info($"[FlyPlayer] 首帧耗时: {_openStopwatch.ElapsedMilliseconds}ms {StreamUrl}");
+                    _openStopwatch = null;
+                }
+            }
+            if (_state is PlayerState.Playing or PlayerState.Paused)
+            {
+                var posMs = _player.CurTime / 10000;
+                if (!_seekDragging)
+                {
+                    _sliderUpdating = true;
+                    if (_durationMs > 0) SeekSlider.Value = Math.Min(posMs, _durationMs);
+                    _sliderUpdating = false;
+                    CurrentTimeText.Text = FormatTime(posMs);
+                }
+                ApplyHandoffSeek();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 状态同步失败: {ex.Message}");
+        }
+    }
+
+    private void PauseInternal()
+    {
+        try { _player?.Pause(); } catch { }
+        _pausedGuess = true;
+        SetState(PlayerState.Paused);
     }
 
     private void PauseToggle_Click(object sender, RoutedEventArgs e)
     {
-        if (_mediaPlayer is null) return;
-        if (_mediaPlayer.State == VLCState.Playing)
+        if (_player is null) return;
+        if (IsPlaying)
         {
-            _mediaPlayer.Pause();
-            SetState(PlayerState.Paused); // 暂停态也常驻控制条，可继续或停止
+            PauseInternal();
         }
         else
         {
-            _mediaPlayer.Play();
+            _pausedGuess = false;
+            try { _player.Play(); } catch { }
             PauseToggleButton.Content = "❚❚";
         }
     }
 
-    /// <summary>停止播放并回到海报态（控制条"⏹"按钮）。</summary>
+    /// <summary>停止播放并回到海报态（控制条"■"按钮）。</summary>
     private void StopButton_Click(object sender, RoutedEventArgs e) => Stop();
 
     // ── 进度条 / 跳转 ────────────────────────────────────────────────
@@ -473,6 +478,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private bool _sliderUpdating;
     private bool _seekDragging;
     private long _durationMs;
+    /// <summary>打开耗时打点：TryPlay 起播 → 首次进入 Playing，定位初始化到底慢在哪一段。</summary>
+    private System.Diagnostics.Stopwatch? _openStopwatch;
+    /// <summary>打开代际：切走/重播时自增，在途的旧打开完成后直接丢弃（避免 Cancelled 误报 Error）。</summary>
+    private int _openGeneration;
+    /// <summary>当前这次打开所属代际（OpenAsync 前一刻取值，供 OpenCompleted 回执比对）。</summary>
+    private int _activeOpenGeneration;
 
     private void ResetSeekBar()
     {
@@ -494,14 +505,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_sliderUpdating || _mediaPlayer is null) return;
-        if (_seekDragging)
-        {
-            // 拖动中只刷新时间预览，松手后一次性 seek，避免连续跳转卡顿
-            CurrentTimeText.Text = FormatTime((long)e.NewValue);
-            return;
-        }
-        SeekTo((long)e.NewValue);
+        if (_sliderUpdating || _player is null) return;
+        if (_seekDragging) return; // 拖动中不实时 seek，松手时一次定位
+        try { _player.CurTime = (long)e.NewValue * 10000; } catch { }
     }
 
     private void SeekSlider_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
@@ -510,150 +516,28 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void SeekSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
         _seekDragging = false;
-        SeekTo((long)SeekSlider.Value);
-    }
-
-    private void SeekTo(long positionMs)
-    {
-        if (_mediaPlayer is null || _durationMs <= 0 || positionMs <= 0) return;
-        _mediaPlayer.Time = Math.Min(positionMs, _durationMs - 1);
-        CurrentTimeText.Text = FormatTime(positionMs);
-    }
-
-    // ── LibVLC 生命周期 ──────────────────────────────────────────────
-
-    private void EnsurePlayer()
-    {
-        if (_mediaPlayer is not null) return;
+        if (_player is null) return;
         try
         {
-            lock (_libVlcInitLock)
-            {
-                if (!_libVlcInitialized)
-                {
-                    var libvlcDir = FindLibVlcDirectory();
-                    if (libvlcDir is null)
-                        throw new FileNotFoundException(
-                            "找不到 LibVLC 原生库（libvlc.dll）。请确认 libvlc 目录（含 win-x64/win-x86 子目录）随程序一起部署。");
-                    _logger?.Info($"[OnlineVideoPreviewPlayer] 使用 LibVLC 目录: {libvlcDir}");
-                    LibVLCSharp.Shared.Core.Initialize(libvlcDir);
-                    _libVlcInitialized = true;
-                }
-            }
-            _libVlc = new LibVLC();
-            _libVlc.Log += (_, e) =>
-            {
-                if (e.Level is LibVLCSharp.Shared.LogLevel.Warning or LibVLCSharp.Shared.LogLevel.Error)
-                    _logger?.Info($"[VLC:{e.Level}:{e.Module}] {e.Message}");
-            };
-            _mediaPlayer = new MediaPlayer(_libVlc) { EnableHardwareDecoding = true };
-            // VLC 事件在线程池触发，一律切回 UI 线程改状态
-            _mediaPlayer.Playing += (_, _) => Dispatcher.InvokeAsync(() =>
-            {
-                _logger?.Info($"[OnlineVideoPreviewPlayer] VLC Playing 事件。PlayerState={_mediaPlayer.State}");
-                SetState(PlayerState.Playing);
-                ApplyHandoffSeek();
-            });
-            _mediaPlayer.EncounteredError += (_, _) => Dispatcher.InvokeAsync(() =>
-            {
-                _logger?.Error($"[OnlineVideoPreviewPlayer] VLC EncounteredError。PlayerState={_mediaPlayer.State}, MediaState={_currentMedia?.State}");
-                SetState(PlayerState.Error);
-            });
-            _mediaPlayer.EndReached += (_, _) => Dispatcher.InvokeAsync(() => SetState(PlayerState.Idle));
-            _mediaPlayer.LengthChanged += (_, e) => Dispatcher.InvokeAsync(() =>
-            {
-                // 时长已知（点播）才显示进度滑条与总时长；直播流 length<=0 自动隐藏
-                _durationMs = e.Length;
-                if (_durationMs > 0 && _mediaPlayer.State is VLCState.Playing or VLCState.Paused)
-                {
-                    SeekSlider.Maximum = _durationMs; // 滑条上限=时长（毫秒），否则进度会被钳在旧上限
-                    DurationText.Text = FormatTime(_durationMs);
-                }
-                SeekSlider.Visibility = _durationMs > 0 ? Visibility.Visible : Visibility.Collapsed;
-                DurationText.Visibility = _durationMs > 0 ? Visibility.Visible : Visibility.Collapsed;
-                // 时长就绪后执行接力续播定位（起播时可能还拿不到时长，这里兜底）
-                ApplyHandoffSeek();
-            });
-            _mediaPlayer.TimeChanged += (_, e) => Dispatcher.InvokeAsync(() =>
-            {
-                if (_seekDragging) return;
-                _sliderUpdating = true;
-                if (_durationMs > 0) SeekSlider.Value = Math.Min(e.Time, _durationMs);
-                _sliderUpdating = false;
-                CurrentTimeText.Text = FormatTime(e.Time);
-            });
+            _player.CurTime = (long)SeekSlider.Value * 10000;
+            _handoffSeekApplied = true; // 用户手动定位优先于接力定位
         }
-        catch (Exception ex)
-        {
-            _logger?.Error("[OnlineVideoPreviewPlayer] LibVLC 初始化失败", ex);
-            Dispatcher.Invoke(() => SetState(PlayerState.Error));
-        }
-    }
-
-    /// <summary>
-    /// 定位 LibVLC 原生库所在目录。VideoLAN.LibVLC.Windows 把原生库放在
-    /// libvlc/win-x64（或 win-x86）子目录，而 LibVLCSharp 默认只在 exe 同级目录找
-    /// libvlc.dll，所以必须显式传入目录。依次尝试常见部署位置，按当前进程架构优先。
-    /// </summary>
-    private static string? FindLibVlcDirectory()
-    {
-        var baseDir = AppContext.BaseDirectory;
-        string rid = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? RuntimeInformation.OSArchitecture switch
-            {
-                Architecture.X86 => "win-x86",
-                Architecture.Arm64 => "win-arm64",
-                _ => "win-x64",
-            }
-            : "win-x64";
-
-        var candidates = new List<string>
-        {
-            Path.Combine(baseDir, "libvlc", rid),
-            Path.Combine(baseDir, "libvlc", "win-x64"),
-            Path.Combine(baseDir, "libvlc", "win-x86"),
-            Path.Combine(baseDir, "libvlc"),
-            baseDir,
-        };
-
-        foreach (var dir in candidates)
-        {
-            try
-            {
-                if (File.Exists(Path.Combine(dir, "libvlc.dll")))
-                    return dir;
-            }
-            catch
-            {
-                // 忽略无权限/路径非法，继续尝试下一个候选
-            }
-        }
-        return null;
+        catch { }
     }
 
     private void DisposePlayer()
     {
-        _playPending = false;
-        _hoverPollTimer.Stop();
+        _uiSyncTimer.Stop();
         _controlBarHideTimer.Stop();
-        try { _mediaPlayer?.Stop(); } catch { }
-        if (_currentRelayUrl is not null)
-        {
-            HlsLocalRelay.Instance.Unregister(_currentRelayUrl);
-            _currentRelayUrl = null;
-        }
-        VideoHost.MediaPlayer = null;
-        _currentMedia?.Dispose();
-        _currentMedia = null;
-        _mediaPlayer?.Dispose();
-        _mediaPlayer = null;
-        _libVlc?.Dispose();
-        _libVlc = null;
+        try { _player?.Stop(); } catch { }
+        try { _player?.Dispose(); } catch { }
+        _player = null;
+        try { VideoHost.Player = null!; } catch { }
     }
 
     /// <summary>
     /// 从配置读取应用代理（VideoScraping.Proxy），归一化为 http(s):// 形式。
-    /// LibVLC 默认不走应用/系统代理，播放在线流必须显式通过 :http-proxy 传入。
+    /// 经 Demuxer http_proxy 传入，否则直连被墙会立刻失败。
     /// </summary>
     private string? GetProxyUrl()
     {

@@ -312,8 +312,8 @@ public partial class App : Application
             }
         });
 
-        // 后台预热 LibVLC（原生库加载 + 插件扫描首次很慢，同上）
-        _ = OnlineVideoPreviewPlayer.PreWarmAsync();
+        // 后台预热 Flyleaf（FFmpeg 动态库加载首次很慢，同上）
+        _ = FlyleafEngine.PreWarmAsync(Services.GetService<ILogger>());
 
         var window = new MainWindow();
         MainWindow = window;
