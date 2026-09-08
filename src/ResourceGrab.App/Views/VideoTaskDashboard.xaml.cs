@@ -321,6 +321,7 @@ public partial class VideoTaskDashboard : UserControl
             VideoTaskType.ScrapeVideo => "刮削",
             VideoTaskType.RescrapeVideo => "重刮削",
             VideoTaskType.ActorScrape => "演员",
+            VideoTaskType.DownloadVideo => "下载",
             _ => task.Type.ToString(),
         };
 
@@ -328,7 +329,8 @@ public partial class VideoTaskDashboard : UserControl
         var (dotBrush, statusLabel) = task.Status switch
         {
             VideoTaskStatus.Pending => ((Brush)FindResource("TextDisabledBrush"), "等待中"),
-            VideoTaskStatus.Running => ((Brush)FindResource("PrimaryBrush"), "刮削中"),
+            VideoTaskStatus.Running => ((Brush)FindResource("PrimaryBrush"),
+                task.Type == VideoTaskType.DownloadVideo ? "下载中" : "刮削中"),
             VideoTaskStatus.WaitingRetry => ((Brush)FindResource("WarningBrush"), "重试中"),
             VideoTaskStatus.Completed => ((Brush)FindResource("SuccessBrush"), "完成"),
             VideoTaskStatus.Failed => ((Brush)FindResource("DangerBrush"), "失败"),
@@ -371,13 +373,15 @@ public partial class VideoTaskDashboard : UserControl
             }
             if (progressRow.Children[1] is TextBlock progressText)
             {
-                progressText.Text = task.Total > 0
-                    ? $"{task.Completed}/{task.Total} · 成功{task.SuccessCount} 未匹配{task.NoMatchCount} 失败{task.FailedCount} 跳过{task.SkippedCount}"
-                    : "等待执行";
+                progressText.Text = task.Type == VideoTaskType.DownloadVideo && task.Total == 100
+                    ? $"{task.Completed}%{(task.Logs.Count > 0 ? " · " + task.Logs[0] : "")}"
+                    : task.Total > 0
+                        ? $"{task.Completed}/{task.Total} · 成功{task.SuccessCount} 未匹配{task.NoMatchCount} 失败{task.FailedCount} 跳过{task.SkippedCount}"
+                        : "等待执行";
             }
         }
 
-        // 详情行：错误信息或源尝试
+        // 详情行：错误信息或源尝试（下载任务的进度行已展示 Logs[0]，此处跳过避免两排重复）
         if (detailText is not null)
         {
             if (!string.IsNullOrEmpty(task.Error))
@@ -385,6 +389,20 @@ public partial class VideoTaskDashboard : UserControl
                 detailText.Text = task.Error;
                 detailText.Foreground = (Brush)FindResource("DangerBrush");
                 detailText.Visibility = Visibility.Visible;
+            }
+            else if (task.Type == VideoTaskType.DownloadVideo)
+            {
+                var rest = string.Join("  ·  ", task.Logs.Skip(1).Take(3));
+                if (!string.IsNullOrEmpty(rest))
+                {
+                    detailText.Text = rest;
+                    detailText.Foreground = (Brush)FindResource("TextSecondaryBrush");
+                    detailText.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    detailText.Visibility = Visibility.Collapsed;
+                }
             }
             else if (task.Attempts.Count > 0)
             {

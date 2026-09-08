@@ -13,7 +13,9 @@ public enum VideoTaskType
     DownloadResources,
     CleanupResources,
     ActorScrape,
-    TranslateMetadata
+    TranslateMetadata,
+    /// <summary>在线视频 M3U8/MP4 直存下载（VideoDownloadService + ffmpeg）。</summary>
+    DownloadVideo,
 }
 
 public enum VideoTaskStatus
@@ -58,6 +60,24 @@ public sealed class VideoScrapeTask
 
     /// <summary>批内单条刮削结果流水（最新在前，执行器实时回填，供看板明细展示）。</summary>
     public List<VideoTaskItemResult> ItemResults { get; set; } = [];
+
+    // ---- DownloadVideo 任务载荷（其他类型任务保持 null） ----
+    /// <summary>待下载的流地址（HLS m3u8 或 MP4 直链）。</summary>
+    public string? DownloadUrl { get; set; }
+    /// <summary>展示用标题（番号缺失时回退用）。</summary>
+    public string? DownloadTitle { get; set; }
+    /// <summary>请求流所需的 Referer 头。</summary>
+    public string? DownloadReferer { get; set; }
+    /// <summary>下载走的代理（可空）。</summary>
+    public string? DownloadProxy { get; set; }
+    /// <summary>展示用时长文本（如 "12:34" / "90 分钟"），用于估算进度；未知留空。</summary>
+    public string? DownloadDurationText { get; set; }
+    /// <summary>下载完成后的本地文件路径（成功/跳过时由执行器回填）。</summary>
+    public string? DownloadOutputPath { get; set; }
+    /// <summary>主 playlist 地址（重探新鲜分片地址用）。</summary>
+    public string? DownloadMasterUrl { get; set; }
+    /// <summary>用户所选档位名（如 "720p"），空表示默认最高档。</summary>
+    public string? DownloadVariantLabel { get; set; }
 }
 
 /// <summary>批内单条刮削的明细：命中来源、刮到的标题、耗时或失败原因。</summary>

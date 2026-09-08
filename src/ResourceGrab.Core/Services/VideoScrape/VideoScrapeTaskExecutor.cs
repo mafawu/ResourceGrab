@@ -14,21 +14,30 @@ public sealed class VideoScrapeTaskExecutor
     private readonly VideoGraphScrapeOrchestrator? _graphOrchestrator;
     private readonly VideoScrapeTaskQueue _queue;
     private readonly ConfigService? _configService;
+    private readonly VideoDownloadService? _downloadService;
     private readonly ILogger? _logger;
 
     public VideoScrapeTaskExecutor(VideoScrapeService scrapeService, VideoScrapeTaskQueue queue,
         ILogger? logger = null, VideoGraphScrapeOrchestrator? graphOrchestrator = null,
-        ConfigService? configService = null)
+        ConfigService? configService = null, VideoDownloadService? downloadService = null)
     {
         _scrapeService = scrapeService;
         _graphOrchestrator = graphOrchestrator;
         _queue = queue;
         _configService = configService;
+        _downloadService = downloadService;
         _logger = logger;
     }
 
     public async Task ExecuteAsync(VideoScrapeTask task, CancellationToken ct)
     {
+        // 下载任务不关联本地库条目，走 ffmpeg 直存分支
+        if (task.Type == VideoTaskType.DownloadVideo)
+        {
+            await ExecuteDownloadAsync(task, ct);
+            return;
+        }
+
         var ids = task.ItemIds is { Count: > 0 } items
             ? items
             : task.VideoItemId is { Length: > 0 } itemId
@@ -83,5 +92,56 @@ public sealed class VideoScrapeTaskExecutor
 
         _logger?.Info($"[TaskExecutor] 完成 {task.Id} (engine={engine}): {task.Completed}/{task.Total} " +
                       $"成功{task.SuccessCount} 未匹配{task.NoMatchCount} 失败{task.FailedCount} 跳过{task.SkippedCount}");
+    }
+
+    /// <summary>下载任务执行：ffmpeg 直存，百分比回填任务进度供看板读取。</summary>
+    private async Task ExecuteDownloadAsync(VideoScrapeTask task, CancellationToken ct)
+    {
+        if (_downloadService is null)
+            throw new InvalidOperationException("下载服务未注册");
+        if (string.IsNullOrWhiteSpace(task.DownloadUrl))
+            throw new InvalidOperationException($"任务 {task.Id} 没有下载地址");
+
+        task.Total = 100;
+        task.Completed = 0;
+        task.Logs = [];
+        var request = new VideoDownloadRequest(
+            task.Number, task.DownloadTitle ?? "", task.DownloadUrl,
+            task.DownloadReferer ?? "", task.DownloadProxy, task.DownloadDurationText ?? "",
+            task.DownloadMasterUrl ?? "", task.DownloadVariantLabel ?? "");
+        var progress = new Progress<VideoDownloadProgress>(p =>
+        {
+            lock (task)
+            {
+                var size = VideoDownloadService.FormatSize(p.DownloadedBytes);
+                var speed = VideoDownloadService.FormatBytes(p.SpeedBytesPerSec);
+                var eta = p.EtaSeconds >= 0 ? $" · 剩余约{VideoDownloadService.FormatEta(p.EtaSeconds)}" : "";
+                if (p.Percent >= 0) task.Completed = (int)Math.Clamp(p.Percent, 0, 100);
+                // 看板行直接读 Logs[0] 展示，时长未知时也至少能看到速度
+                task.Logs = [$"已下载 {size} · {speed}{eta}"];
+                task.Error = "";
+                _queue.NotifyTaskProgress();
+            }
+        });
+
+        var result = await _downloadService.DownloadAsync(request, progress, ct);
+        lock (task)
+        {
+            task.DownloadOutputPath = result.OutputPath;
+            task.Completed = 100;
+            if (result.Skipped)
+            {
+                task.Status = VideoTaskStatus.Skipped;
+                task.Logs = [$"文件已存在，跳过：{result.OutputPath}"];
+            }
+            else
+            {
+                task.SuccessCount = 1;
+                task.Logs = [$"已保存：{result.OutputPath}"];
+            }
+            task.Error = "";
+            _queue.NotifyTaskProgress();
+        }
+        _logger?.Info($"[TaskExecutor] 下载{(result.Skipped ? "跳过" : "完成")} {task.Id}: {result.OutputPath}");
     }
 }

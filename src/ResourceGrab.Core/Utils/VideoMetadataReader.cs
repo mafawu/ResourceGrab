@@ -187,7 +187,7 @@ public static class VideoMetadataReader
     }
 
     /// <summary>在 PATH 与程序目录中查找外部工具的可执行文件路径；找不到返回 null。</summary>
-    internal static string? FindTool(string fileName)
+    public static string? FindTool(string fileName)
     {
         var exeName = fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? fileName : fileName + ".exe";
 

@@ -79,6 +79,35 @@ public sealed class VideoScrapeTaskQueue : IDisposable
         return task.Id;
     }
 
+    /// <summary>入队单个 M3U8/MP4 直存下载任务（Total 固定 100，按百分比回填）。</summary>
+    public string EnqueueDownload(VideoDownloadRequest request, int priority = 0)
+    {
+        // 空地址是永久性错误，进队列重试也救不回来，直接抛给调用方（UI 转 Toast）
+        if (string.IsNullOrWhiteSpace(request.StreamUrl))
+            throw new ArgumentException("没有可下载的流地址", nameof(request));
+        PruneFinishedTasks();
+        var task = new VideoScrapeTask
+        {
+            Id = Guid.NewGuid().ToString("N")[..12],
+            Type = VideoTaskType.DownloadVideo,
+            Number = string.IsNullOrWhiteSpace(request.Number) ? request.Title : request.Number,
+            Total = 100,
+            Priority = priority,
+            MaxRetries = 2,
+            DownloadUrl = request.StreamUrl,
+            DownloadTitle = request.Title,
+            DownloadReferer = request.Referer,
+            DownloadProxy = request.Proxy,
+            DownloadDurationText = request.DurationText,
+            DownloadMasterUrl = request.MasterUrl,
+            DownloadVariantLabel = request.VariantLabel,
+        };
+        _tasks[task.Id] = task;
+        _channel.Writer.TryWrite(task);
+        _logger?.Info($"[TaskQueue] 入队下载: {task.Id} {task.Number}");
+        return task.Id;
+    }
+
     /// <summary>批量入队。</summary>
     public IReadOnlyList<string> EnqueueBatch(IEnumerable<string> numbers, VideoTaskType type = VideoTaskType.ScrapeVideo, int priority = 0)
     {

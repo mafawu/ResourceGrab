@@ -149,6 +149,9 @@
                                         <Button x:Name="OnlineDetailFullButton" Style="{StaticResource LibraryActionButtonStyle}"
                                                 Content="完整详情 →" Click="OnlineDetailFull_Click"
                                                 ToolTip="打开完整详情页" Margin="0,0,6,0" Visibility="Collapsed" />
+                                        <Button x:Name="OnlineDetailDownloadButton" Style="{StaticResource LibraryActionButtonStyle}"
+                                                Content="⬇ 下载" Click="OnlineDetailDownload_Click"
+                                                ToolTip="下载视频到本地（加入任务队列）" Margin="0,0,6,0" Visibility="Collapsed" />
                                         <Button x:Name="OnlineDetailPopoutButton" Style="{StaticResource IconButtonStyle}"
                                                 Content="⛶" Click="OnlineDetailPopout_Click"
                                                 ToolTip="放大播放（独立窗口）" Margin="0,0,6,0" Visibility="Collapsed" />
@@ -184,19 +187,25 @@
 
                                 <!-- JAVDB/MissAV 式版式：封面 → 番号+评分胶囊 → 标题 → Tab(详情/磁力) -->
                                 <Grid Margin="0,12,0,0">
-                                    <TextBlock x:Name="OnlineDetailNumber" FontSize="17" FontWeight="Bold"
-                                               Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                    <TextBox x:Name="OnlineDetailNumber" FontSize="17" FontWeight="Bold"
+                                             Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
+                                             IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             ToolTip="可拖选复制番号" />
                                     <Border x:Name="OnlineDetailRating" HorizontalAlignment="Right" VerticalAlignment="Center"
                                             CornerRadius="{DynamicResource RadiusXs}" Background="#26FFB347" Padding="9,3" Visibility="Collapsed">
                                         <TextBlock x:Name="OnlineDetailRatingText" Text="" FontSize="12" FontWeight="Bold"
                                                    Foreground="#E8890C" />
                                     </Border>
                                 </Grid>
-                                <TextBlock x:Name="OnlineDetailTitle" FontSize="14" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" Margin="0,6,0,0" />
-                                <TextBlock x:Name="OnlineDetailOriginalTitle" FontSize="11.5"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                                           Margin="0,3,0,0" />
+                                <TextBox x:Name="OnlineDetailTitle" FontSize="14" FontWeight="SemiBold"
+                                         TextWrapping="Wrap" Margin="0,6,0,0"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制标题" />
+                                <TextBox x:Name="OnlineDetailOriginalTitle" FontSize="11.5"
+                                         Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                         Margin="0,3,0,0"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制原标题" />
 
                                 <!-- Tab 分段控件：视频详情 / 磁力列表；右侧“打开详情页”直达源站 -->
                                 <Grid Margin="0,12,0,0">
@@ -279,9 +288,11 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="OnlineFullBackButton" Style="{StaticResource LibraryActionButtonStyle}"
                                         Content="← 返回搜索结果" Click="OnlineFullBack_Click" />
-                                <TextBlock x:Name="OnlineFullNumber" FontSize="17" FontWeight="Bold"
-                                           Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
-                                           Margin="14,0,0,0" />
+                                <TextBox x:Name="OnlineFullNumber" FontSize="17" FontWeight="Bold"
+                                         Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
+                                         Margin="14,0,0,0"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制番号" />
                                 <Border x:Name="OnlineFullRating" HorizontalAlignment="Left" VerticalAlignment="Center"
                                         CornerRadius="{DynamicResource RadiusXs}" Background="#26FFB347" Padding="9,3"
                                         Visibility="Collapsed" Margin="10,0,0,0">
@@ -293,6 +304,9 @@
                                 <Button x:Name="OnlineFullOpenUrlButton" Content="打开详情页 ↗"
                                         Style="{StaticResource LibraryActionButtonStyle}" Visibility="Collapsed"
                                         Click="OnlineFullOpenUrl_Click" ToolTip="在浏览器打开源站详情页" />
+                                <Button x:Name="OnlineFullDownloadButton" Content="⬇ 下载"
+                                        Style="{StaticResource LibraryActionButtonStyle}" Visibility="Collapsed"
+                                        Click="OnlineFullDownload_Click" ToolTip="下载视频到本地（加入任务队列）" Margin="8,0,0,0" />
                                 <Button x:Name="OnlineFullPopoutButton" Style="{StaticResource IconButtonStyle}"
                                         Content="⛶" Click="OnlineFullPopout_Click"
                                         ToolTip="放大播放（独立窗口）" Margin="8,0,0,0" Visibility="Collapsed" />
@@ -329,11 +343,15 @@
                                 </StackPanel>
 
                                 <!-- 标题信息区 -->
-                                <TextBlock x:Name="OnlineFullTitle" FontSize="18" FontWeight="Bold"
-                                           TextWrapping="Wrap" Margin="0,14,0,0" />
-                                <TextBlock x:Name="OnlineFullOriginalTitle" FontSize="12.5"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
-                                           Margin="0,4,0,0" />
+                                <TextBox x:Name="OnlineFullTitle" FontSize="18" FontWeight="Bold"
+                                         TextWrapping="Wrap" Margin="0,14,0,0"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制标题" />
+                                <TextBox x:Name="OnlineFullOriginalTitle" FontSize="12.5"
+                                         Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                         Margin="0,4,0,0"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制原标题" />
 
                                 <!-- 双列信息区：左=信息表+标签，右=简介+磁力 -->
                                 <Grid Margin="0,16,0,0">
@@ -433,8 +451,10 @@
                             </Border>
 
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                <TextBlock x:Name="DetailNumber" FontSize="15" FontWeight="Bold"
-                                           Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center" />
+                                <TextBox x:Name="DetailNumber" FontSize="15" FontWeight="Bold"
+                                         Foreground="{DynamicResource PrimaryBrush}" VerticalAlignment="Center"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         ToolTip="可拖选复制番号" />
                                 <Button x:Name="FavoriteButton" Style="{StaticResource IconButtonStyle}"
                                         Margin="8,0,0,0" Click="DetailFavorite_Click" ToolTip="收藏">
                                     <TextBlock x:Name="FavoriteHeart" Text="♡" FontSize="15" />
@@ -448,8 +468,12 @@
                                 <Button Style="{StaticResource LibraryActionButtonStyle}" Content="移除" Margin="6,0,0,0" Click="RemoveDetail_Click" />
                             </WrapPanel>
 
-                            <TextBlock x:Name="DetailTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,2" />
-                            <TextBlock x:Name="OriginalTitleText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                            <TextBox x:Name="DetailTitle" FontSize="16" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,2"
+                                     IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                     ToolTip="可拖选复制标题" />
+                            <TextBox x:Name="OriginalTitleText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap"
+                                     IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                     ToolTip="可拖选复制原标题" />
                             <TextBlock Text="演员" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,12,0,3" />
                             <WrapPanel x:Name="ActorChips" />
                             <TextBlock Text="标签" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,10,0,3" />

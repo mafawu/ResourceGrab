@@ -91,6 +91,7 @@ public partial class SettingsDialog : Window
         WriteNfoBox.IsChecked = scraping.WriteNfo;
         AiravEnabledBox.IsChecked = scraping.AiravEnabled;
         ScrapeProxyBox.Text = scraping.Proxy;
+        VideoDownloadDirBox.Text = scraping.VideoDownloadDir;
         JavBusUrlBox.Text = scraping.JavBusBaseUrl;
         JavDbUrlBox.Text = scraping.JavDbBaseUrl;
         JavBusCookieBox.Text = scraping.JavBusCookie;
@@ -202,6 +203,9 @@ public partial class SettingsDialog : Window
 
     private void BrowseMediaLibrary_Click(object sender, RoutedEventArgs e)
         => BrowseFolder(MediaLibraryDirBox, "选择媒体库目录");
+
+    private void BrowseVideoDownloadDir_Click(object sender, RoutedEventArgs e)
+        => BrowseFolder(VideoDownloadDirBox, "选择视频下载目录");
 
     private static void BrowseFolder(TextBox target, string title)
     {
@@ -321,6 +325,9 @@ public partial class SettingsDialog : Window
         scraping.WriteNfo = WriteNfoBox.IsChecked == true;
         scraping.AiravEnabled = AiravEnabledBox.IsChecked == true;
         scraping.Proxy = ScrapeProxyBox.Text.Trim();
+        scraping.VideoDownloadDir = string.IsNullOrWhiteSpace(VideoDownloadDirBox.Text)
+            ? ""
+            : Path.GetFullPath(VideoDownloadDirBox.Text.Trim());
         scraping.JavBusBaseUrl = string.IsNullOrWhiteSpace(JavBusUrlBox.Text) ? "https://www.javbus.com" : JavBusUrlBox.Text.Trim();
         scraping.JavDbBaseUrl = string.IsNullOrWhiteSpace(JavDbUrlBox.Text) ? "https://javdb.com" : JavDbUrlBox.Text.Trim();
         scraping.JavBusCookie = JavBusCookieBox.Text.Trim();

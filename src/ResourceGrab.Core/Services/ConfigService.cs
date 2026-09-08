@@ -64,6 +64,10 @@ public class ConfigService
             config.TitleTranslate ??= new TitleTranslateOptions();
             config.ReaderScrollSpeed = NormalizeScrollSpeed(config.ReaderScrollSpeed);
             config.VideoScraping ??= new VideoScrapeSettings();
+            if (string.IsNullOrWhiteSpace(config.VideoScraping.VideoDownloadDir))
+            {
+                config.VideoScraping.VideoDownloadDir = Path.Combine(AppPaths.AppDataDir, "视频下载");
+            }
             config.VideoScraping.Advanced ??= new VideoScrapeAdvancedSettings();
             config.Manga ??= new MangaSettings();
             config.VideoPlayback = NormalizeVideoPlayback(config.VideoPlayback);
@@ -129,6 +133,7 @@ public class ConfigService
                 Concurrency = scraping.Concurrency,
                 RequestIntervalMs = scraping.RequestIntervalMs,
                 AutoScrapeNewFiles = scraping.AutoScrapeNewFiles,
+                VideoDownloadDir = scraping.VideoDownloadDir,
                 DownloadExtraFanart = scraping.DownloadExtraFanart,
                 WriteNfo = scraping.WriteNfo,
                 JavBusBaseUrl = scraping.JavBusBaseUrl,

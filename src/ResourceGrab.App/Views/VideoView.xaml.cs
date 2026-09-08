@@ -105,7 +105,8 @@ public partial class VideoView : CardGridViewBase
         BuildOnlineListingTabs();
         _logger.Info($"[VideoView] 构造函数其余部分耗时 {sw.ElapsedMilliseconds} ms");
         Loaded += OnLoaded;
-        Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) _taskQueue.ProgressChanged -= OnQueueProgressChanged; };
+        if (_taskQueue != null) _taskQueue.TaskCompleted += OnQueueTaskCompleted;
+        Unloaded += (_, _) => { _enrichCts?.Cancel(); _onlineEnrichCts?.Cancel(); if (_taskQueue != null) { _taskQueue.ProgressChanged -= OnQueueProgressChanged; _taskQueue.TaskCompleted -= OnQueueTaskCompleted; } };
         VideoThumbnailService.ThumbnailSaved += OnThumbnailSaved;
         Unloaded += (_, _) => VideoThumbnailService.ThumbnailSaved -= OnThumbnailSaved;
     }
@@ -1300,6 +1301,10 @@ public partial class VideoView : CardGridViewBase
     private OnlineVideoSummary? _onlineDetailSummary;
     private string? _onlineDetailUrl;
     private int _onlineDetailVersion;
+    /// <summary>侧栏最后一次渲染成功的在线详情（下载按钮的输入）。</summary>
+    private OnlineVideoDetail? _onlineDetail;
+    /// <summary>完整页最后一次渲染成功的在线详情（含跨源补充的磁力/同系列）。</summary>
+    private OnlineVideoDetail? _onlineFullDetail;
     /// <summary>完整详情页渲染版本号：切换影片/重搜/切页时自增，用于丢弃过期的异步详情回填。</summary>
     private int _onlineFullDetailVersion;
     private CancellationTokenSource? _onlineEnrichCts;
@@ -1382,6 +1387,8 @@ public partial class VideoView : CardGridViewBase
         _onlinePendingAutoPlay = autoPlay;
 
         OnlineDetailFullButton.Visibility = Visibility.Collapsed;
+        OnlineDetailDownloadButton.Visibility = Visibility.Collapsed;
+        _onlineDetail = null;
         SetOnlineDetailVisible(true);
         OnlineDetailPanel.ScrollToTop();
         // 与本地详情一致：顶替右侧筛选面板的位置
@@ -1443,6 +1450,7 @@ public partial class VideoView : CardGridViewBase
 
     private void RenderOnlineDetail(OnlineVideoDetail detail)
     {
+        _onlineDetail = detail;
         // 兜底结果的详情带真实来源页地址，优先于合成缓存键 URL（供"打开详情页"直达源站）
         if (!string.IsNullOrEmpty(detail.VideoUrl)) _onlineDetailUrl = detail.VideoUrl;
         if (!string.IsNullOrEmpty(detail.CoverUrl)) ImageLoader.SetSource(OnlineDetailPoster, detail.CoverUrl);
@@ -1494,6 +1502,8 @@ public partial class VideoView : CardGridViewBase
         RenderOnlinePreviewImages(detail, OnlinePreviewImagesHost, OnlinePreviewImagesSection);
         // 详情数据就绪后开放「完整详情 →」入口
         OnlineDetailFullButton.Visibility = Visibility.Visible;
+        // 有流地址才开放下载：HLS 全片标"下载全片"，MP4 多为预告片诚实标注
+        UpdateDownloadButton(OnlineDetailDownloadButton, detail);
     }
 
     /// <summary>预览图（剧照）横向条：点击在浏览器查看原图；详情无预览图时整段隐藏。
@@ -1872,6 +1882,164 @@ public partial class VideoView : CardGridViewBase
     /// <summary>侧栏「完整详情 →」：收起侧栏与遮罩，整页覆盖结果区；播放交接给完整页大播放器（同位置续播）。</summary>
     private void OnlineDetailFull_Click(object sender, RoutedEventArgs e) => OpenOnlineFullDetail();
 
+    // ── 在线视频直存下载 ──────────────────────────────────────────────
+
+    /// <summary>下载按钮显隐与文案：仅有流地址时开放；HLS 全片与 MP4 预告诚实区分。</summary>
+    private static void UpdateDownloadButton(Button button, OnlineVideoDetail detail)
+    {
+        if (string.IsNullOrEmpty(detail.StreamUrl))
+        {
+            button.Visibility = Visibility.Collapsed;
+            return;
+        }
+        button.Content = VideoDownloadService.IsHls(detail.StreamUrl) ? "⬇ 下载全片" : "⬇ 下载预告";
+        button.Visibility = Visibility.Visible;
+    }
+
+    private async void OnlineDetailDownload_Click(object sender, RoutedEventArgs e) =>
+        await DownloadOnlineVideoAsync(_onlineDetail, OnlineDetailDownloadButton);
+
+    private async void OnlineFullDownload_Click(object sender, RoutedEventArgs e) =>
+        await DownloadOnlineVideoAsync(_onlineFullDetail ?? _onlineDetail, OnlineFullDownloadButton);
+
+    /// <summary>在线详情下载：ffmpeg 检查 → 探测清晰度档位（多档弹菜单选，单档直接下）
+    /// → 入下载队列 → 任务看板看进度；完成入库由完成事件处理。</summary>
+    private async Task DownloadOnlineVideoAsync(OnlineVideoDetail? detail, Button anchor)
+    {
+        if (detail is null || string.IsNullOrEmpty(detail.StreamUrl))
+        {
+            ToastService.Show("该详情没有可下载的流地址", ToastKind.Info);
+            return;
+        }
+        if (VideoDownloadService.FindFfmpeg() is null)
+        {
+            ToastService.Show("未找到 ffmpeg，请先安装 FFmpeg 后再下载", ToastKind.Error);
+            return;
+        }
+        if (_taskQueue is null)
+        {
+            ToastService.Show("任务队列未就绪", ToastKind.Error);
+            return;
+        }
+        var number = !string.IsNullOrEmpty(detail.Number)
+            ? detail.Number
+            : _onlineDetailSummary is null
+                ? ""
+                : (!string.IsNullOrEmpty(_onlineDetailSummary.Number)
+                    ? _onlineDetailSummary.Number
+                    : VideoNumberParser.Parse(_onlineDetailSummary.Title).Number);
+        var proxy = App.Services.GetService<ConfigService>()?.Current.VideoScraping?.Proxy;
+        // 时长优先用详情，缺失时回退搜索卡片（缩略图角标时长），都没有则 ETA 只能等 ffmpeg 自报
+        var duration = !string.IsNullOrWhiteSpace(detail.DurationText)
+            ? detail.DurationText
+            : _onlineDetailSummary?.DurationText ?? "";
+
+        // HLS 统一走具体档位：探测成功用档位地址（执行时可按档重探刷新），
+        // 探测失败/单档/非 HLS 才用详情原地址
+        var masterUrl = detail.StreamUrl ?? "";
+        if (VideoDownloadService.IsHls(masterUrl))
+        {
+            anchor.IsEnabled = false;
+            try
+            {
+                var svc = App.Services.GetRequiredService<VideoDownloadService>();
+                var variants = await svc.ProbeVariantsAsync(
+                    masterUrl, detail.Referer, proxy, duration);
+                if (variants.Count >= 2)
+                {
+                    ShowQualityMenu(anchor, detail, number, duration, proxy, masterUrl, variants);
+                    return;
+                }
+                if (variants.Count == 1)
+                {
+                    EnqueueOnlineDownload(detail, number, duration, proxy,
+                        masterUrl, variants[0].Label, variants[0].Uri);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[VideoView] 清晰度探测失败，用详情原地址下载: {ex.Message}");
+            }
+            finally
+            {
+                anchor.IsEnabled = true;
+            }
+        }
+        EnqueueOnlineDownload(detail, number, duration, proxy, masterUrl, "", streamUrlOverride: null);
+    }
+
+    /// <summary>清晰度选择菜单：每档显示预估大小（时长未知时显示码率）。</summary>
+    private void ShowQualityMenu(
+        Button anchor, OnlineVideoDetail detail, string number, string duration,
+        string? proxy, string masterUrl, IReadOnlyList<VideoVariantInfo> variants)
+    {
+        var menu = new ContextMenu();
+        foreach (var v in variants)
+        {
+            var size = v.EstimatedBytes is > 0
+                ? $"约{VideoDownloadService.FormatSize(v.EstimatedBytes.Value)}"
+                : v.BandwidthBps > 0 ? $"{v.BandwidthBps / 1000}kbps" : "";
+            var item = new MenuItem { Header = $"{v.Label}{(size.Length > 0 ? " · " + size : "")}" };
+            var uri = v.Uri;
+            var label = v.Label;
+            item.Click += (_, _) => EnqueueOnlineDownload(detail, number, duration, proxy, masterUrl, label, uri);
+            menu.Items.Add(item);
+        }
+        menu.PlacementTarget = anchor;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void EnqueueOnlineDownload(
+        OnlineVideoDetail detail, string number, string duration, string? proxy,
+        string masterUrl, string variantLabel, string? streamUrlOverride)
+    {
+        if (_taskQueue is null) return;
+        var streamUrl = string.IsNullOrEmpty(streamUrlOverride) ? detail.StreamUrl ?? "" : streamUrlOverride;
+        try
+        {
+            _taskQueue.EnqueueDownload(new VideoDownloadRequest(
+                number, detail.Title, streamUrl, detail.Referer, proxy, duration, masterUrl, variantLabel));
+        }
+        catch (Exception ex)
+        {
+            ToastService.Show($"加入下载队列失败：{ex.Message}", ToastKind.Error);
+            return;
+        }
+        ToastService.Show($"已加入下载队列：{(string.IsNullOrEmpty(number) ? detail.Title : number)}（任务页查看进度）",
+            ToastKind.Success);
+    }
+
+    /// <summary>下载任务完成 → 落盘目录入库（注册为根目录+重扫）、刷新列表、新文件按配置自动刮削。</summary>
+    private void OnQueueTaskCompleted(VideoScrapeTask task)
+    {
+        if (task.Type != VideoTaskType.DownloadVideo || task.Status != VideoTaskStatus.Completed) return;
+        if (string.IsNullOrEmpty(task.DownloadOutputPath)) return;
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(task.DownloadOutputPath);
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+                var added = _library.AddFolder(dir);
+                var newIds = added
+                    .Where(i => string.Equals(i.FilePath, task.DownloadOutputPath, StringComparison.OrdinalIgnoreCase))
+                    .Select(i => i.Id)
+                    .ToList();
+                Refresh();
+                ToastService.Show($"下载完成，已入库：{Path.GetFileName(task.DownloadOutputPath)}", ToastKind.Success);
+                if (newIds.Count == 0) return;
+                var autoScrape = App.Services.GetService<ConfigService>()?.Current.VideoScraping?.AutoScrapeNewFiles ?? true;
+                if (autoScrape) StartScrape(newIds, autoStarted: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("[VideoView] 下载入库失败", ex);
+            }
+        });
+    }
+
     private void OpenOnlineFullDetail(bool refresh = false)
     {
         // refresh：完整页内推荐卡片切换影片时强制重载；否则（按钮/双击首次进入）已在页内则忽略
@@ -1911,6 +2079,8 @@ public partial class VideoView : CardGridViewBase
         OnlineFullRelatedSection.Visibility = Visibility.Collapsed;
         OnlineFullRelatedHost.Children.Clear();
         OnlineFullOpenUrlButton.Visibility = string.IsNullOrEmpty(_onlineDetailUrl) ? Visibility.Collapsed : Visibility.Visible;
+        OnlineFullDownloadButton.Visibility = Visibility.Collapsed;
+        _onlineFullDetail = null;
         // 完整页播放器待详情渲染后再配流；先清掉上一次的状态
         OnlineFullPreviewPlayer.Stop();
         OnlineFullPreviewPlayer.Visibility = Visibility.Collapsed;
@@ -1956,6 +2126,7 @@ public partial class VideoView : CardGridViewBase
     /// <summary>完整详情页渲染：与侧栏共用信息表/磁力/剧照渲染，双列布局 + 16:9 大播放器。</summary>
     private void RenderOnlineFullDetail(OnlineVideoDetail detail)
     {
+        _onlineFullDetail = detail;
         if (!string.IsNullOrEmpty(detail.CoverUrl)) ImageLoader.SetSource(OnlineFullPoster, detail.CoverUrl);
         if (!string.IsNullOrEmpty(detail.Number)) OnlineFullNumber.Text = detail.Number;
         OnlineFullTitle.Text = detail.Title;
@@ -1994,6 +2165,7 @@ public partial class VideoView : CardGridViewBase
                 () => RunOnlineSearch($"#{tag}"), toolTip: "点击搜索该标签"));
 
         RenderOnlinePreviewImages(detail, OnlineFullPreviewImagesHost, OnlineFullPreviewImagesSection);
+        UpdateDownloadButton(OnlineFullDownloadButton, detail);
         RenderOnlineFullRelated(detail);
         EnrichFullDetailFromSecondarySource(detail);
     }

@@ -39,7 +39,7 @@ public sealed class HlsLocalRelay : IDisposable
     private readonly ConcurrentDictionary<string, RelayTarget> _targets = new();
     private readonly ILogger? _logger = App.Services.GetService<ILogger>();
 
-    private sealed record RelayTarget(string Token, string Host, Uri BaseUri, string? Referer, string? ProxyUrl);
+    private sealed record RelayTarget(string Token, string Host, Uri BaseUri, string? Referer, string? ProxyUrl, string FileName);
 
     private HlsLocalRelay()
     {
@@ -65,14 +65,22 @@ public sealed class HlsLocalRelay : IDisposable
     {
         var token = Guid.NewGuid().ToString("N");
         var baseUri = new Uri(streamUrl, ".");
-        _targets[token] = new RelayTarget(token, streamUrl.Host, baseUri, referer, proxyUrl);
-        return $"http://127.0.0.1:{_port}/{token}/playlist.m3u8";
+        // 保留原始 playlist 文件名：上游并非都叫 playlist.m3u8（如 x36xhzz.m3u8），
+        // 硬编码会导致中继向上游请求一个不存在的地址（404）再原样喂给播放器/ffmpeg。
+        // MissAV 系 URL 本来就以 playlist.m3u8 结尾，行为与之前完全一致。
+        var fileName = streamUrl.LocalPath.TrimEnd('/').Split('/').LastOrDefault();
+        if (string.IsNullOrEmpty(fileName) || !fileName.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase))
+            fileName = "playlist.m3u8";
+        _targets[token] = new RelayTarget(token, streamUrl.Host, baseUri, referer, proxyUrl, fileName);
+        _logger?.Info($"[HlsLocalRelay] 注册 {token} 上游={streamUrl.Host} 基址={baseUri.AbsolutePath} 文件={fileName}");
+        return $"http://127.0.0.1:{_port}/{token}/{fileName}";
     }
 
     public void Unregister(string? localUrl)
     {
         var token = ExtractToken(localUrl);
-        if (token is not null) _targets.TryRemove(token, out _);
+        if (token is not null && _targets.TryRemove(token, out _))
+            _logger?.Info($"[HlsLocalRelay] 注销 {token}");
     }
 
     private static string? ExtractToken(string? localUrl)
@@ -172,11 +180,13 @@ public sealed class HlsLocalRelay : IDisposable
             var m = Regex.Match(localPath, @"^/([^/]+)/(.*)$");
             if (!m.Success || !_targets.TryGetValue(m.Groups[1].Value, out var target))
             {
+                _logger?.Warn($"[HlsLocalRelay] 404：path={localPath} token命中={m.Success && _targets.ContainsKey(m.Groups[1].Value)} 在线token={_targets.Count}");
                 ctx.Response.StatusCode = 404; ctx.Response.Close(); return;
             }
             var rest = m.Groups[2].Value;
-            if (string.IsNullOrEmpty(rest)) rest = "playlist.m3u8";
+            if (string.IsNullOrEmpty(rest)) rest = target.FileName;
             var (body, ct, status) = await Prepare(target, rest);
+            _logger?.Info($"[HlsLocalRelay] {m.Groups[1].Value}/{rest} -> 上游{new Uri(target.BaseUri, rest).AbsolutePath} {status} len={body.Length}");
             if (status < 200 || status >= 300) { ctx.Response.StatusCode = 502; ctx.Response.Close(); return; }
             ctx.Response.ContentType = ct;
             ctx.Response.ContentLength64 = body.Length;
@@ -225,10 +235,11 @@ public sealed class HlsLocalRelay : IDisposable
                 var m = Regex.Match(localPath, @"^/([^/]+)/(.*)$");
                 if (!m.Success || !_targets.TryGetValue(m.Groups[1].Value, out var target))
                 {
+                    _logger?.Warn($"[HlsLocalRelay] 404(tcp)：path={localPath} 在线token={_targets.Count}");
                     await WriteStatus(stream, 404, "Not Found"); return;
                 }
                 var rest = m.Groups[2].Value;
-                if (string.IsNullOrEmpty(rest)) rest = "playlist.m3u8";
+                if (string.IsNullOrEmpty(rest)) rest = target.FileName;
                 var (body, ct, status) = await Prepare(target, rest);
                 if (status < 200 || status >= 300) { await WriteStatus(stream, 502, "Bad Gateway"); return; }
                 await WriteResponse(stream, status, ct, body);

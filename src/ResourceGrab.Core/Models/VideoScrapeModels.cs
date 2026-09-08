@@ -51,6 +51,8 @@ public sealed class VideoScrapeSettings
     public int Concurrency { get; set; } = 2;
     public int RequestIntervalMs { get; set; } = 1000;
     public bool AutoScrapeNewFiles { get; set; } = true;
+    /// <summary>在线视频直存下载目录；为空时用程序数据目录下的"视频下载"。</summary>
+    public string VideoDownloadDir { get; set; } = "";
     public bool DownloadExtraFanart { get; set; }
     public bool WriteNfo { get; set; } = true;
     public string JavBusBaseUrl { get; set; } = "https://www.javbus.com";

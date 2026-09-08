@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Text;
 using System.Windows;
+using ResourceGrab.App.Common;
 using ResourceGrab.App.Services;
 using ResourceGrab.App.Themes;
 using ResourceGrab.App.ViewModels;
@@ -121,6 +122,13 @@ public partial class App : Application
             Math.Clamp((sp.GetRequiredService<ConfigService>().Current.VideoScraping ?? new VideoScrapeSettings()).Concurrency, 1, 8),
             sp.GetRequiredService<ILogger>()));
         services.AddSingleton<VideoScrapeTaskExecutor>();
+        // M3U8/MP4 直存下载：HLS 经本地中继（与播放器同链路，Referer/代理由中继注入）
+        services.AddSingleton<VideoDownloadService>(sp => new VideoDownloadService(
+            (uri, referer, proxy) => HlsLocalRelay.Instance.Register(uri, referer, proxy),
+            url => HlsLocalRelay.Instance.Unregister(url),
+            sp.GetRequiredService<ILogger>(),
+            () => VideoDownloadService.ResolveDownloadDir(
+                configService.Current.VideoScraping?.VideoDownloadDir)));
         // MissAV 在线搜索源：注册为具体单例，供 IVideoSource（在线搜索）与刮削源共用
         services.AddSingleton(sp => new MissAvSource(
             CreateMissAvHttpClient(configService),
