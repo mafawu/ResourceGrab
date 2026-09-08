@@ -353,7 +353,7 @@ public partial class VideoView : CardGridViewBase
         var ct = _onlineSearchCts.Token;
         var version = ++_onlineSearchVersion;
 
-        OnlineLoadingText.Text = "加载中…";
+        OnlineLoadingState.Text = "加载中…";
         OnlineLoadingState.Visibility = Visibility.Visible;
         OnlineEmptyState.Visibility = Visibility.Collapsed;
         OnlineCards.Visibility = Visibility.Collapsed;
@@ -1083,7 +1083,7 @@ public partial class VideoView : CardGridViewBase
         var ct = _onlineSearchCts.Token;
         var version = ++_onlineSearchVersion;
 
-        OnlineLoadingText.Text = "搜索中…";
+        OnlineLoadingState.Text = "搜索中…";
         OnlineLoadingState.Visibility = Visibility.Visible;
         OnlineEmptyState.Visibility = Visibility.Collapsed;
         OnlineCards.Visibility = Visibility.Collapsed;
@@ -1210,7 +1210,7 @@ public partial class VideoView : CardGridViewBase
         var fallback = App.Services.GetService<OnlineVideoFallbackSearchService>();
         if (fallback is null) return false;
         var version = _onlineSearchVersion;
-        OnlineLoadingText.Text = "MissAV 无结果，正在尝试其他源…";
+        OnlineLoadingState.Text = "MissAV 无结果，正在尝试其他源…";
         OnlineVideoFallbackHit? hit;
         try { hit = await fallback.SearchAsync(_onlineSearchText, ct); }
         catch (OperationCanceledException) { throw; }
@@ -1219,7 +1219,7 @@ public partial class VideoView : CardGridViewBase
             _logger.Warn($"[VideoView] 换源兜底失败: {ex.Message}");
             hit = null;
         }
-        finally { OnlineLoadingText.Text = "搜索中…"; }
+        finally { OnlineLoadingState.Text = "搜索中…"; }
         if (hit is null || version != _onlineSearchVersion || ct.IsCancellationRequested) return false;
 
         // 预填详情缓存：卡片点击 → GetDetailUrl(合成 Id) → 缓存命中直接渲染，不再联网

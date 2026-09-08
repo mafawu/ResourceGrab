@@ -40,8 +40,8 @@ public partial class ActorProfileView : UserControl
         InfoText.Text = "";
         SourceWrap.Children.Clear();
         Avatar.Visibility = Visibility.Collapsed;
-        OnlineText.Text = "加载中…";
-        OnlineText.Visibility = Visibility.Visible;
+        OnlineLoadingIndicator.Visibility = Visibility.Visible;
+        OnlineText.Visibility = Visibility.Collapsed;
 
         var items = _library.Query(new VideoQueryOptions
         {
@@ -63,6 +63,8 @@ public partial class ActorProfileView : UserControl
     {
         if (_merger is null)
         {
+            OnlineLoadingIndicator.Visibility = Visibility.Collapsed;
+            OnlineText.Visibility = Visibility.Visible;
             OnlineText.Text = "未配置在线演员源";
             return;
         }
@@ -75,6 +77,8 @@ public partial class ActorProfileView : UserControl
             if (ct.IsCancellationRequested) return;
             if (meta is null)
             {
+                OnlineLoadingIndicator.Visibility = Visibility.Collapsed;
+                OnlineText.Visibility = Visibility.Visible;
                 OnlineText.Text = "暂无在线资料";
                 return;
             }
@@ -103,11 +107,17 @@ public partial class ActorProfileView : UserControl
             {
                 SourceWrap.Children.Add(MakeLink(key, url));
             }
+            OnlineLoadingIndicator.Visibility = Visibility.Collapsed;
             OnlineText.Visibility = Visibility.Collapsed;
         }
         catch (Exception)
         {
-            if (!ct.IsCancellationRequested) OnlineText.Text = "在线资料获取失败";
+            if (!ct.IsCancellationRequested)
+            {
+                OnlineLoadingIndicator.Visibility = Visibility.Collapsed;
+                OnlineText.Visibility = Visibility.Visible;
+                OnlineText.Text = "在线资料获取失败";
+            }
         }
     }
 

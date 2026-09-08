@@ -183,7 +183,7 @@
                                             <TextBlock Text="{Binding TimeText}" FontSize="10.5" Foreground="{DynamicResource TextDisabledBrush}" Margin="8,0,0,0" />
                                         </StackPanel>
                                     </DockPanel>
-                                    <TextBox Text="{Binding Content}" Style="{StaticResource SelectableTextStyle}"
+                                    <TextBox Text="{Binding Content, Mode=OneWay}" Style="{StaticResource SelectableTextStyle}"
                                              FontSize="12" Margin="0,6,0,0" ContextMenu="{x:Null}" />
                                     <ItemsControl ItemsSource="{Binding Replies}" Margin="0,8,0,0">
                                         <ItemsControl.ItemTemplate>
@@ -196,7 +196,7 @@
                                                     </Border.ContextMenu>
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding AuthorLine}" FontSize="10.5" Foreground="{DynamicResource TextSecondaryBrush}" FontWeight="SemiBold"/>
-                                                        <TextBox Text="{Binding Content}" Style="{StaticResource SelectableTextStyle}"
+                                                        <TextBox Text="{Binding Content, Mode=OneWay}" Style="{StaticResource SelectableTextStyle}"
                                                                  FontSize="11" Margin="0,2,0,0" ContextMenu="{x:Null}" />
                                                     </StackPanel>
                                                 </Border>

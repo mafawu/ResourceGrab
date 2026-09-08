@@ -23,6 +23,8 @@
                 <TextBlock x:Name="InfoText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" Margin="0,8,0,0" />
                 <TextBlock Text="在线资料" FontSize="15" FontWeight="Bold" Margin="0,16,0,8" />
+                <controls:LoadingIndicator x:Name="OnlineLoadingIndicator" RingSize="28"
+                                            HorizontalAlignment="Left" Margin="0,4,0,0" />
                 <TextBlock x:Name="OnlineText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
                 <WrapPanel x:Name="SourceWrap" Margin="0,8,0,0" />

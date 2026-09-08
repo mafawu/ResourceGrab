@@ -42,6 +42,9 @@ public partial class ReaderView : UserControl
     private double _viewWidth = 1200;
     private double _viewHeight = 800;
     private double _zoom = 1.0;
+    private const double ZoomMin = 0.5;
+    private const double ZoomMax = 3.0;
+    private bool _suppressZoomSlider;
     private FitMode _fitMode = FitMode.FitPage;
     private bool _pageMode = true;
     private int _currentPage;
@@ -55,8 +58,7 @@ public partial class ReaderView : UserControl
     public ReaderView(LocalComic comic)
     {
         InitializeComponent();
-        _suppressScrollSpeedSave = true;
-        if (App.Services.GetService(typeof(ResourceGrab.Core.Services.ConfigService)) is ResourceGrab.Core.Services.ConfigService cfg)
+        _suppressScrollSpeedSave = true;        if (App.Services.GetService(typeof(ResourceGrab.Core.Services.ConfigService)) is ResourceGrab.Core.Services.ConfigService cfg)
         {
             ScrollSpeedSlider.Value = ResourceGrab.Core.Services.ConfigService.NormalizeScrollSpeed(cfg.Current.ReaderScrollSpeed);
             UpdateScrollSpeedText(ScrollSpeedSlider.Value);
@@ -69,6 +71,7 @@ public partial class ReaderView : UserControl
         _suppressScrollSpeedSave = false;
         _comic = comic;
         TitleText.Text = string.IsNullOrEmpty(comic.NameCn) ? comic.Name : comic.NameCn;
+        UpdateZoomUI();
 
         _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _progressTimer.Tick += (_, _) => SaveProgress();
@@ -273,15 +276,81 @@ public partial class ReaderView : UserControl
 
     private void ZoomBy(double factor)
     {
-        _zoom = Math.Clamp(_zoom * factor, 0.2, 8.0);
+        SetZoom(_zoom * factor);
+    }
+
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) => ZoomBy(1.2);
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) => ZoomBy(1 / 1.2);
+
+    private void ZoomReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fitMode == FitMode.Actual)
+        {
+            SetFitMode(FitMode.FitWidth);
+            return;
+        }
+        SetZoom(1.0);
+    }
+
+    private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressZoomSlider)
+        {
+            return;
+        }
+        SetZoom(e.NewValue, fromSlider: true);
+    }
+
+    /// <summary>统一缩放入口：钳制范围、保持滚动位置、刷新布局与缩放 UI。</summary>
+    private void SetZoom(double newZoom, bool fromSlider = false)
+    {
+        newZoom = Math.Clamp(newZoom, ZoomMin, ZoomMax);
+        if (Math.Abs(newZoom - _zoom) < 0.001)
+        {
+            UpdateZoomUI();
+            return;
+        }
         if (_fitMode == FitMode.Actual)
         {
             _fitMode = FitMode.FitWidth;
         }
+        // 滚动模式下按比例保持阅读位置，避免缩放后跳回顶部
+        double ratio = -1;
+        if (!_pageMode && Scroller.ScrollableHeight > 0)
+        {
+            ratio = Scroller.VerticalOffset / Scroller.ScrollableHeight;
+        }
+        _zoom = newZoom;
         ResizeLoadedImages();
         if (_pageMode)
         {
             ScrollToPage(_currentPage);
+        }
+        else if (ratio >= 0)
+        {
+            Scroller.ScrollToVerticalOffset(Math.Clamp(ratio * Scroller.ScrollableHeight, 0, Scroller.ScrollableHeight));
+        }
+        UpdateZoomUI(fromSlider);
+    }
+
+    private void UpdateZoomUI(bool fromSlider = false)
+    {
+        if (ZoomSlider != null && !fromSlider)
+        {
+            _suppressZoomSlider = true;
+            try
+            {
+                ZoomSlider.Value = _zoom;
+            }
+            finally
+            {
+                _suppressZoomSlider = false;
+            }
+        }
+        if (ZoomResetButton != null)
+        {
+            ZoomResetButton.Content = $"{_zoom * 100:0}%";
         }
     }
 
@@ -302,6 +371,7 @@ public partial class ReaderView : UserControl
         {
             ScrollToPage(_currentPage);
         }
+        UpdateZoomUI();
     }
 
     private void ResizeLoadedImages()
@@ -614,16 +684,16 @@ public partial class ReaderView : UserControl
         if (enabled)
         {
             Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
-            Scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
-            ModeHintText.Text = "← / → 或滚轮翻页 · Ctrl + 滚轮缩放";
+            Scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            ModeHintText.Text = "← / → 或滚轮翻页 · 缩放：滑杆/± 或 Ctrl + 滚轮";
             var page = _images.Count == 0 ? 0 : FindIndexAt(Scroller.VerticalOffset + Scroller.ViewportHeight / 2);
             ScrollToPage(page);
         }
         else
         {
             Scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-            Scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-            ModeHintText.Text = "滚动浏览 · Ctrl + 滚轮缩放";
+            Scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+            ModeHintText.Text = "滚动浏览 · 缩放：滑杆/± 或 Ctrl + 滚轮";
             UpdateVisible();
         }
     }
@@ -723,9 +793,60 @@ public partial class ReaderView : UserControl
         PageJumpBox.SelectAll();
     }
 
+    /// <summary>顶部工具栏显隐切换：工具栏隐藏时右上浮钮找回；状态不持久化，切书重置。
+    /// 显隐改变阅读区高度，待布局完成后按当前适应模式重排（不重置缩放）。</summary>
+    private void SetTopToolbarVisible(bool visible)
+    {
+        TopToolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        ShowToolbarButton.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        Dispatcher.BeginInvoke(() =>
+        {
+            ResizeLoadedImages();
+            if (_pageMode) ScrollToPage(_currentPage);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ShowToolbarButton_Click(object sender, RoutedEventArgs e) => SetTopToolbarVisible(true);
+
+    private void HideToolbarButton_Click(object sender, RoutedEventArgs e) => SetTopToolbarVisible(false);
+
     private void ReaderView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (!_pageMode || Keyboard.FocusedElement is ComboBox)
+        // Ctrl + 缩放快捷键（输入框聚焦时也生效：只响应带 Ctrl 的组合，不干扰打字）
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            switch (e.Key)
+            {
+                case Key.Add:
+                case Key.OemPlus:
+                    ZoomBy(1.2);
+                    e.Handled = true;
+                    return;
+                case Key.Subtract:
+                case Key.OemMinus:
+                    ZoomBy(1 / 1.2);
+                    e.Handled = true;
+                    return;
+                case Key.D0:
+                case Key.NumPad0:
+                    SetZoom(1.0);
+                    e.Handled = true;
+                    return;
+            }
+        }
+        // 输入框里打字不触发快捷键（跳转框输 "/" 时不能顺手藏了工具栏）
+        if (Keyboard.FocusedElement is TextBox or ComboBox)
+        {
+            return;
+        }
+        // "/" 隐藏/显示顶部（两种模式都可用，提示文案在工具栏第二行）
+        if (e.Key is Key.Divide or Key.OemQuestion)
+        {
+            SetTopToolbarVisible(TopToolbar.Visibility != Visibility.Visible);
+            e.Handled = true;
+            return;
+        }
+        if (!_pageMode)
         {
             return;
         }

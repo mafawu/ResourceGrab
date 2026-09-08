@@ -1,6 +1,8 @@
 <UserControl x:Class="ResourceGrab.App.Views.OnlineReaderView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             PreviewKeyDown="OnlineReaderView_PreviewKeyDown">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -49,17 +51,26 @@
                     <TextBlock x:Name="ModeHintText" FontSize="12"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                VerticalAlignment="Center" Margin="12,0,0,0"
-                               Text="翻页浏览 · ←/→ 或滚轮翻页 · Ctrl + 滚轮缩放" />
+                               Text="翻页浏览 · ←/→ 或滚轮翻页 · 缩放：滑杆/± 或 Ctrl + 滚轮" />
                     <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
                             Margin="14,0,12,0" />
                     <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="适应宽度" Click="FitWidth_Click" Padding="10,5" />
+                            Content="适应宽度" Click="FitWidth_Click" Padding="10,5" ToolTip="条漫推荐：滚动模式 + 适应宽度" />
                     <Button x:Name="FitHeightButton" Style="{StaticResource GhostButtonStyle}"
                             Content="适应高度" Margin="6,0,0,0" Click="FitHeight_Click" Padding="10,5" />
                     <Button x:Name="FitPageButton" Style="{StaticResource GhostButtonStyle}"
                             Content="适应页面" Margin="6,0,0,0" Click="FitPage_Click" Padding="10,5" />
                     <Button x:Name="ActualSizeButton" Style="{StaticResource GhostButtonStyle}"
                             Content="实际大小" Margin="6,0,0,0" Click="ActualSize_Click" Padding="10,5" />
+                    <!-- 缩放控制：条漫时拖动滑杆/±按钮控制图片宽度，百分比点击复位 -->
+                    <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="ZoomOutButton" Style="{StaticResource GhostButtonStyle}" Content="−" Padding="10,5" Click="ZoomOut_Click" ToolTip="缩小 (Ctrl + -)" FontWeight="Bold" />
+                            <Slider x:Name="ZoomSlider" Width="110" Minimum="0.5" Maximum="3.0" TickFrequency="0.05" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="6,0,0,0" Value="1.0" ValueChanged="ZoomSlider_ValueChanged" ToolTip="拖动缩放图片（50% ~ 300%），条漫建议 100% ~ 200%" />
+                            <Button x:Name="ZoomResetButton" Style="{StaticResource GhostButtonStyle}" Content="100%" Margin="6,0,0,0" Padding="8,5" MinWidth="52" Click="ZoomReset_Click" ToolTip="点击恢复 100% (Ctrl + 0)" FontWeight="SemiBold" />
+                            <Button x:Name="ZoomInButton" Style="{StaticResource GhostButtonStyle}" Content="+" Margin="3,0,0,0" Padding="10,5" Click="ZoomIn_Click" ToolTip="放大 (Ctrl + +)" FontWeight="Bold" />
+                        </StackPanel>
+                    </Border>
                     <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
                             Margin="14,0,12,0" />
                     <TextBlock Text="滚动速度" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
@@ -79,7 +90,7 @@
         <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="8">
             <Grid>
                 <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
+                              HorizontalScrollBarVisibility="Auto"
                               ScrollChanged="Scroller_ScrollChanged"
                               SizeChanged="Scroller_SizeChanged"
                               PreviewMouseWheel="Scroller_PreviewMouseWheel">
@@ -89,6 +100,7 @@
                 <!-- 章节级加载/失败状态 -->
                 <StackPanel x:Name="ChapterStatePanel" Visibility="Collapsed"
                             VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <controls:LoadingIndicator x:Name="ChapterLoadingIndicator" Margin="0,0,0,4" />
                     <TextBlock x:Name="ChapterStateText" FontSize="14"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                Text="章节加载中…" Margin="20,12" HorizontalAlignment="Center" />

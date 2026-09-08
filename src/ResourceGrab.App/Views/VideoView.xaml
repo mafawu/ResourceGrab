@@ -115,13 +115,9 @@
                                        FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"
                                        HorizontalAlignment="Center" Margin="0,16,0,0" />
                         </StackPanel>
-                        <StackPanel x:Name="OnlineLoadingState" Visibility="Collapsed"
-                                    VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <ProgressBar Width="180" Height="4" IsIndeterminate="True" />
-                            <TextBlock x:Name="OnlineLoadingText" Text="搜索中…" FontSize="13"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                       HorizontalAlignment="Center" Margin="0,12,0,0" />
-                        </StackPanel>
+                        <controls:LoadingIndicator x:Name="OnlineLoadingState" Visibility="Collapsed"
+                                                     Text="搜索中…"
+                                                     VerticalAlignment="Center" HorizontalAlignment="Center" />
 
                         <!-- 悬浮抽屉遮罩：覆盖结果区，点击关闭详情 -->
                         <Border x:Name="OnlineDetailMask" Panel.ZIndex="9" Background="#66000000"

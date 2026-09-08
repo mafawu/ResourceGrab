@@ -9,8 +9,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 顶部工具栏 · 全新胶囊式设计 -->
-        <Border Grid.Row="0" Margin="0,0,0,12"
+        <!-- 顶部工具栏 · 全新胶囊式设计（按 / 或右上浮钮隐藏/显示） -->
+        <Border x:Name="TopToolbar" Grid.Row="0" Margin="0,0,0,12"
                 Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                 CornerRadius="{DynamicResource RadiusXl}" Padding="12"
@@ -86,6 +86,17 @@
                                 <Button x:Name="NextChapterButton" Style="{StaticResource GhostButtonStyle}" Content="下一章" Padding="10,6" Click="NextChapter_Click" />
                             </StackPanel>
                         </Border>
+                        <!-- 隐藏顶部工具栏：与找回浮钮同图标同语义 -->
+                        <Button x:Name="HideToolbarButton" Style="{StaticResource GhostButtonStyle}"
+                                Padding="10,6" Margin="8,0,0,0" VerticalAlignment="Center"
+                                Click="HideToolbarButton_Click" ToolTip="隐藏顶部工具栏（/）">
+                            <Path Data="{StaticResource IconPanelToggle}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Stretch="Uniform" Width="15" Height="15"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
                     </StackPanel>
                 </Grid>
 
@@ -104,7 +115,7 @@
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="/ → 隐藏顶部" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <Border Width="1" Height="12" Background="{DynamicResource DividerBrush}" Margin="8,0" VerticalAlignment="Center" />
-                                <TextBlock x:Name="ModeHintText" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Text="Ctrl + 滚轮缩放" />
+                                <TextBlock x:Name="ModeHintText" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Text="缩放：滑杆/± 或 Ctrl + 滚轮" />
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -113,9 +124,18 @@
                         <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="FitHeightButton" Style="{StaticResource GhostButtonStyle}" Content="适应高度" Padding="10,5" Click="FitHeight_Click" />
-                                <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}" Content="适应宽度" Margin="3,0,0,0" Padding="10,5" Click="FitWidth_Click" />
+                                <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}" Content="适应宽度" Margin="3,0,0,0" Padding="10,5" Click="FitWidth_Click" ToolTip="条漫推荐：滚动模式 + 适应宽度" />
                                 <Button x:Name="FitPageButton" Style="{StaticResource GhostButtonStyle}" Content="适应画面" Margin="3,0,0,0" Padding="10,5" Click="FitPage_Click" />
                                 <Button x:Name="ActualSizeButton" Style="{StaticResource GhostButtonStyle}" Content="实际大小" Margin="3,0,0,0" Padding="10,5" Click="ActualSize_Click" />
+                            </StackPanel>
+                        </Border>
+                        <!-- 缩放控制：条漫时拖动滑杆/±按钮控制图片宽度，百分比点击复位 -->
+                        <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="ZoomOutButton" Style="{StaticResource GhostButtonStyle}" Content="−" Padding="10,5" Click="ZoomOut_Click" ToolTip="缩小 (Ctrl + -)" FontWeight="Bold" />
+                                <Slider x:Name="ZoomSlider" Width="110" Minimum="0.5" Maximum="3.0" TickFrequency="0.05" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="6,0,0,0" Value="1.0" ValueChanged="ZoomSlider_ValueChanged" ToolTip="拖动缩放图片（50% ~ 300%），条漫建议 100% ~ 200%" />
+                                <Button x:Name="ZoomResetButton" Style="{StaticResource GhostButtonStyle}" Content="100%" Margin="6,0,0,0" Padding="8,5" MinWidth="52" Click="ZoomReset_Click" ToolTip="点击恢复 100% (Ctrl + 0)" FontWeight="SemiBold" />
+                                <Button x:Name="ZoomInButton" Style="{StaticResource GhostButtonStyle}" Content="+" Margin="3,0,0,0" Padding="10,5" Click="ZoomIn_Click" ToolTip="放大 (Ctrl + +)" FontWeight="Bold" />
                             </StackPanel>
                         </Border>
                         <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="10,5" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -132,13 +152,56 @@
 
         <!-- 阅读区 -->
         <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="8">
-            <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Hidden"
-                          HorizontalScrollBarVisibility="Hidden"
-                          ScrollChanged="Scroller_ScrollChanged"
-                          SizeChanged="Scroller_SizeChanged"
-                          PreviewMouseWheel="Scroller_PreviewMouseWheel">
-                <StackPanel x:Name="ImageStack" HorizontalAlignment="Center" />
-            </ScrollViewer>
+            <Grid>
+                <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Hidden"
+                              HorizontalScrollBarVisibility="Auto"
+                              ScrollChanged="Scroller_ScrollChanged"
+                              SizeChanged="Scroller_SizeChanged"
+                              PreviewMouseWheel="Scroller_PreviewMouseWheel">
+                    <StackPanel x:Name="ImageStack" HorizontalAlignment="Center" />
+                </ScrollViewer>
+                <!-- 工具栏隐藏时的找回浮钮：圆形悬浮按钮 + 矢量图标，半透明不挡画面 -->
+                <Button x:Name="ShowToolbarButton"
+                        Width="40" Height="40" Padding="0"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"
+                        Opacity="0.85" Visibility="Collapsed"
+                        Click="ShowToolbarButton_Click" ToolTip="显示顶部工具栏（/）">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource GhostButtonStyle}">
+                            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+                            <Setter Property="BorderThickness" Value="1" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="20"
+                                                SnapsToDevicePixels="True">
+                                            <Path Data="{StaticResource IconPanelToggle}"
+                                                  Stroke="{TemplateBinding Foreground}"
+                                                  StrokeThickness="1.6"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                  Stretch="Uniform" Width="18" Height="18"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Opacity" Value="1" />
+                                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter Property="Opacity" Value="1" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

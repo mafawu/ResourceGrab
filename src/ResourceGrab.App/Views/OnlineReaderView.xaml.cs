@@ -31,6 +31,7 @@ public partial class OnlineReaderView : UserControl
         public required Image Image { get; init; }
         public required Border StateLayer { get; init; }
         public required TextBlock StateText { get; init; }
+        public required Controls.LoadingIndicator StateIndicator { get; init; }
         public int PixelWidth;
         public int PixelHeight;
         public double HeightEstimate = 800;
@@ -60,6 +61,9 @@ public partial class OnlineReaderView : UserControl
     private double _viewWidth = 1200;
     private double _viewHeight = 800;
     private double _zoom = 1.0;
+    private const double ZoomMin = 0.5;
+    private const double ZoomMax = 3.0;
+    private bool _suppressZoomSlider;
     private bool _suppressChapterCombo;
     private bool _suppressScrollSpeedSave;
 
@@ -87,6 +91,7 @@ public partial class OnlineReaderView : UserControl
         }
         catch { }
         _suppressScrollSpeedSave = false;
+        UpdateZoomUI();
 
         _service = App.Services.GetRequiredService<OnlineReaderService>();
         _source = source;
@@ -116,6 +121,7 @@ public partial class OnlineReaderView : UserControl
         {
             TitleText.Text = source.Info.DisplayName;
             ChapterStatePanel.Visibility = Visibility.Visible;
+            ChapterLoadingIndicator.Visibility = Visibility.Collapsed;
             ChapterStateText.Text = "该漫画没有可在线阅读的章节";
             return;
         }
@@ -149,7 +155,8 @@ public partial class OnlineReaderView : UserControl
 
             ReleaseAll();
             ChapterStatePanel.Visibility = Visibility.Visible;
-            ChapterStateText.Text = "章节加载中…";
+            ChapterLoadingIndicator.Visibility = Visibility.Visible;
+            ChapterStateText.Visibility = Visibility.Collapsed;
             ChapterRetryButton.Visibility = Visibility.Collapsed;
 
             try
@@ -162,6 +169,8 @@ public partial class OnlineReaderView : UserControl
                 {
                     return;
                 }
+                ChapterLoadingIndicator.Visibility = Visibility.Collapsed;
+                ChapterStateText.Visibility = Visibility.Visible;
                 ChapterStateText.Text = JmErrorClassifier.Message(ex);
                 ChapterRetryButton.Visibility = Visibility.Visible;
                 UpdatePagingButtons();
@@ -175,6 +184,8 @@ public partial class OnlineReaderView : UserControl
 
             if (_pages.Count == 0)
             {
+                ChapterLoadingIndicator.Visibility = Visibility.Collapsed;
+                ChapterStateText.Visibility = Visibility.Visible;
                 ChapterStateText.Text = "本章暂无可用图片";
                 ChapterRetryButton.Visibility = Visibility.Collapsed;
                 ChapterStatePanel.Visibility = Visibility.Visible;
@@ -250,18 +261,32 @@ public partial class OnlineReaderView : UserControl
             };
             var stateText = new TextBlock
             {
-                Text = "加载中…",
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420,
                 FontSize = 12,
                 Foreground = stateTextBrush,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+            };
+            var stateIndicator = new Controls.LoadingIndicator
+            {
+                RingSize = 28,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+            };
+            var stateStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { stateIndicator, stateText },
             };
             var stateLayer = new Border
             {
                 Background = stateBackground,
-                Child = stateText,
+                Child = stateStack,
                 Visibility = Visibility.Collapsed,
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(12, 8, 12, 8),
@@ -274,7 +299,7 @@ public partial class OnlineReaderView : UserControl
             root.Children.Add(image);
             root.Children.Add(stateLayer);
 
-            var host = new PageHost { Root = root, Image = image, StateLayer = stateLayer, StateText = stateText };
+            var host = new PageHost { Root = root, Image = image, StateLayer = stateLayer, StateText = stateText, StateIndicator = stateIndicator };
             stateLayer.MouseLeftButtonDown += (_, _) => RetryPage(_hosts.IndexOf(host));
             ImageStack.Children.Add(root);
             _hosts.Add(host);
@@ -360,7 +385,8 @@ public partial class OnlineReaderView : UserControl
         }
         host.IsLoading = true;
         host.StateLayer.Visibility = Visibility.Visible;
-        host.StateText.Text = "加载中…";
+        host.StateIndicator.Visibility = Visibility.Visible;
+        host.StateText.Visibility = Visibility.Collapsed;
         _loading.Add(index);
         var page = _pages[index];
         var version = _chapterVersion;
@@ -423,6 +449,8 @@ public partial class OnlineReaderView : UserControl
         var host = _hosts[index];
         host.IsLoading = false;
         host.StateLayer.Visibility = Visibility.Visible;
+        host.StateIndicator.Visibility = Visibility.Collapsed;
+        host.StateText.Visibility = Visibility.Visible;
         host.StateText.Text = message;
         RebuildTops();
         UpdateVisible();
@@ -583,8 +611,7 @@ public partial class OnlineReaderView : UserControl
     {
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
-            _zoom = Math.Clamp(_zoom + (e.Delta > 0 ? 0.1 : -0.1), 0.5, 3.0);
-            ApplyZoomToAll();
+            ZoomBy(e.Delta > 0 ? 1.2 : 1 / 1.2);
             e.Handled = true;
             return;
         }
@@ -639,8 +666,8 @@ public partial class OnlineReaderView : UserControl
         ScrollModeButton.IsChecked = !_pageMode;
         PageModeButton.IsChecked = _pageMode;
         ModeHintText.Text = _pageMode
-            ? "翻页浏览 · ←/→ 或滚轮翻页 · Ctrl + 滚轮缩放"
-            : "滚动浏览 · Ctrl + 滚轮缩放";
+            ? "翻页浏览 · ←/→ 或滚轮翻页 · 缩放：滑杆/± 或 Ctrl + 滚轮"
+            : "滚动浏览 · 缩放：滑杆/± 或 Ctrl + 滚轮";
         if (_pageMode)
         {
             _currentPage = Math.Clamp(FindIndexAt(Scroller.VerticalOffset + Scroller.ViewportHeight / 2), 0, Math.Max(0, _hosts.Count - 1));
@@ -655,25 +682,156 @@ public partial class OnlineReaderView : UserControl
     private void FitWidth_Click(object sender, RoutedEventArgs e)
     {
         _fitMode = FitMode.FitWidth;
+        _zoom = 1.0;
         ApplyZoomToAll();
+        UpdateZoomUI();
     }
 
     private void FitHeight_Click(object sender, RoutedEventArgs e)
     {
         _fitMode = FitMode.FitHeight;
+        _zoom = 1.0;
         ApplyZoomToAll();
+        UpdateZoomUI();
     }
 
     private void FitPage_Click(object sender, RoutedEventArgs e)
     {
         _fitMode = FitMode.FitPage;
+        _zoom = 1.0;
         ApplyZoomToAll();
+        UpdateZoomUI();
     }
 
     private void ActualSize_Click(object sender, RoutedEventArgs e)
     {
         _fitMode = FitMode.Actual;
+        _zoom = 1.0;
         ApplyZoomToAll();
+        UpdateZoomUI();
+    }
+
+    private void ZoomIn_Click(object sender, RoutedEventArgs e) => ZoomBy(1.2);
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e) => ZoomBy(1 / 1.2);
+
+    private void ZoomReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (_fitMode == FitMode.Actual)
+        {
+            _fitMode = FitMode.FitWidth;
+        }
+        SetZoom(1.0);
+    }
+
+    private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressZoomSlider)
+        {
+            return;
+        }
+        SetZoom(e.NewValue, fromSlider: true);
+    }
+
+    private void ZoomBy(double factor) => SetZoom(_zoom * factor);
+
+    /// <summary>统一缩放入口：钳制范围、保持滚动位置、刷新布局与缩放 UI。</summary>
+    private void SetZoom(double newZoom, bool fromSlider = false)
+    {
+        newZoom = Math.Clamp(newZoom, ZoomMin, ZoomMax);
+        if (Math.Abs(newZoom - _zoom) < 0.001)
+        {
+            UpdateZoomUI();
+            return;
+        }
+        if (_fitMode == FitMode.Actual)
+        {
+            _fitMode = FitMode.FitWidth;
+        }
+        // 滚动模式下按比例保持阅读位置，避免缩放后跳回顶部
+        double ratio = -1;
+        if (!_pageMode && Scroller.ScrollableHeight > 0)
+        {
+            ratio = Scroller.VerticalOffset / Scroller.ScrollableHeight;
+        }
+        _zoom = newZoom;
+        ApplyZoomToAll();
+        if (!fromSlider && !_pageMode && ratio >= 0 && Scroller.ScrollableHeight > 0)
+        {
+            Scroller.ScrollToVerticalOffset(Math.Clamp(ratio * Scroller.ScrollableHeight, 0, Scroller.ScrollableHeight));
+        }
+        UpdateZoomUI(fromSlider);
+    }
+
+    private void UpdateZoomUI(bool fromSlider = false)
+    {
+        if (ZoomSlider != null && !fromSlider)
+        {
+            _suppressZoomSlider = true;
+            try
+            {
+                ZoomSlider.Value = _zoom;
+            }
+            finally
+            {
+                _suppressZoomSlider = false;
+            }
+        }
+        if (ZoomResetButton != null)
+        {
+            ZoomResetButton.Content = $"{_zoom * 100:0}%";
+        }
+    }
+
+    /// <summary>键盘快捷键：Ctrl + +/- 缩放、Ctrl + 0 复位；翻页模式下 ←/→ 翻页。</summary>
+    private void OnlineReaderView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Ctrl + 缩放快捷键（输入框聚焦时也生效：只响应带 Ctrl 的组合，不干扰打字）
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            switch (e.Key)
+            {
+                case Key.Add:
+                case Key.OemPlus:
+                    ZoomBy(1.2);
+                    e.Handled = true;
+                    return;
+                case Key.Subtract:
+                case Key.OemMinus:
+                    ZoomBy(1 / 1.2);
+                    e.Handled = true;
+                    return;
+                case Key.D0:
+                case Key.NumPad0:
+                    SetZoom(1.0);
+                    e.Handled = true;
+                    return;
+            }
+        }
+        // 输入框里打字不触发翻页快捷键
+        if (Keyboard.FocusedElement is TextBox or ComboBox)
+        {
+            return;
+        }
+        if (!_pageMode)
+        {
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.Left:
+            case Key.Up:
+            case Key.PageUp:
+                ScrollToPage(_currentPage - 1);
+                e.Handled = true;
+                break;
+            case Key.Right:
+            case Key.Down:
+            case Key.PageDown:
+                ScrollToPage(_currentPage + 1);
+                e.Handled = true;
+                break;
+        }
     }
 
     private void ApplyZoomToAll()
