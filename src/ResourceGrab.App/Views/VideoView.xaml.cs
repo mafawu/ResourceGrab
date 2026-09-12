@@ -175,6 +175,7 @@ public partial class VideoView : CardGridViewBase
             Orientation = Orientation.Horizontal,
             Children = { rescanButton, addFolderButton },
         };
+        LocalToolbar.RefreshSegments();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -977,6 +978,64 @@ public partial class VideoView : CardGridViewBase
         ApplyAndRender();
     }
 
+    private OnlineVideoFavoriteService? OnlineFavorites =>
+        App.Services.GetService<OnlineVideoFavoriteService>();
+
+    /// <summary>在线详情 ★：没入库也能收藏；入库（下载/重扫）时按番号自动转为本地收藏。</summary>
+    private void OnlineDetailFavorite_Click(object sender, RoutedEventArgs e) => ToggleOnlineFavorite();
+
+    private void OnlineFullFavorite_Click(object sender, RoutedEventArgs e) => ToggleOnlineFavorite();
+
+    private void ToggleOnlineFavorite()
+    {
+        var favs = OnlineFavorites;
+        if (favs is null || _onlineDetailSummary is not { } summary) return;
+        var number = !string.IsNullOrEmpty(_onlineDetail?.Number)
+            ? _onlineDetail.Number
+            : (!string.IsNullOrEmpty(summary.Number)
+                ? summary.Number
+                : VideoNumberParser.Parse(summary.Title).Number);
+        var title = !string.IsNullOrEmpty(_onlineDetail?.Title) ? _onlineDetail.Title : summary.Title;
+        var cover = !string.IsNullOrEmpty(_onlineDetail?.CoverUrl) ? _onlineDetail.CoverUrl : summary.CoverUrl;
+        var now = favs.Toggle(summary.SourceId, summary.Id, number, title, cover);
+        RefreshOnlineFavoriteGlyph();
+        ToastService.Show(now ? "已收藏（入库后自动关联为本地收藏）" : "已取消收藏", ToastKind.Success);
+    }
+
+    private void RefreshOnlineFavoriteGlyph()
+    {
+        var fav = _onlineDetailSummary is { } s
+            && (OnlineFavorites?.IsFavorite(s.SourceId, s.Id) == true);
+        foreach (var heart in new[] { OnlineDetailFavoriteHeart, OnlineFullFavoriteHeart })
+        {
+            heart.Text = fav ? "♥" : "♡";
+            heart.Foreground = fav
+                ? new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x6F))
+                : (Brush)FindResource("TextSecondaryBrush");
+        }
+    }
+
+    /// <summary>入库关联：新入库条目按番号匹配在线预收藏，转为本地收藏并移除 stub。</summary>
+    private void LinkOnlineFavorites(IEnumerable<VideoItem> newItems)
+    {
+        var favs = OnlineFavorites;
+        if (favs is null) return;
+        var linked = 0;
+        foreach (var item in newItems)
+        {
+            if (string.IsNullOrWhiteSpace(item.Number)) continue;
+            if (favs.FindByNumber(item.Number).Count == 0) continue;
+            item.IsFavorite = true;
+            favs.RemoveByNumber(item.Number);
+            linked++;
+        }
+        if (linked > 0)
+        {
+            _library.Save();
+            ToastService.Show($"在线收藏已关联 {linked} 部到本地收藏", ToastKind.Success);
+        }
+    }
+
     private void PlayDetail_Click(object sender, RoutedEventArgs e)
     {
         if (_currentItem is not { FileExists: true } item)
@@ -1155,9 +1214,37 @@ public partial class VideoView : CardGridViewBase
         }
     }
 
+    /// <summary>本地库已有番号集合（在线卡已下载角标用，按需重建）。</summary>
+    private HashSet<string> _downloadedNumbers = new(StringComparer.OrdinalIgnoreCase);
+
+    private void RefreshDownloadedNumbers()
+    {
+        _downloadedNumbers = new HashSet<string>(
+            _library.Items.Where(i => !string.IsNullOrWhiteSpace(i.Number)).Select(i => i.Number),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>在线条目取番号：摘要自带优先，否则从标题解析（与卡片 MetaLeft 同规则）。</summary>
+    public string ResolveOnlineNumber(OnlineVideoSummary item) =>
+        !string.IsNullOrEmpty(item.Number)
+            ? item.Number
+            : VideoNumberParser.Parse(item.Title).Number;
+
+    public bool IsNumberDownloaded(string number) =>
+        !string.IsNullOrEmpty(number) && _downloadedNumbers.Contains(number);
+
+    /// <summary>已建卡的已下载角标全量刷新（入库/重扫后调用）。</summary>
+    private void RefreshOnlineDownloadedBadges()
+    {
+        RefreshDownloadedNumbers();
+        foreach (var adapter in _onlineAdapters)
+            adapter.ApplyDownloaded(IsNumberDownloaded(ResolveOnlineNumber(adapter.Item)));
+    }
+
     private void RenderOnlineResults(List<OnlineVideoSummary> items, bool append)
     {
         OnlineLoadingState.Visibility = Visibility.Collapsed;
+        RefreshDownloadedNumbers();
         if (!append)
         {
             _onlineAdapters.Clear();
@@ -1296,10 +1383,14 @@ public partial class VideoView : CardGridViewBase
             _card?.UpdateOnlineDetail(detail);
         }
 
+        /// <summary>已下载角标刷新：已建卡立即挂载，未建卡创建时按当前库状态挂载。</summary>
+        public void ApplyDownloaded(bool downloaded) => _card?.SetDownloaded(downloaded);
+
         private VideoPosterCard Create()
         {
             var card = new VideoPosterCard { Width = _view.OnlineCards.CardWidth };
             card.Bind(Item);
+            card.SetDownloaded(_view.IsNumberDownloaded(_view.ResolveOnlineNumber(Item)));
             card.OnlineDetailRequested += _view.OnlinePosterDetailRequested;
             card.OnlinePreviewRequested += _view.OnlinePosterPreviewRequested;
             card.OnlineFullDetailRequested += _view.OnlinePosterFullDetailRequested;
@@ -1404,6 +1495,7 @@ public partial class VideoView : CardGridViewBase
         OnlineDetailFullButton.Visibility = Visibility.Collapsed;
         OnlineDetailDownloadButton.Visibility = Visibility.Collapsed;
         _onlineDetail = null;
+        RefreshOnlineFavoriteGlyph();
         SetOnlineDetailVisible(true);
         OnlineDetailPanel.ScrollToTop();
         // 与本地详情一致：顶替右侧筛选面板的位置
@@ -1519,6 +1611,7 @@ public partial class VideoView : CardGridViewBase
         OnlineDetailFullButton.Visibility = Visibility.Visible;
         // 有流地址才开放下载：HLS 全片标"下载全片"，MP4 多为预告片诚实标注
         UpdateDownloadButton(OnlineDetailDownloadButton, detail);
+        RefreshOnlineFavoriteGlyph();
     }
 
     /// <summary>预览图（剧照）横向条：点击在浏览器查看原图；详情无预览图时整段隐藏。
@@ -2042,6 +2135,8 @@ public partial class VideoView : CardGridViewBase
                     .Where(i => string.Equals(i.FilePath, task.DownloadOutputPath, StringComparison.OrdinalIgnoreCase))
                     .Select(i => i.Id)
                     .ToList();
+                LinkOnlineFavorites(added);
+                RefreshOnlineDownloadedBadges();
                 Refresh();
                 ToastService.Show($"下载完成，已入库：{Path.GetFileName(task.DownloadOutputPath)}", ToastKind.Success);
                 if (newIds.Count == 0) return;
@@ -2097,6 +2192,7 @@ public partial class VideoView : CardGridViewBase
         OnlineFullOpenUrlButton.Visibility = string.IsNullOrEmpty(_onlineDetailUrl) ? Visibility.Collapsed : Visibility.Visible;
         OnlineFullDownloadButton.Visibility = Visibility.Collapsed;
         _onlineFullDetail = null;
+        RefreshOnlineFavoriteGlyph();
         // 完整页播放器待详情渲染后再配流；先清掉上一次的状态
         OnlineFullPreviewPlayer.Stop();
         OnlineFullPreviewPlayer.Visibility = Visibility.Collapsed;
@@ -2182,6 +2278,7 @@ public partial class VideoView : CardGridViewBase
 
         RenderOnlinePreviewImages(detail, OnlineFullPreviewImagesHost, OnlineFullPreviewImagesSection);
         UpdateDownloadButton(OnlineFullDownloadButton, detail);
+        RefreshOnlineFavoriteGlyph();
         RenderOnlineFullRelated(detail);
         EnrichFullDetailFromSecondarySource(detail);
     }
@@ -2821,6 +2918,11 @@ public partial class VideoView : CardGridViewBase
             TaskProgress.IsIndeterminate = false;
             TaskSummary.Text = $"发现 {newCount} 个新文件";
             ToastService.Show($"重新扫描完成，发现 {newCount} 个新文件", ToastKind.Success);
+            LinkOnlineFavorites(pendingIds.Distinct()
+                .Select(id => _library.GetById(id))
+                .Where(i => i is not null)
+                .Select(i => i!));
+            RefreshOnlineDownloadedBadges();
             Refresh();
             if (newCount == 0) return;
             var autoScrape = App.Services.GetRequiredService<ConfigService>().Current.VideoScraping?.AutoScrapeNewFiles ?? true;

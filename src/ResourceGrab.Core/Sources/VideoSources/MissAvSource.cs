@@ -541,7 +541,7 @@ public sealed class MissAvSource : IVideoSource
                 psi.ArgumentList.Add(_proxy);
             }
             psi.ArgumentList.Add("-A");
-            psi.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
+            psi.ArgumentList.Add(VideoConstants.UserAgent);
             psi.ArgumentList.Add("-H");
             psi.ArgumentList.Add($"Referer: {BaseUrl}/");
             if (!string.IsNullOrEmpty(_cachedCookieHeader))

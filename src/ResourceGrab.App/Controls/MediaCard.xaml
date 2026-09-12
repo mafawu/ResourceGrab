@@ -6,7 +6,13 @@
         <controls:NonEmptyToVisibilityConverter x:Key="NonEmptyToVis"
                                                 xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
         <controls:FavoriteTextConverter x:Key="FavoriteTextConverter"
-                                        xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
+                                         xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
+        <controls:BadgeBackgroundConverter x:Key="BadgeBackgroundConverter"
+                                           xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
+        <controls:BadgeForegroundConverter x:Key="BadgeForegroundConverter"
+                                           xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
+        <controls:MultiplyConverter x:Key="MultiplyConverter"
+                                    xmlns:controls="clr-namespace:ResourceGrab.App.Controls" />
 
         <!-- PortraitCover -->
         <DataTemplate x:Key="PortraitCoverTemplate">
@@ -15,7 +21,8 @@
                     BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                     ClipToBounds="True" Cursor="Hand">
                 <StackPanel>
-                    <Grid Height="160">
+                    <!-- 纵向封面高度跟随卡片宽度（2:3），列数变化时等比放大 -->
+                    <Grid Height="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource MultiplyConverter}, ConverterParameter=1.5}">
                         <Border Background="{DynamicResource HoverBgBrush}">
                             <TextBlock Text="{Binding CoverFallbackText}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -41,11 +48,11 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{DynamicResource PrimarySubtleBrush}"
+                                        <Border Background="{Binding Color, Converter={StaticResource BadgeBackgroundConverter}}"
                                                 CornerRadius="{DynamicResource RadiusXs}"
                                                 Padding="6,2" Margin="0,0,4,0">
-                                            <TextBlock Text="{Binding Text}" FontSize="10"
-                                                       Foreground="{DynamicResource PrimaryBrush}" />
+                                            <TextBlock Text="{Binding Text}" FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{Binding Color, Converter={StaticResource BadgeForegroundConverter}}" />
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -63,14 +70,17 @@
                     BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                     ClipToBounds="True" Cursor="Hand">
                 <StackPanel>
-                    <Grid Height="100">
+                    <!-- 横向缩略图高度跟随卡片宽度（16:9），列数变化时等比放大；
+                         封面原比例完整显示（Uniform），竖版海报两侧留白也不裁切 -->
+                    <Grid Height="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource MultiplyConverter}, ConverterParameter=0.5625}"
+                          Background="{DynamicResource HoverBgBrush}">
                         <Border Background="{DynamicResource HoverBgBrush}">
                             <TextBlock Text="{Binding CoverFallbackText}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        FontSize="22" FontWeight="Bold"
                                        Foreground="{DynamicResource TextDisabledBrush}" />
                         </Border>
-                        <Image Source="{Binding Cover}" Stretch="UniformToFill" />
+                        <Image Source="{Binding Cover}" Stretch="Uniform" />
                         <!-- 未观看标记 -->
                         <Border Width="3" Height="24" HorizontalAlignment="Left" VerticalAlignment="Top"
                                 Background="{DynamicResource PrimaryBrush}"

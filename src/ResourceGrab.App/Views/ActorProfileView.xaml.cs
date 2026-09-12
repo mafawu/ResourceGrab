@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Controls;
+using ResourceGrab.App.Services;
 using ResourceGrab.App.ViewModels;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Services;
@@ -19,8 +20,10 @@ public partial class ActorProfileView : UserControl
 {
     private readonly VideoLibraryService _library;
     private readonly VideoActorMerger? _merger;
+    private readonly ActorFavoriteService? _favorites;
     private CancellationTokenSource? _cts;
     private static readonly HttpClient _http = new();
+    private string _actorName = "";
 
     public Action? CloseRequested;
     public Action<VideoItem>? OnLocalWorkSelected;
@@ -30,12 +33,22 @@ public partial class ActorProfileView : UserControl
         InitializeComponent();
         _library = App.Services.GetRequiredService<VideoLibraryService>();
         try { _merger = App.Services.GetService<VideoActorMerger>(); } catch { }
+        try { _favorites = App.Services.GetService<ActorFavoriteService>(); } catch { }
         BackButton.Click += (_, _) => CloseRequested?.Invoke();
+        if (_favorites is not null) _favorites.Changed += OnFavoriteChanged;
+    }
+
+    private void OnFavoriteChanged(string name)
+    {
+        if (string.Equals(name, _actorName, StringComparison.OrdinalIgnoreCase))
+            Dispatcher.BeginInvoke(RefreshFavoriteGlyph);
     }
 
     public void LoadAsync(string actor)
     {
+        _actorName = actor;
         NameText.Text = actor;
+        RefreshFavoriteGlyph();
         AliasWrap.Children.Clear();
         InfoText.Text = "";
         SourceWrap.Children.Clear();
@@ -144,6 +157,38 @@ public partial class ActorProfileView : UserControl
         {
             // 头像加载失败不影响其余信息展示
         }
+    }
+
+    private void RefreshFavoriteGlyph()
+    {
+        var fav = _favorites?.IsFavorite(_actorName) == true;
+        FavoriteHeart.Text = fav ? "♥" : "♡";
+        FavoriteHeart.Foreground = fav
+            ? new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x6F))
+            : (Brush)FindResource("TextSecondaryBrush");
+    }
+
+    /// <summary>档案页星标：收藏即后台补全（头像/简介），补完刷新头像显示。</summary>
+    private void FavoriteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_favorites is null || string.IsNullOrEmpty(_actorName)) return;
+        var now = _favorites.Toggle(_actorName);
+        RefreshFavoriteGlyph();
+        ToastService.Show(now ? $"已收藏 {_actorName}，正在补全档案…" : $"已取消收藏 {_actorName}",
+            ToastKind.Success);
+        if (!now) return;
+        _ = Task.Run(async () =>
+        {
+            if (await _favorites.EnrichAsync(_actorName))
+            {
+                await Dispatcher.BeginInvoke(async () =>
+                {
+                    var entry = _favorites.Get(_actorName);
+                    if (entry?.AvatarPath is { } path && File.Exists(path))
+                        await LoadAvatarAsync(path, CancellationToken.None);
+                });
+            }
+        });
     }
 
     private static Border MakeLink(string key, string url)

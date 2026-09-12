@@ -12,7 +12,7 @@ using ResourceGrab.Core.Services.VideoScrape.Sources;
 namespace ResourceGrab.App.Views;
 
 /// <summary>演员卡片数据：名字 + 作品数 + 代表作海报（无海报时 Poster 为空，卡片显示首字回退）。</summary>
-public sealed record ActorCardItem(string Name, int Count, string? Poster)
+public sealed record ActorCardItem(string Name, int Count, string? Poster, bool IsFavorite = false)
 {
     public string Fallback => string.IsNullOrEmpty(Name) ? "?" : Name[..1].ToUpperInvariant();
     public string CountText => $"{Count} 部";
@@ -27,6 +27,7 @@ public sealed record ActorCardItem(string Name, int Count, string? Poster)
 public partial class ActorListView : UserControl
 {
     private readonly VideoLibraryService _library;
+    private readonly ActorFavoriteService? _favorites;
 
     /// <summary>全量有序缓存：Refresh() 重建；翻页/过滤只在此切片。</summary>
     private List<KeyValuePair<string, int>> _ordered = [];
@@ -45,8 +46,13 @@ public partial class ActorListView : UserControl
     {
         InitializeComponent();
         _library = App.Services.GetRequiredService<VideoLibraryService>();
+        _favorites = App.Services.GetService<ActorFavoriteService>();
+        if (_favorites is not null) _favorites.Changed += OnFavoriteChanged;
         Loaded += (_, _) => Refresh();
     }
+
+    private void OnFavoriteChanged(string _) =>
+        Dispatcher.BeginInvoke(ApplyFilterAndRender);
 
     /// <summary>重建统计/海报缓存并回到第一页。翻页/过滤请走内部方法，不要调这个。</summary>
     public void Refresh()
@@ -99,6 +105,8 @@ public partial class ActorListView : UserControl
         var keyword = _searchText.Trim();
         if (keyword.Length > 0)
             query = query.Where(kv => kv.Key.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        if (FavoritesOnlyBox?.IsChecked == true && _favorites is not null)
+            query = query.Where(kv => _favorites.IsFavorite(kv.Key));
         if (_sortByName)
             query = query.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -107,7 +115,8 @@ public partial class ActorListView : UserControl
         _page = Math.Clamp(_page, 1, _pageCount);
 
         var pageItems = _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize)
-            .Select(kv => new ActorCardItem(kv.Key, kv.Value, _posters.GetValueOrDefault(kv.Key)))
+            .Select(kv => new ActorCardItem(kv.Key, kv.Value, _posters.GetValueOrDefault(kv.Key),
+                _favorites?.IsFavorite(kv.Key) == true))
             .ToList();
         ActorCards.ItemsSource = pageItems;
         ActorCards.ScrollToTop();
@@ -122,6 +131,32 @@ public partial class ActorListView : UserControl
     {
         if ((sender as FrameworkElement)?.DataContext is ActorCardItem item)
             ActorSelected?.Invoke(item.Name);
+    }
+
+    private void FavoritesOnly_Changed(object sender, RoutedEventArgs e)
+    {
+        _page = 1;
+        ApplyFilterAndRender();
+    }
+
+    /// <summary>卡片星标：收藏/取消；收藏成功后台补全档案（头像落盘后刷新卡片图）。</summary>
+    private void ActorFavorite_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        if (_favorites is null) return;
+        if ((sender as FrameworkElement)?.DataContext is not ActorCardItem item) return;
+        var now = _favorites.Toggle(item.Name);
+        ToastService.Show(now ? $"已收藏 {item.Name}，正在补全档案…" : $"已取消收藏 {item.Name}",
+            ToastKind.Success);
+        ApplyFilterAndRender();
+        if (now)
+        {
+            _ = Task.Run(async () =>
+            {
+                if (await _favorites.EnrichAsync(item.Name))
+                    _ = Dispatcher.BeginInvoke(() => Refresh());
+            });
+        }
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)

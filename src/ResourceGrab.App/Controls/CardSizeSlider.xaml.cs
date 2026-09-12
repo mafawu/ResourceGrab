@@ -47,6 +47,13 @@ public partial class CardSizeSlider : UserControl
     private void OnColumnsChanged()
     {
         if (_syncing) return;
+        // 越界值（如未绑定时的 0）钳回有效区间，避免显示"0个/行"之类的无效态
+        var clamped = Math.Clamp(Columns, GridCellSizer.MinColumns, GridCellSizer.MaxColumns);
+        if (clamped != Columns)
+        {
+            Columns = clamped;
+            return;
+        }
         _syncing = true;
         if (ScaleSlider is not null)
             ScaleSlider.Value = Columns;

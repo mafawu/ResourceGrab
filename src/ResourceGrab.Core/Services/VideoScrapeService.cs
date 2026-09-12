@@ -77,8 +77,7 @@ public sealed class VideoScrapeHttpClient : IDisposable
             AllowAutoRedirect = true,
         };
         _client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 3, 60)) };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd(VideoConstants.UserAgent);
         _client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         _client.DefaultRequestHeaders.AcceptLanguage.TryParseAdd("zh-CN,zh;q=0.9,en-US;q=0.8,ja;q=0.7");
         // JavBus 的 Referrer/Cookie 只能发给 JavBus，放在默认头上会泄漏给其他源。
@@ -365,7 +364,7 @@ public sealed class AiravScraper : IVideoScraper
                 psi.ArgumentList.Add(proxy);
             }
             psi.ArgumentList.Add("-A");
-            psi.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
+            psi.ArgumentList.Add(VideoConstants.UserAgent);
             psi.ArgumentList.Add("-H");
             psi.ArgumentList.Add("Accept-Language: zh-CN,zh;q=0.9,en-US;q=0.8,ja;q=0.7");
             psi.ArgumentList.Add(url);

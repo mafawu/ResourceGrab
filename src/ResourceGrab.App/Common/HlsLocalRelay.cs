@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ResourceGrab.Core;
 using ResourceGrab.Core.Logging;
 
 namespace ResourceGrab.App.Common;
@@ -313,8 +314,8 @@ public sealed class HlsLocalRelay : IDisposable
         return (body, ct, s);
     }
 
-    private const string RelayUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    /// <summary>中继代发请求的 UA：与详情抓取/播放器共用统一常量，避免签名校验不一致。</summary>
+    private const string RelayUserAgent = VideoConstants.UserAgent;
 
     private async Task<(int Status, byte[] Body, string ContentType)> FetchAsync(RelayTarget target, Uri absTarget, string? proxyUrl = null)
     {

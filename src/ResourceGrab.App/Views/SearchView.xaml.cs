@@ -178,6 +178,15 @@ public partial class SearchView : CardGridViewBase
             return;
         }
 
+        // JM 号直达：JM123456 / jm123456 / 纯数字 → 跳过聚合搜索，直接打开禁漫详情
+        if (page == 1
+            && selected.Any(s => s.Info.Id == "jm")
+            && ResourceGrab.Core.Utils.JmIdParser.TryParse(keyword, out var jmId))
+        {
+            Navigation.OpenComic("jm", jmId.ToString());
+            return;
+        }
+
         _searchCts?.Cancel();
         _searchCts?.Dispose();
         _searchCts = new CancellationTokenSource();

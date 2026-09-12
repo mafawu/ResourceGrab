@@ -106,6 +106,8 @@ public partial class OnlineReaderView : UserControl
         _scrollDebounce.Tick += (_, _) =>
         {
             _scrollDebounce.Stop();
+            // 滚动停稳：先取消可视区之外的在途加载，把 2 并发Slot让给当前页
+            CancelOutOfWindowLoads();
             UpdateVisible();
         };
         _progressTimer.Tick += (_, _) => SaveProgress();
@@ -114,6 +116,7 @@ public partial class OnlineReaderView : UserControl
             // 停止定时器并保存进度，避免阅读器实例被 DispatcherTimer 持有而无法回收
             _progressTimer.Stop();
             _scrollDebounce.Stop();
+            CancelAllLoads();
             SaveProgress();
         };
 
@@ -153,6 +156,7 @@ public partial class OnlineReaderView : UserControl
             _suppressChapterCombo = false;
             UpdateChapterButtons();
 
+            CancelAllLoads();
             ReleaseAll();
             ChapterStatePanel.Visibility = Visibility.Visible;
             ChapterLoadingIndicator.Visibility = Visibility.Visible;
@@ -372,6 +376,9 @@ public partial class OnlineReaderView : UserControl
         UpdatePageText();
     }
 
+    /// <summary>每页独立取消源：滚出可视区（或切章节）时取消，在 2 并发Slot里给当前页让路。</summary>
+    private readonly Dictionary<int, CancellationTokenSource> _loadCts = new();
+
     private void EnsureImage(int index)
     {
         if (index < 0 || index >= _hosts.Count)
@@ -390,14 +397,27 @@ public partial class OnlineReaderView : UserControl
         _loading.Add(index);
         var page = _pages[index];
         var version = _chapterVersion;
+        var cts = new CancellationTokenSource();
+        if (_loadCts.TryGetValue(index, out var old))
+        {
+            try { old.Cancel(); old.Dispose(); } catch { }
+        }
+        _loadCts[index] = cts;
+        var ct = cts.Token;
 
         _ = Task.Run(async () =>
         {
-            var bytes = await _service.GetImageBytesAsync(_source, page);
+            var bytes = await _service.GetImageBytesAsync(_source, page, ct);
+            ct.ThrowIfCancellationRequested();
             return DecodeBytes(bytes);
-        }).ContinueWith(t =>
+        }, ct).ContinueWith(t =>
         {
             _loading.Remove(index);
+            if (_loadCts.TryGetValue(index, out var cur) && ReferenceEquals(cur, cts))
+            {
+                _loadCts.Remove(index);
+                try { cts.Dispose(); } catch { }
+            }
             if (version != _chapterVersion)
             {
                 return;
@@ -406,11 +426,71 @@ public partial class OnlineReaderView : UserControl
             {
                 AttachImage(index, t.Result);
             }
+            else if (IsCancellation(t.Exception))
+            {
+                // 被可视区调度取消：静默复位（不报红），滚回来/停稳后自动重下
+                ResetLoadingHost(index);
+            }
             else
             {
                 MarkError(index, t.Exception?.GetBaseException().Message ?? "加载失败，点击重试");
             }
         }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private static bool IsCancellation(Exception? ex)
+        => ex is OperationCanceledException
+            || (ex as AggregateException)?.InnerExceptions.All(e => e is OperationCanceledException) == true;
+
+    /// <summary>把一页恢复到"未开始"态（下一轮 UpdateVisible 会重新触发下载）。</summary>
+    private void ResetLoadingHost(int index)
+    {
+        if (index < 0 || index >= _hosts.Count) return;
+        var host = _hosts[index];
+        if (host.IsLoaded) return;
+        host.IsLoading = false;
+        host.StateLayer.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>取消可视窗口之外的在途加载（滚动停稳时调用）。翻页模式保留当前页±4，滚动模式保留可视区±8。</summary>
+    private void CancelOutOfWindowLoads()
+    {
+        if (_loadCts.Count == 0) return;
+        int keepFrom, keepTo;
+        if (_pageMode)
+        {
+            var page = Math.Clamp(_currentPage, 0, _hosts.Count - 1);
+            keepFrom = page - 4;
+            keepTo = page + 4;
+        }
+        else
+        {
+            if (_hosts.Count == 0) return;
+            keepFrom = FindIndexAt(Math.Max(0, Scroller.VerticalOffset - 400)) - 8;
+            keepTo = FindIndexAt(Math.Min(
+                Scroller.VerticalOffset + Scroller.ViewportHeight + 400,
+                _tops.Length > 0 ? _tops[^1] : 0)) + 8;
+        }
+        foreach (var index in _loadCts.Keys.ToList())
+        {
+            if (index < keepFrom || index > keepTo) CancelLoad(index);
+        }
+    }
+
+    private void CancelLoad(int index)
+    {
+        if (_loadCts.TryGetValue(index, out var cts))
+        {
+            _loadCts.Remove(index);
+            try { cts.Cancel(); cts.Dispose(); } catch { }
+        }
+        _loading.Remove(index);
+        ResetLoadingHost(index);
+    }
+
+    private void CancelAllLoads()
+    {
+        foreach (var index in _loadCts.Keys.ToList()) CancelLoad(index);
     }
 
     private void AttachImage(int index, BitmapSource bitmap)

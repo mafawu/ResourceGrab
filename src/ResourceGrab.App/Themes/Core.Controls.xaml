@@ -11,6 +11,13 @@
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
   </Style>
+  <!-- RadioButton/CheckBox 均派生自 ToggleButton：只写这一条隐式样式即覆盖三者。
+       分开写会导致字典键冲突（Item has already been added）直接崩溃启动。
+       背景：这类控件没有隐式样式时 Foreground 继承窗口默认黑色，
+       暗色下跟随它的矢量图标全黑看不见（如左侧导航图标）。与 TextBlock/Button 看齐。 -->
+  <Style x:Key="{x:Type ToggleButton}" TargetType="{x:Type ToggleButton}">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
   <Style x:Key="BaseButtonStyle" TargetType="{x:Type Button}">
     <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
     <Setter Property="FontSize" Value="12.5" />

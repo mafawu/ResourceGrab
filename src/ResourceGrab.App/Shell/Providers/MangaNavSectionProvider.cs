@@ -17,7 +17,11 @@ public sealed class MangaNavSectionProvider : INavSectionProvider
 
     public IReadOnlyList<NavSection> GetSections()
     {
-        var discovery = new List<NavItem> { new("manga.search", "搜索", Icons.Search) };
+        var discovery = new List<NavItem>
+        {
+            new("manga.search", "搜索", Icons.Search),
+            new("manga.author", "作者合集", Icons.Library),
+        };
         if (_info.SupportsRank)
             discovery.Add(new NavItem("manga.rank", "排行", Icons.Rank));
         if (_info.SupportsCategories)

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Text;
@@ -124,6 +125,13 @@ public partial class App : Application
             sp.GetRequiredService<ILogger>()));
         services.AddSingleton<VideoScrapeTaskExecutor>();
         // M3U8/MP4 直存下载：HLS 经本地中继（与播放器同链路，Referer/代理由中继注入）
+        services.AddSingleton<ActorFavoriteService>(sp => new ActorFavoriteService(
+            Path.Combine(AppPaths.AppDataDir, "actor-favorites.json"),
+            sp.GetRequiredService<ILogger>(),
+            sp.GetService<VideoActorMerger>()));
+        services.AddSingleton<OnlineVideoFavoriteService>(sp => new OnlineVideoFavoriteService(
+            Path.Combine(AppPaths.AppDataDir, "online-video-favorites.json"),
+            sp.GetRequiredService<ILogger>()));
         services.AddSingleton<VideoDownloadService>(sp => new VideoDownloadService(
             (uri, referer, proxy) => HlsLocalRelay.Instance.Register(uri, referer, proxy),
             url => HlsLocalRelay.Instance.Unregister(url),
@@ -278,8 +286,7 @@ public partial class App : Application
         if (!string.IsNullOrWhiteSpace(settings.Proxy))
             handler.Proxy = new System.Net.WebProxy(settings.Proxy);
         var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 5, 60)) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(VideoHttpClientFactory.DefaultUserAgent);
         client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         client.DefaultRequestHeaders.AcceptLanguage.TryParseAdd("zh-CN,zh;q=0.9,en-US;q=0.8,ja;q=0.7");
         return client;

@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
     private ScrapeToolsView? _scrapeToolsView;
+    private AuthorSearchView? _authorSearchView;
 
     /// <summary>章节详情页缓存：按最近访问 LRU 淘汰，限制常驻内存。</summary>
     private const int MaxCachedChapterViews = 6;
@@ -339,6 +340,11 @@ public partial class MainWindow : Window
     {
         // 漫画
         _navigator.Register("manga.search", () => { EnsureSearchView(); return _searchView; });
+        _navigator.Register("manga.author", () =>
+        {
+            _authorSearchView ??= new AuthorSearchView();
+            return _authorSearchView;
+        });
         _navigator.Register("manga.rank", () =>
         {
             if (_sourceManager.Current is IRankSource)

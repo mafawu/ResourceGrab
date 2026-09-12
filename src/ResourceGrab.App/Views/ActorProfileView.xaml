@@ -18,7 +18,14 @@
             <StackPanel MaxWidth="960" Margin="0,0,12,0">
                 <Image x:Name="Avatar" Width="120" Height="120" Stretch="UniformToFill"
                        Margin="0,0,0,10" Visibility="Collapsed" HorizontalAlignment="Left" />
-                <TextBlock x:Name="NameText" FontSize="20" FontWeight="Bold" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="NameText" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Button x:Name="FavoriteButton" Style="{StaticResource IconButtonStyle}"
+                            Margin="10,0,0,0" VerticalAlignment="Center" Click="FavoriteButton_Click"
+                            ToolTip="收藏演员（自动补全头像与简介）">
+                        <TextBlock x:Name="FavoriteHeart" Text="♡" FontSize="18" />
+                    </Button>
+                </StackPanel>
                 <WrapPanel x:Name="AliasWrap" Margin="0,6,0,0" />
                 <TextBlock x:Name="InfoText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" Margin="0,8,0,0" />

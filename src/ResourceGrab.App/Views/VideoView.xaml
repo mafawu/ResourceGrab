@@ -148,6 +148,10 @@
                                         <Button x:Name="OnlineDetailDownloadButton" Style="{StaticResource LibraryActionButtonStyle}"
                                                 Content="⬇ 下载" Click="OnlineDetailDownload_Click"
                                                 ToolTip="下载视频到本地（加入任务队列）" Margin="0,0,6,0" Visibility="Collapsed" />
+                                        <Button x:Name="OnlineDetailFavoriteButton" Style="{StaticResource IconButtonStyle}"
+                                                Margin="0,0,6,0" Click="OnlineDetailFavorite_Click" ToolTip="收藏（入库自动关联为本地收藏）">
+                                            <TextBlock x:Name="OnlineDetailFavoriteHeart" Text="♡" FontSize="15" />
+                                        </Button>
                                         <Button x:Name="OnlineDetailPopoutButton" Style="{StaticResource IconButtonStyle}"
                                                 Content="⛶" Click="OnlineDetailPopout_Click"
                                                 ToolTip="放大播放（独立窗口）" Margin="0,0,6,0" Visibility="Collapsed" />
@@ -303,6 +307,10 @@
                                 <Button x:Name="OnlineFullDownloadButton" Content="⬇ 下载"
                                         Style="{StaticResource LibraryActionButtonStyle}" Visibility="Collapsed"
                                         Click="OnlineFullDownload_Click" ToolTip="下载视频到本地（加入任务队列）" Margin="8,0,0,0" />
+                                <Button x:Name="OnlineFullFavoriteButton" Style="{StaticResource IconButtonStyle}"
+                                        Margin="8,0,0,0" Click="OnlineFullFavorite_Click" ToolTip="收藏（入库自动关联为本地收藏）">
+                                    <TextBlock x:Name="OnlineFullFavoriteHeart" Text="♡" FontSize="15" />
+                                </Button>
                                 <Button x:Name="OnlineFullPopoutButton" Style="{StaticResource IconButtonStyle}"
                                         Content="⛶" Click="OnlineFullPopout_Click"
                                         ToolTip="放大播放（独立窗口）" Margin="8,0,0,0" Visibility="Collapsed" />
@@ -563,7 +571,8 @@
 
                         <!-- 本地页工具栏：标题/排序/动作在代码后置组装（内容属性元素内不能注册 x:Name） -->
                         <controls:BrowserToolbar x:Name="LocalToolbar" Grid.Row="0" Margin="0,0,0,14"
-                                                 ShowSearchBox="False" ShowSearchButton="False" />
+                                                 ShowSearchBox="False" ShowSearchButton="False"
+                                                 SizeSliderColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:VideoView}, Mode=TwoWay}" />
 
                         <controls:VirtualizedCardGrid x:Name="VideoItems" Grid.Row="1" Visibility="Collapsed"
                                                        SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=views:VideoView}}"

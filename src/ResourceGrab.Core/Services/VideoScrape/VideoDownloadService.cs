@@ -64,8 +64,8 @@ public sealed class VideoDownloadService
     /// <summary>输出文件名总长上限（含扩展名），超长截断标题部分。</summary>
     private const int MaxFileNameLength = 120;
 
-    private const string UserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    /// <summary>下载/取流统一 UA：必须与播放器、详情抓取一致，否则 CDN 校验签名时会 403。</summary>
+    private const string UserAgent = VideoConstants.UserAgent;
 
     private readonly Func<Uri, string?, string?, string>? _hlsRelayRegister;
     private readonly Action<string?>? _hlsRelayUnregister;

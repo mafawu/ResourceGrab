@@ -12,8 +12,12 @@
 
         <Style x:Key="NavRailItemContainerStyle" TargetType="RadioButton">
             <Setter Property="Height" Value="44" />
-            <Setter Property="Margin" Value="2,0" />
+            <!-- 上下各留 1px，悬浮/选中圆角之间有 2px 间隔，不再完全挨着 -->
+            <Setter Property="Margin" Value="2,1" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- 显示样式会整体替换隐式样式：前景色必须在这里显式声明，
+                 否则图标（绑定 RadioButton.Foreground）在暗色下继承窗口默认黑色 -->
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
@@ -43,20 +47,12 @@
 
         <DataTemplate x:Key="NavItemTemplate">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Width="28" Height="28"
-                        CornerRadius="{DynamicResource RadiusSm}"
-                        Background="Transparent"
-                        BorderBrush="{DynamicResource CardBorderBrush}"
-                        BorderThickness="1"
-                        SnapsToDevicePixels="True"
-                        VerticalAlignment="Center">
-                    <Path Data="{Binding Icon}"
-                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
-                          StrokeThickness="1.55"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                          Stretch="Uniform" Width="15" Height="15"
-                          HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
+                <Path Data="{Binding Icon}"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                      StrokeThickness="1.55"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Stretch="Uniform" Width="17" Height="17"
+                      HorizontalAlignment="Center" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Title}"
                            Margin="10,0,0,0"
                            FontWeight="SemiBold"

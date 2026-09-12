@@ -1,0 +1,91 @@
+<UserControl x:Class="ResourceGrab.App.Views.AuthorSearchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 搜索行：作者名 + 搜索 + 状态 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <controls:SearchBoxControl x:Name="AuthorBox" Width="260"
+                     Watermark="输入作者名，在禁漫天堂 + 绅士漫画中合并搜索"
+                     SearchSubmitted="AuthorBox_SearchSubmitted" />
+            <Button x:Name="SearchButton" Style="{StaticResource LibraryPrimaryButtonStyle}" Content="搜索作者"
+                    Margin="8,0,0,0" Padding="16,6" Click="SearchButton_Click" />
+            <Button x:Name="CancelButton" Style="{StaticResource GhostButtonStyle}" Content="取消"
+                    Margin="8,0,0,0" Padding="12,6" Visibility="Collapsed" Click="CancelButton_Click" />
+            <TextBlock x:Name="StatusText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <!-- 结果工具条：全选/全不选/仅中文 + 计数 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,12,0,8">
+            <Button Style="{StaticResource GhostButtonStyle}" Content="全选" Padding="10,5" Click="SelectAllButton_Click" />
+            <Button Style="{StaticResource GhostButtonStyle}" Content="全不选" Padding="10,5" Margin="6,0,0,0" Click="DeselectAllButton_Click" />
+            <Button Style="{StaticResource GhostButtonStyle}" Content="仅中文" Padding="10,5" Margin="6,0,0,0" Click="SelectChineseButton_Click"
+                    ToolTip="只勾选中文版" />
+            <TextBlock x:Name="CountText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" Margin="12,0,0,0" />
+        </StackPanel>
+
+        <!-- 去重结果列表 -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="ResultList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                CornerRadius="{DynamicResource RadiusMd}" Padding="10,8" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                          VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0">
+                                        <Run Text="{Binding Author}" /><Run Text=" · " /><Run Text="{Binding SourceName}" />
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Background="#1FA855" CornerRadius="{DynamicResource RadiusXs}"
+                                            Padding="6,2" Margin="0,0,4,0"
+                                            Visibility="{Binding HasChinese, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="中文" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                    </Border>
+                                    <Border Background="{DynamicResource PrimarySubtleBrush}" CornerRadius="{DynamicResource RadiusXs}"
+                                            Padding="6,2"
+                                            Visibility="{Binding IsDownloaded, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="✓ 已下载" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{DynamicResource PrimaryBrush}" />
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 底部下载 -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <TextBlock x:Name="DownloadStatusText" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center" Margin="0,0,12,0" />
+            <Button x:Name="DownloadButton" Style="{StaticResource LibraryPrimaryButtonStyle}" Content="⬇ 下载选中"
+                    Padding="18,7" Click="DownloadButton_Click" ToolTip="下载勾选的漫画（已下载的自动跳过）" />
+        </StackPanel>
+    </Grid>
+</UserControl>

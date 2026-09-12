@@ -113,6 +113,23 @@ public class VideoPosterCard : PosterCard
         return false;
     }
 
+    /// <summary>设置统一已下载角标（绿底白字 ✓，与漫画卡一致）；false 清除。</summary>
+    public void SetDownloaded(bool downloaded)
+    {
+        if (!downloaded)
+        {
+            // 仅清除本方法挂的角标，不碰评分/类型等其他槽位
+            if (BottomLeftContent is Border b && b.Tag as string == "downloaded")
+                BottomLeftContent = null;
+            return;
+        }
+        var badge = MakeBadge("✓已下载",
+            new SolidColorBrush(Colors.White),
+            new SolidColorBrush(Color.FromRgb(0x1F, 0xA8, 0x55)));
+        badge.Tag = "downloaded";
+        BottomLeftContent = badge;
+    }
+
     /// <summary>绑定 VideoItem，自动填充所有属性和角标。</summary>
     public void Bind(VideoItem item)
     {
@@ -270,14 +287,13 @@ public class VideoPosterCard : PosterCard
                 new SolidColorBrush(Color.FromRgb(0xFF, 0xB3, 0x47)));
         }
 
-        // 右下：文件丢失
+        // 右下：文件丢失（只挂角标，不再整体降透明——降透明在大片白底上像蒙了层白纱）
+        Opacity = 1;
         if (!item.FileExists)
         {
             BottomRightContent = MakeBadge("缺失",
                 new SolidColorBrush(Color.FromRgb(0xFF, 0x4D, 0x6F)),
                 new SolidColorBrush(Color.FromArgb(0xB3, 0x80, 0x00, 0x00)));
-            // 整体降低透明度
-            Opacity = 0.6;
         }
     }
 }

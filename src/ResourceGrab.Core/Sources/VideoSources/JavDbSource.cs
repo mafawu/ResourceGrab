@@ -21,8 +21,7 @@ namespace ResourceGrab.Core.Sources.VideoSources;
 public sealed class JavDbSource : IVideoSource
 {
     private const string DefaultBaseUrl = "https://javdb.com";
-    private const string BrowserUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+    private const string BrowserUserAgent = VideoConstants.UserAgent;
 
     private readonly HttpClient _http;
     private readonly ConfigService _config;

@@ -32,7 +32,7 @@ public partial class BrowserToolbar : UserControl
 
     public static readonly DependencyProperty SizeSliderColumnsProperty = DependencyProperty.Register(
         nameof(SizeSliderColumns), typeof(int), typeof(BrowserToolbar),
-        new PropertyMetadata(0));
+        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault));
 
     public static readonly DependencyProperty TitleProperty = DependencyProperty.Register(
         nameof(Title), typeof(object), typeof(BrowserToolbar),
@@ -88,8 +88,13 @@ public partial class BrowserToolbar : UserControl
         BindingOperations.SetBinding(PART_SizeSlider, CardSizeSlider.ColumnsProperty,
             new System.Windows.Data.Binding(nameof(SizeSliderColumns)) { Source = this, Mode = System.Windows.Data.BindingMode.TwoWay });
         DataContextChanged += (_, _) => UpdateSegments();
+        // 标题/排序/动作区多为页面构造时后赋值：Loaded 时再刷新一次显隐，否则永远 Collapsed
+        Loaded += (_, _) => UpdateSegments();
         UpdateSegments();
     }
+
+    /// <summary>页面向各内容区赋值后调用，刷新分段显隐（构造时的 UpdateSegments 看不到后赋值的内容）。</summary>
+    public void RefreshSegments() => UpdateSegments();
 
     private void SearchButton_Click(object sender, RoutedEventArgs e)
         => SearchButtonClick?.Invoke(this, e);

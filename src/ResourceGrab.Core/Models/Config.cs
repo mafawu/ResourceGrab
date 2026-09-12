@@ -62,6 +62,12 @@ public sealed class VideoPlaybackSettings
     [JsonPropertyName("seekStepSeconds")] public int SeekStepSeconds { get; set; } = 10;
     [JsonPropertyName("loadExternalSubtitles")] public bool LoadExternalSubtitles { get; set; } = true;
     [JsonPropertyName("preferredSubtitleLanguage")] public string PreferredSubtitleLanguage { get; set; } = "zh-CN";
+
+    /// <summary>在线播放音量（0-100），跨会话记住。</summary>
+    [JsonPropertyName("volume")] public int Volume { get; set; } = 100;
+
+    /// <summary>在线播放是否静音，跨会话记住。</summary>
+    [JsonPropertyName("muted")] public bool Muted { get; set; }
 }
 
 public sealed class GeneralSettings

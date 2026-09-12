@@ -185,6 +185,8 @@ public class ConfigService
             ? 1.0
             : Math.Clamp(rate, 0.25, 4.0);
         settings.SeekStepSeconds = Math.Clamp(settings.SeekStepSeconds, 5, 60);
+        // Flyleaf 音量放大器上限 100；越界配置会让播放器一开声就爆音
+        settings.Volume = Math.Clamp(settings.Volume, 0, 100);
         return settings;
     }
 

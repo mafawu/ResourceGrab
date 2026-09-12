@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
 using ResourceGrab.App.ViewModels;
 
 namespace ResourceGrab.App.Controls;
@@ -11,6 +12,62 @@ public sealed class NonEmptyToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is string s && s.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>数值 × 系数（卡片封面高度跟随卡片宽度按比例自适应，如宽高比）。</summary>
+public sealed class MultiplyConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is double d
+            && double.TryParse(parameter?.ToString(), System.Globalization.NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var ratio))
+            return Math.Max(0, d * ratio);
+        return 0.0;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>徽章底色：Color 为空走主题浅底（PrimarySubtleBrush），否则解析 hex（如已下载绿）。</summary>
+public sealed class BadgeBackgroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string s && !string.IsNullOrWhiteSpace(s))
+        {
+            try { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(s)); }
+            catch { }
+        }
+        try
+        {
+            if (Application.Current?.TryFindResource("PrimarySubtleBrush") is Brush b) return b;
+        }
+        catch { }
+        return new SolidColorBrush(Color.FromRgb(0xE8, 0xF0, 0xFE));
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>徽章文字色：Color 为空走主题主色，否则白色（保证彩底可读）。</summary>
+public sealed class BadgeForegroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string s && !string.IsNullOrWhiteSpace(s)) return Brushes.White;
+        try
+        {
+            if (Application.Current?.TryFindResource("PrimaryBrush") is Brush b) return b;
+        }
+        catch { }
+        return new SolidColorBrush(Color.FromRgb(0x2F, 0x6F, 0xED));
+    }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

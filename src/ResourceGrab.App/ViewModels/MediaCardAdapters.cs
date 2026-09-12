@@ -39,7 +39,7 @@ public sealed class MangaOnlineCardAdapter : MediaCardViewModel
         get
         {
             var badges = new List<MediaBadge>();
-            if (_inner.IsDownloaded) badges.Add(new("已下载"));
+            if (_inner.IsDownloaded) badges.Add(new("✓ 已下载", "#1FA855"));
             if (!string.IsNullOrEmpty(_inner.SourceBadge)) badges.Add(new(_inner.SourceBadge));
             return badges.AsReadOnly();
         }

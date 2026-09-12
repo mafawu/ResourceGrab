@@ -30,7 +30,14 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- 底部控制条：暂停/继续 + 当前时间 + 进度滑条 + 总时长 + 停止（播放/暂停态显示，5 秒无操作自动隐藏） -->
+                <!-- 缓冲中提示：播放中网络跟不上时显示（不改变播放状态，控制条继续可操作） -->
+                <Grid x:Name="BufferingLayer" Background="#33101418" Visibility="Collapsed">
+                    <controls:LoadingIndicator VerticalAlignment="Center" HorizontalAlignment="Center"
+                                               RingSize="34" Foreground="#CCFFFFFF" />
+                </Grid>
+
+                <!-- 底部控制条：暂停/继续 + 当前时间 + 进度滑条 + 总时长 + 画质 + 静音 + 音量 + 停止
+                     （播放/暂停态显示，5 秒无操作自动隐藏） -->
                 <Border x:Name="ControlBar" VerticalAlignment="Bottom" Background="#99000000"
                         Padding="12,8" Visibility="Collapsed" MouseMove="ControlBar_MouseMove">
                     <Grid>
@@ -38,6 +45,9 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -78,8 +88,70 @@
                                 Thumb.DragCompleted="SeekSlider_DragCompleted" />
                         <TextBlock x:Name="DurationText" Grid.Column="3" Text="--:--" FontSize="12"
                                    Foreground="#B3FFFFFF" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        <!-- 画质：点击弹出档位菜单；有多档时才显示，文字为当前档位 -->
+                        <Button x:Name="QualityButton" Grid.Column="4" MinWidth="40" Height="32"
+                                Background="Transparent" BorderThickness="0"
+                                Click="QualityButton_Click" ToolTip="切换画质" Visibility="Collapsed"
+                                Margin="10,0,0,0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="8" Padding="8,0" SnapsToDevicePixels="True">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock x:Name="QualityLabel" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="#F2FFFFFF" VerticalAlignment="Center" />
+                        </Button>
+
+                        <!-- 静音 / 取消静音：矢量图标随状态切换（不用 emoji，避免被彩色字形渲染） -->
+                        <Button x:Name="MuteToggleButton" Grid.Column="5" Width="32" Height="32"
+                                Background="Transparent" BorderThickness="0"
+                                Click="MuteToggle_Click" ToolTip="静音 / 取消静音" Margin="4,0,0,0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="8" SnapsToDevicePixels="True">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Grid Width="16" Height="16">
+                                <Path x:Name="VolumeOnIcon" Data="{StaticResource IconVolumeHigh}"
+                                      Stroke="White" StrokeThickness="1.6" StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" />
+                                <Path x:Name="VolumeOffIcon" Data="{StaticResource IconVolumeMute}"
+                                      Stroke="White" StrokeThickness="1.6" StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform"
+                                      Visibility="Collapsed" />
+                            </Grid>
+                        </Button>
+
+                        <!-- 音量滑条：0-100，跨会话记住 -->
+                        <Slider x:Name="VolumeSlider" Grid.Column="6" Width="70" Minimum="0" Maximum="100"
+                                VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="音量"
+                                ValueChanged="VolumeSlider_ValueChanged"
+                                Thumb.DragCompleted="VolumeSlider_DragCompleted" />
+
                         <!-- 停止：白色图标 -->
-                        <Button x:Name="StopButton" Grid.Column="4" Width="32" Height="32"
+                        <Button x:Name="StopButton" Grid.Column="7" Width="32" Height="32"
                                 Background="Transparent" BorderThickness="0"
                                 FontFamily="Segoe UI Symbol"
                                 Foreground="White" Content="■" Margin="10,0,0,0" Click="StopButton_Click" ToolTip="停止播放">
