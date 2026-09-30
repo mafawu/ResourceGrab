@@ -608,7 +608,9 @@ public partial class LocalView : CardGridViewBase
                 return false;
             }
         }
-        if (_selectedTags.Count > 0 && !comic.Tags.Any(t => _selectedTags.Contains(t)))
+        // 包含标签为「与」语义：需同时具备所有已选标签
+        if (_selectedTags.Count > 0
+            && !_selectedTags.All(selected => comic.Tags.Any(tag => string.Equals(tag, selected, StringComparison.OrdinalIgnoreCase))))
         {
             return false;
         }

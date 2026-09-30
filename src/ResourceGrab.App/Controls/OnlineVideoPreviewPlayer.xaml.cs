@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using Microsoft.Extensions.DependencyInjection;
@@ -110,12 +111,56 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         InitializeComponent();
         InitVolumeFromConfig();
         Unloaded += (_, _) => DisposePlayer();
+        // 播放画面在 FlyleafHost 的独立窗口里，滚轮不会冒泡到页面；挂转发让滚轮能滚动页面
+        AttachWheelForwarding();
+        Loaded += (_, _) => AttachWheelForwarding();
         _controlBarHideTimer.Tick += (_, _) =>
         {
             _controlBarHideTimer.Stop();
             if (_inPlayback) ControlBar.Visibility = Visibility.Collapsed;
         };
         _uiSyncTimer.Tick += (_, _) => SyncPlaybackUi();
+    }
+
+    /// <summary>
+    /// 把 FlyleafHost 的 Surface / Overlay 窗口上的滚轮转发给页面最近的 ScrollViewer：
+    /// 这两个窗口是独立顶层窗口，滚轮不会冒泡回主窗口，导致鼠标停在播放画面上无法滚动页面。
+    /// Ctrl/Shift+滚轮不转发，保留 Flyleaf 的缩放/旋转手势。
+    /// </summary>
+    private void AttachWheelForwarding()
+    {
+        try
+        {
+            if (VideoHost?.Surface is { } surface)
+            {
+                surface.PreviewMouseWheel -= ForwardWheelToPage;
+                surface.PreviewMouseWheel += ForwardWheelToPage;
+            }
+            if (VideoHost?.Overlay is { } overlay)
+            {
+                overlay.PreviewMouseWheel -= ForwardWheelToPage;
+                overlay.PreviewMouseWheel += ForwardWheelToPage;
+            }
+        }
+        catch { /* 宿主尚未就绪时忽略，Loaded/播放时会再试 */ }
+    }
+
+    private void ForwardWheelToPage(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled || Keyboard.Modifiers != ModifierKeys.None) return;
+        var scroller = FindAncestorScrollViewer(this);
+        if (scroller is null) return;
+        scroller.ScrollToVerticalOffset(scroller.VerticalOffset - e.Delta);
+        e.Handled = true;
+    }
+
+    private static ScrollViewer? FindAncestorScrollViewer(DependencyObject start)
+    {
+        for (var node = start; node is not null; node = VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node))
+        {
+            if (node is ScrollViewer scroller) return scroller;
+        }
+        return null;
     }
 
     // ── 状态切换 ─────────────────────────────────────────────────────
@@ -314,6 +359,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
         ApplyRequestHeaders();
         VideoHost.Player = _player;
+        AttachWheelForwarding();
         SetState(PlayerState.Loading);
         _openStopwatch = System.Diagnostics.Stopwatch.StartNew();
         _uiSyncTimer.Start();

@@ -110,7 +110,8 @@ public sealed class VideoCardAdapter : MediaCardViewModel
         _detailRequested = detailRequested;
         _selectionChanged = selectionChanged;
 
-        var cover = new[] { item.PosterPath, item.CoverPath, item.ThumbnailPath }.FirstOrDefault(File.Exists);
+        // 本地页/演员作品网格用横版 fanart 作封面（推荐页才用竖版 poster）
+        var cover = new[] { item.CoverPath, item.ThumbnailPath, item.PosterPath }.FirstOrDefault(File.Exists);
         Cover = cover;
         CoverFallbackText = "V";
         Subtitle = JoinInfo(" ", item.DurationText, item.Resolution) is { Length: > 0 } s ? s : null;

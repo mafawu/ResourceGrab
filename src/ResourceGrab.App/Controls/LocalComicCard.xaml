@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:common="clr-namespace:ResourceGrab.App.Common"
              Margin="0,0,14,14"
+             UseLayoutRounding="True" SnapsToDevicePixels="True"
              SizeChanged="Card_SizeChanged">
     <Grid x:Name="Root" Cursor="Hand" MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave" MouseLeftButtonUp="Root_MouseLeftButtonUp">
         <Grid.ToolTip>

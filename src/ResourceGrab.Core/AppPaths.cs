@@ -9,6 +9,8 @@ public static class AppPaths
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "jmcomic-downloader");
     public static string ConfigPath => Path.Combine(AppDataDir, "config.json");
     public static string LocalLibraryCachePath => Path.Combine(AppDataDir, "local-library-cache.json");
+    public static string MangaRelationsCachePath => Path.Combine(AppDataDir, "manga-relations-cache.json");
+    public static string RelatedCoversDir => Path.Combine(AppDataDir, "related-covers");
     public static string DownloadHistoryPath => Path.Combine(AppDataDir, "download-history.json");
     public static string NovelHistoryPath => Path.Combine(AppDataDir, "novel-history.json");
     public static string NovelIndexPath => Path.Combine(AppDataDir, "novel-index.json");

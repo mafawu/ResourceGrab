@@ -186,10 +186,17 @@ public static class VideoMetadataReader
         }
     }
 
-    /// <summary>在 PATH 与程序目录中查找外部工具的可执行文件路径；找不到返回 null。</summary>
+    /// <summary>在程序目录（含 ffmpeg\ 子目录）与 PATH 中查找外部工具的可执行文件路径；找不到返回 null。</summary>
     public static string? FindTool(string fileName)
     {
         var exeName = fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? fileName : fileName + ".exe";
+
+        // 发布包把 ffmpeg.exe/ffprobe.exe 与共享库一起放在程序目录的 ffmpeg\ 下
+        var bundled = Path.Combine(AppContext.BaseDirectory, "ffmpeg", exeName);
+        if (File.Exists(bundled))
+        {
+            return bundled;
+        }
 
         var local = Path.Combine(AppContext.BaseDirectory, exeName);
         if (File.Exists(local))

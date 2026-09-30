@@ -5,26 +5,12 @@
              Background="{DynamicResource SurfaceBrush}">
     <ScrollViewer x:Name="RootScroll" VerticalScrollBarVisibility="Auto" Padding="20,20,20,20">
         <StackPanel>
-            <TextBlock Text="推荐" FontSize="18" FontWeight="Bold" Margin="0,0,0,16" />
+            <TextBlock Text="推荐" FontSize="20" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock Text="基于本地视频库自动整理" FontSize="12"
+                       Foreground="{DynamicResource TextDisabledBrush}" Margin="0,0,0,18" />
 
-            <!-- 最近添加 -->
-            <TextBlock Text="最近添加" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <!-- 内层横向行：滚轮悬停时横向浏览（见 Row_MouseWheel），到头后放行给外层竖向滚动 -->
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                          Margin="0,0,0,20" PreviewMouseWheel="Row_MouseWheel">
-                <StackPanel x:Name="RecentPanel" Orientation="Horizontal" />
-            </ScrollViewer>
-
-            <!-- 高评分 -->
-            <TextBlock Text="高评分" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                          Margin="0,0,0,20" PreviewMouseWheel="Row_MouseWheel">
-                <StackPanel x:Name="TopRatedPanel" Orientation="Horizontal" />
-            </ScrollViewer>
-
-            <!-- 热门系列 -->
-            <TextBlock Text="热门系列" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <StackPanel x:Name="SeriesPanel" />
+            <!-- 分组由代码构建：竖向整页滚动，卡片自适应换行，无嵌套横向滚动 -->
+            <StackPanel x:Name="SectionsHost" />
 
             <!-- 空状态 -->
             <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center"

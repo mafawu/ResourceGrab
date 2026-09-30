@@ -55,12 +55,16 @@ public partial class VideoView : CardGridViewBase
     private CancellationTokenSource? _onlineSearchCts;
     private int _onlineSearchVersion;
     /// <summary>在线结果卡片宽度下限：横版封面 + 大标题需要足够宽度才方便浏览。</summary>
-    private const double OnlineMinCardWidth = 200;
+    private const double OnlineMinCardWidth = 170;
     /// <summary>在线卡片间距（PosterCard 右侧 Margin），需与 VirtualizedCardGrid 的 Spacing 一致。</summary>
     private const double OnlineCardGap = 10;
 
     /// <summary>单次搜索自动续抓的页数上限。MissAV 服务端每页仅返回约 12 条，需合并多页才够一屏。</summary>
     private const int OnlineAutoMergePages = 3;
+    /// <summary>在线推荐（榜单）单次获取的页数：2 页 ≈ 24 条。</summary>
+    private const int ListingMergePages = 2;
+    /// <summary>在线推荐每行卡片数。</summary>
+    private const int ListingColumns = 4;
     /// <summary>单次搜索最多上屏的条数。</summary>
     private const int OnlineMaxResults = 60;
     private int _onlineRenderedCount;
@@ -80,6 +84,13 @@ public partial class VideoView : CardGridViewBase
     
     /// <summary>已成功加载过的榜单（同源同榜单进入推荐页不重复请求）。</summary>
     private (string SourceId, VideoListingKind Kind)? _listingLoadedFor;
+
+    /// <summary>榜单结果快照：切到别的子页（含在线搜索）再回来时直接用快照渲染，不重新请求。</summary>
+    private List<OnlineVideoSummary> _listingSnapshot = new();
+    private (string SourceId, VideoListingKind Kind)? _listingSnapshotKey;
+
+    /// <summary>进入在线推荐前的搜索源：榜单仅 MissAV 支持，进入时切到 missav，退出时还原。</summary>
+    private string? _sourceBeforeListing;
 
     private IVideoSource? OnlineSource => App.Services.GetServices<IVideoSource>()
         .FirstOrDefault(s => s.Info.Id == _selectedOnlineSourceId);
@@ -366,7 +377,7 @@ public partial class VideoView : CardGridViewBase
         try
         {
             // 与搜索一致：MissAV 每页条数少，一次并发抓本段所有页，首页先上屏、续页去重追加
-            var mergePages = MergePagesFor(source);
+            var mergePages = ListingMergePagesFor(source);
             var pages = Enumerable.Range(_onlinePage, mergePages).ToList();
             var pageTasks = pages.ToDictionary(p => p, p => source.GetListingAsync(kind, p, ct));
 
@@ -383,7 +394,8 @@ public partial class VideoView : CardGridViewBase
             _onlineLastPage = _onlinePage;
             _listingLoadedFor = (source.Info.Id, kind);
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            RenderOnlineResults(first.Items.Where(i => seen.Add(OnlineDedupeKey(i))).ToList(), append: false);
+            var rendered = first.Items.Where(i => seen.Add(OnlineDedupeKey(i))).ToList();
+            RenderOnlineResults(rendered, append: false);
             if (_onlineRenderedCount == 0)
             {
                 OnlineEmptyHint.Text = "榜单暂无内容";
@@ -416,6 +428,10 @@ public partial class VideoView : CardGridViewBase
                 _onlineLastPage = lastPageWithNew;
                 RenderOnlineResults(added, append: true);
             }
+
+            // 记录榜单快照：切走再回来直接用它渲染，不再联网请求
+            _listingSnapshot = rendered.Concat(added).ToList();
+            _listingSnapshotKey = (source.Info.Id, kind);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -480,15 +496,35 @@ public partial class VideoView : CardGridViewBase
         }
     }
 
-    /// <summary>进入在线推荐模式：展示榜单 Tab，默认（或继续上次的）榜单；同源同榜单已加载过则不重复请求。</summary>
+    /// <summary>进入在线推荐模式：展示榜单 Tab，默认（或继续上次的）榜单；已有结果/快照时不重复请求。</summary>
     private void EnterListingMode()
     {
         OnlineListingBar.Visibility = Visibility.Visible;
+        // 榜单只有 MissAV 支持：隐藏源切换/搜索横栏，并把源切到 missav
+        OnlineToolbar.Visibility = Visibility.Collapsed;
+        if (_selectedOnlineSourceId != "missav")
+        {
+            _sourceBeforeListing ??= _selectedOnlineSourceId;
+            _selectedOnlineSourceId = "missav";
+        }
         _onlineListingKind ??= VideoListingKind.TodayHot;
         MarkListingTab(_onlineListingKind.Value);
-        // 同源同榜单且结果还在（如去了本地页再回来）才跳过重复请求；搜索模式退出时结果已清空，必须重拉
+        UpdateOnlineCardWidth();
+
+        // 同源同榜单结果还在屏上：直接用
         if (_listingLoadedFor == (_selectedOnlineSourceId, _onlineListingKind.Value) && _onlineAdapters.Count > 0)
             return;
+
+        // 有同源同榜单快照（如切到本地/搜索后回来）：用快照恢复，不重新请求榜单
+        if (_listingSnapshotKey == (_selectedOnlineSourceId, _onlineListingKind.Value) && _listingSnapshot.Count > 0)
+        {
+            _listingLoadedFor = _listingSnapshotKey;
+            _onlinePage = 1;
+            // 详情回填走 _detailCache（内存缓存），命中即不联网
+            RenderOnlineResults(_listingSnapshot, append: false);
+            return;
+        }
+
         _onlinePage = 1;
         ExecuteOnlineListing();
     }
@@ -498,6 +534,15 @@ public partial class VideoView : CardGridViewBase
     {
         _onlineListingKind = null;
         OnlineListingBar.Visibility = Visibility.Collapsed;
+        OnlineToolbar.Visibility = Visibility.Visible;
+        UpdateOnlineCardWidth();
+        // 还原进入推荐前选择的搜索源
+        if (!string.IsNullOrEmpty(_sourceBeforeListing))
+        {
+            _selectedOnlineSourceId = _sourceBeforeListing;
+            _sourceBeforeListing = null;
+            BuildVideoSourceTabs();
+        }
         _onlineSearchCts?.Cancel();
         ClosePopoutIfOpen();
         CloseOnlineFullDetail();
@@ -658,7 +703,9 @@ public partial class VideoView : CardGridViewBase
         EmptyPanel.Visibility = _filtered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyTitle.Text = _library.Items.Count > 0 ? "没有符合筛选条件的视频" : "还没有视频文件";
         EmptyAddButton.Visibility = _library.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-        _videoCountText.Text = $"共 {_filtered.Count} 个";
+        _videoCountText.Text = _filtered.Count == _library.Items.Count
+            ? $"共 {_library.Items.Count} 个"
+            : $"当前 {_filtered.Count} / 共 {_library.Items.Count} 个";
 
         var pageItems = _filtered
             .Skip((_page - 1) * _pageSize)
@@ -1267,7 +1314,8 @@ public partial class VideoView : CardGridViewBase
         OnlineEmptyHint.Text = _onlineRenderedCount > 0 ? "" : "没有找到匹配的视频";
         UpdateOnlinePagingText();
 
-        // 搜索页摘要信息有限，后台逐卡片拉详情回填（发行日期/演员/标签），低并发渐进显示
+        // 搜索页摘要信息有限，后台逐卡片拉详情回填（发行日期/演员/标签），低并发渐进显示；
+        // 详情走 _detailCache 内存缓存，切页回来重渲染命中缓存不联网
         if (adapters.Count > 0) StartOnlineDetailEnrichment(adapters);
     }
 
@@ -1286,6 +1334,10 @@ public partial class VideoView : CardGridViewBase
     /// <summary>单次搜索自动合并的页数：MissAV 每页约 12 条需合并多页才够一屏；其他源（如 JavDB）单页即可。</summary>
     private static int MergePagesFor(IVideoSource? source)
         => source is { Info.Id: "missav" } ? OnlineAutoMergePages : 1;
+
+    /// <summary>榜单模式单次获取页数：MissAV 2 页（约 24 条），其它源 1 页。</summary>
+    private static int ListingMergePagesFor(IVideoSource? source)
+        => source is { Info.Id: "missav" } ? ListingMergePages : 1;
 
     /// <summary>
     /// MissAV 搜索无结果时的换源兜底：关键词可解析为番号时，按 advanced.contentRoutes 的
@@ -1332,7 +1384,9 @@ public partial class VideoView : CardGridViewBase
         if (available <= 0) return;
         const double scrollbarReserve = 16;
         if (available > scrollbarReserve) available -= scrollbarReserve;
-        var columns = Math.Clamp(Columns, GridCellSizer.MinColumns, GridCellSizer.MaxColumns);
+        var columns = _onlineListingKind is not null
+            ? ListingColumns
+            : Math.Clamp(Columns, GridCellSizer.MinColumns, GridCellSizer.MaxColumns);
         var maxFit = Math.Max(1, (int)Math.Floor((available + OnlineCardGap) / (OnlineMinCardWidth + OnlineCardGap)));
         var target = Math.Min(columns, maxFit);
         if (OnlineCards.DesiredColumns != target)
@@ -2509,7 +2563,8 @@ public partial class VideoView : CardGridViewBase
         // 每次搜索会自动合并多页，按整段步进回退，避免与当前视图大量重叠
         if (_onlinePage > 1)
         {
-            _onlinePage = Math.Max(1, _onlinePage - MergePagesFor(OnlineSource));
+            var step = _onlineListingKind is not null ? ListingMergePagesFor(OnlineSource) : MergePagesFor(OnlineSource);
+            _onlinePage = Math.Max(1, _onlinePage - step);
             ReloadOnlineFeed();
         }
     }

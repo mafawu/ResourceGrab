@@ -43,18 +43,10 @@
 
         <!-- 内容区 -->
         <Grid Grid.Row="2">
-            <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
-                        Visibility="Collapsed">
-                <Border Width="72" Height="72" CornerRadius="{DynamicResource RadiusXl}"
-                        Background="{DynamicResource HoverBgBrush}">
-                    <Path Data="{StaticResource IconLoading}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Stretch="Uniform" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
-                <TextBlock Text="加载中…" FontSize="15" FontWeight="SemiBold"
-                           Margin="0,16,0,0" HorizontalAlignment="Center" />
-                <TextBlock Text="正在获取每周必看内容，稍候片刻" FontSize="12"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           Margin="0,6,0,0" HorizontalAlignment="Center" />
-            </StackPanel>
+            <controls:LoadingIndicator x:Name="LoadingPanel" RingSize="44"
+                                       Text="加载中…" SubText="正在获取每周必看内容，稍候片刻"
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"
+                                       Visibility="Collapsed" />
 
             <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Visibility="Collapsed">

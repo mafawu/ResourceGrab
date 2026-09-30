@@ -1,7 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Controls;
 using ResourceGrab.Core.Models;
@@ -10,8 +8,8 @@ using ResourceGrab.Core.Services;
 namespace ResourceGrab.App.Views;
 
 /// <summary>
-/// 视频推荐页：基于本地库数据分组展示。
-/// 使用 PosterCard 海报卡片，包含最近添加、高评分、热门系列三个横向滚动区。
+/// 视频推荐页：基于本地库数据分组展示（最近添加 / 高评分 / 热门系列）。
+/// 分组块使用 RecommendSection 竖向换行网格，整页只有一个竖向滚动。
 /// </summary>
 public partial class VideoRecommendView : UserControl
 {
@@ -29,6 +27,8 @@ public partial class VideoRecommendView : UserControl
 
     private void Refresh()
     {
+        SectionsHost.Children.Clear();
+
         // 按番号折叠：同文件夹的推广视频曾被刮成同一番号，库里同番号条目很多，所有行都要先去重
         var items = VideoLibraryService.CollapseByNumber(_library.Items);
         if (items.Count == 0)
@@ -38,82 +38,64 @@ public partial class VideoRecommendView : UserControl
         }
         EmptyState.Visibility = Visibility.Collapsed;
 
-        // 最近添加 — 海报卡片
-        var recent = items
-            .OrderByDescending(i => i.AddedDate)
-            .Take(20)
-            .ToList();
-        RenderPosterRow(RecentPanel, recent);
-
-        // 高评分 — 海报卡片
-        var topRated = items
-            .Where(i => i.Score > 0)
+        AddSection("最近添加", items.OrderByDescending(i => i.AddedDate).ToList());
+        AddSection("高评分", items.Where(i => i.Score > 0)
             .OrderByDescending(i => i.Score)
-            .Take(20)
-            .ToList();
-        if (topRated.Count > 0)
-            RenderPosterRow(TopRatedPanel, topRated);
-        else
-            TopRatedPanel.Children.Clear();
+            .ThenByDescending(i => i.UserRating)
+            .ToList());
 
-        // 热门系列 — 每系列一行海报卡片（items 已按番号折叠，系列内不再有同番号重复）
-        SeriesPanel.Children.Clear();
+        // 热门系列 — 每系列一个子分组（members 已按番号折叠，系列内不再有同番号重复）
         var seriesGroups = items
             .Where(i => !string.IsNullOrEmpty(i.Series))
             .GroupBy(i => i.Series)
             .OrderByDescending(g => g.Count())
-            .Take(5);
-
-        foreach (var group in seriesGroups)
+            .Take(5)
+            .ToList();
+        if (seriesGroups.Count > 0)
         {
-            var header = new TextBlock
+            SectionsHost.Children.Add(MakeGroupHeader("热门系列"));
+            foreach (var group in seriesGroups)
             {
-                Text = $"{group.Key} ({group.Count()})",
-                FontSize = 13, FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 10, 0, 6),
-                Foreground = (Brush)FindResource("TextPrimaryBrush"),
-            };
-            SeriesPanel.Children.Add(header);
-
-            var scroll = PosterGridHelper.CreateVideoPosterRow(group.Take(10).ToList());
-            scroll.PreviewMouseWheel += Row_MouseWheel;
-            SeriesPanel.Children.Add(scroll);
+                var members = group.OrderByDescending(i => i.AddedDate).ToList();
+                var section = new RecommendSection(group.Key, sub: true);
+                section.SetItems(members, MakeCard, members.Count, members.Count);
+                SectionsHost.Children.Add(section);
+            }
         }
     }
 
-    /// <summary>
-    /// 鼠标悬在横向海报行上时，滚轮直接横向浏览该行（向下滚 = 向右看）；
-    /// 行已滚到头（或行内无横向内容）时不拦截，页面正常竖向滚动。
-    /// 鼠标在其他区域不经过此处理器，默认竖向滚动。
-    /// </summary>
-    private void Row_MouseWheel(object sender, MouseWheelEventArgs e)
+    private void AddSection(string title, IReadOnlyList<VideoItem> items)
     {
-        if (sender is not ScrollViewer row) return;
-        var target = row.HorizontalOffset + e.Delta;
-        var atStart = row.HorizontalOffset <= 0.5;
-        var atEnd = row.HorizontalOffset >= row.ScrollableWidth - 0.5;
-        if (row.ScrollableWidth <= 0.5 || (e.Delta > 0 && atStart) || (e.Delta < 0 && atEnd))
-            return; // 不标记 Handled，滚轮继续冒泡给外层页面竖向滚动
-        e.Handled = true;
-        row.ScrollToHorizontalOffset(target);
+        if (items.Count == 0) return;
+        var section = new RecommendSection(title);
+        section.SetItems(items, MakeCard, 12, 60);
+        SectionsHost.Children.Add(section);
     }
 
-    private void RenderPosterRow(StackPanel panel, List<VideoItem> items)
+    private FrameworkElement MakeCard(VideoItem item)
     {
-        panel.Children.Clear();
-        foreach (var item in items)
+        var card = new VideoPosterCard();
+        card.Bind(item);
+        card.DetailRequested += OnDetailRequested;
+        return card;
+    }
+
+    private static TextBlock MakeGroupHeader(string text)
+    {
+        var header = new TextBlock
         {
-            var card = new VideoPosterCard();
-            card.Bind(item);
-            card.DetailRequested += OnDetailRequested;
-            panel.Children.Add(card);
-        }
+            Text = text,
+            FontSize = 15,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 2, 0, 8),
+        };
+        header.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimaryBrush");
+        return header;
     }
 
     private static void OnDetailRequested(VideoItem item)
     {
-        // 点击海报卡片：尝试导航到视频本地页并选中该项
-        // 这里简单用文件管理器打开目录作为演示
+        // 点击海报卡片：打开所在目录
         var dir = System.IO.Path.GetDirectoryName(item.FilePath);
         if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
         {

@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private CategoryBrowseView? _categoryBrowseView;
     private FavoriteView? _favoriteView;
     private LocalView? _localView;
+    private MangaRecommendView? _mangaRecommendView;
     private UserControl? _localTabContent;
     private WeeklyView? _weeklyView;
     private NovelLocalView? _novelView;
@@ -60,6 +61,9 @@ public partial class MainWindow : Window
     // 进入在线阅读器前记录详情页自己的返回目标（搜索/排行等），避免阅读器往返后详情页返回又跳回阅读器
     private UserControl? _pageBeforeOnlineReader;
     private bool _rightPanelVisible;
+    private bool _videoDetailPanelOpen;
+    private ShellRoute? _currentRoute;
+    private UserControl? _currentSidebarPanel;
     private ResourceKind _currentKind = ResourceKind.Manga;
     private readonly ShellController _shellController;
     private readonly Shell.ShellNavigator _navigator;
@@ -304,6 +308,7 @@ public partial class MainWindow : Window
     /// <summary>路由切换：替换中间内容，按路由声明的策略更新右侧边栏。</summary>
     private void OnRouteChanged(object? sender, ShellRoute route)
     {
+        _currentRoute = route;
         LeftNavHost.Visibility = Visibility.Visible;
         SetPage(route.CreateView());
         switch (route.SidebarPolicy.Mode)
@@ -383,6 +388,12 @@ public partial class MainWindow : Window
         });
         _navigator.Register("manga.local", () => { ShowLocalList(); return _localView!; },
             new SidebarPolicy(SidebarMode.Filter, "filter.manga"));
+        _navigator.Register("manga.recommend", () =>
+        {
+            _mangaRecommendView ??= new MangaRecommendView();
+            _mangaRecommendView.OnShown();
+            return _mangaRecommendView;
+        });
         _navigator.Register("manga.scrape", () =>
         {
             _scrapeToolsView ??= new ScrapeToolsView();
@@ -447,6 +458,8 @@ public partial class MainWindow : Window
         {
             _lastPage = current;
         }
+        // 离开视频页时清掉内置详情栏状态，避免右栏插槽一直被隐藏
+        if (!ReferenceEquals(page, _videoView)) _videoDetailPanelOpen = false;
         PageHost.Content = page;
     }
 
@@ -613,10 +626,11 @@ public partial class MainWindow : Window
 
     private void OpenReader(LocalComic comic)
     {
-        ShowSidebarPanel(LocalDetailPanelView);
-        LocalDetailPanelView.Show(comic, true);
         _localTabContent = new ReaderView(comic);
         SetPage(_localTabContent);
+        // 阅读页右栏固定为漫画详情；SetPage 之后再展开，避免被其它收起逻辑回落成标签筛选
+        ShowSidebarPanel(LocalDetailPanelView);
+        LocalDetailPanelView.Show(comic, true);
     }
 
     /// <summary>本地列表点击卡片：右侧切换到本地漫画详情面板（检查更新/更新下载）。</summary>
@@ -728,14 +742,23 @@ public partial class MainWindow : Window
     private void PanelToggle_Click(object sender, RoutedEventArgs e)
     {
         _rightPanelVisible = !_rightPanelVisible;
-        ApplyRightPanelVisibility();
+        if (!_rightPanelVisible)
+        {
+            ApplyRightPanelVisibility();
+            return;
+        }
+        // 展开时确保右栏与当前页面完全对应（本地=标签/详情、视频本地=视频筛选、小说本地=小说筛选，
+        // 其余页面为下载队列），不会残留上一页的面板。
+        SetSidebarPanel(ResolveSidebarPanelForCurrentPage(keepCurrent: true), visible: true);
     }
 
     /// <summary>只控制右侧面板列的展开收起，不影响左侧导航。</summary>
     private void ApplyRightPanelVisibility()
     {
-        RightPanelHost.Visibility = _rightPanelVisible ? Visibility.Visible : Visibility.Collapsed;
-        if (_rightPanelVisible)
+        // 视频页打开了内置详情栏时，右栏插槽必须保持隐藏，避免两个面板叠加
+        var visible = _rightPanelVisible && !_videoDetailPanelOpen;
+        RightPanelHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible)
         {
             PanelColumn.MinWidth = 300;
             PanelColumn.MaxWidth = 440;
@@ -747,7 +770,7 @@ public partial class MainWindow : Window
             PanelColumn.MaxWidth = 420;
             PanelColumn.Width = new GridLength(0);
         }
-        PanelSplitter.Visibility = _rightPanelVisible ? Visibility.Visible : Visibility.Collapsed;
+        PanelSplitter.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>只控制左侧导航栏显隐，不影响右侧面板。</summary>
@@ -755,14 +778,54 @@ public partial class MainWindow : Window
     private void HideLeftRail() => LeftNavHost.Visibility = Visibility.Collapsed;
 
     /// <summary>设置右栏内容并展开（不影响左栏）。内容必须是 ISidebarPanel，由 SidebarHost 统一承载。</summary>
-    private void ShowSidebarPanel(UserControl panel)
+    private void ShowSidebarPanel(UserControl panel) => SetSidebarPanel(panel, visible: true);
+
+    /// <summary>设置右栏内容与显隐，并记录当前面板。</summary>
+    private void SetSidebarPanel(UserControl panel, bool visible)
     {
         if (panel is ISidebarPanel sidebarPanel)
             RightSidebarHost.Show(sidebarPanel);
         else
             RightSidebarHost.Show("", null, panel);
-        _rightPanelVisible = true;
+        _currentSidebarPanel = panel;
+        _rightPanelVisible = visible;
         ApplyRightPanelVisibility();
+    }
+
+    /// <summary>当前页面允许出现的右栏面板 Id 列表（首个为该页默认面板）。</summary>
+    private IReadOnlyList<string> ValidSidebarPanelIdsForCurrentPage()
+    {
+        var content = PageHost?.Content;
+        if (content is ReaderView) return new[] { "context.manga.local" };
+        if (content is LocalView) return new[] { "filter.manga", "context.manga.local" };
+        if (content is MangaRecommendView) return new[] { "task.downloads", "context.manga.local" };
+        if (content is NovelLocalView) return new[] { "filter.novel" };
+        if (content is VideoView)
+        {
+            // 视频是单视图多子页，子页由路由策略区分；非本地子页没有专属面板
+            var panelId = _currentRoute?.SidebarPolicy.PanelId;
+            return string.IsNullOrWhiteSpace(panelId) ? Array.Empty<string>() : new[] { panelId };
+        }
+        return new[] { "task.downloads" };
+    }
+
+    /// <summary>
+    /// 按当前页面解析右栏面板；keepCurrent=true 且当前面板仍属于该页时沿用
+    /// （用于本地页在「标签/详情」之间保持用户当前选择）。
+    /// </summary>
+    private UserControl ResolveSidebarPanelForCurrentPage(bool keepCurrent)
+    {
+        var ids = ValidSidebarPanelIdsForCurrentPage();
+        if (keepCurrent && _currentSidebarPanel is { } current)
+        {
+            var currentId = (current as ISidebarPanel)?.PanelId;
+            if (currentId is not null && ids.Contains(currentId)) return current;
+        }
+        foreach (var id in ids)
+        {
+            if (PanelFor(id) is { } panel) return panel;
+        }
+        return DownloadPanelView;
     }
 
     /// <summary>按路由声明的 PanelId 解析右栏面板。</summary>
@@ -776,18 +839,15 @@ public partial class MainWindow : Window
         _ => null,
     };
 
-    /// <summary>隐藏右栏并恢复默认内容（不影响左栏）。</summary>
+    /// <summary>隐藏右栏，并把内容复位为当前页面对应的面板（不影响左栏）。</summary>
     private void CollapseRightPanel()
-    {
-        RightSidebarHost.Show(DownloadPanelView);
-        _rightPanelVisible = false;
-        ApplyRightPanelVisibility();
-    }
+        => SetSidebarPanel(ResolveSidebarPanelForCurrentPage(keepCurrent: true), visible: false);
 
     /// <summary>视频本地详情开关：打开时收起右侧本地搜索面板，由 VideoView 内置详情栏顶替其位置；关闭时恢复。</summary>
     private void SetVideoDetailPanelOpen(bool open)
     {
         if (!ReferenceEquals(PageHost.Content, _videoView)) return;
+        _videoDetailPanelOpen = open;
         if (open)
         {
             RightPanelHost.Visibility = Visibility.Collapsed;

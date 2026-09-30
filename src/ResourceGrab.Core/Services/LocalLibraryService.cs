@@ -504,6 +504,7 @@ public class LocalLibraryService
             CoverPath = FindCover(albumDir, chapterDirs),
             Tags = metadata?.Tags is { Count: > 0 } tags ? tags : BuildFallbackTags(parsed.Tags),
             Author = metadata?.Author is { Count: > 0 } author ? author : BuildFallbackAuthors(parsed.Tags),
+            Works = metadata?.Works ?? new List<string>(),
             ChapterCount = chapterCount,
             ImageCount = imageCount,
             ModifiedAt = Directory.GetLastWriteTime(albumDir),

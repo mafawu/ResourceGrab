@@ -98,8 +98,8 @@
                     <!-- 结果区域：虚拟化卡片网格（按需实例化海报卡） + 悬浮详情抽屉（覆盖层，不挤压卡片布局；进入完整详情页时整页被替换） -->
                     <Grid x:Name="OnlineResultsArea" Grid.Row="1">
                         <controls:VirtualizedCardGrid x:Name="OnlineCards" Visibility="Collapsed"
-                                                      MinCardWidth="200" Spacing="10"
-                                                      CardWidth="200" SlotWidth="210" DesiredColumns="5">
+                                                       MinCardWidth="170" Spacing="10"
+                                                       CardWidth="200" SlotWidth="210" DesiredColumns="5">
                             <controls:VirtualizedCardGrid.ItemTemplate>
                                 <DataTemplate>
                                     <ContentPresenter Content="{Binding Card}" />

@@ -297,7 +297,7 @@ public partial class SearchView : CardGridViewBase
             if (result == null)
             {
                 if (showError)
-                    ToastService.Show($"{g.Source.Info.DisplayName} 搜索失败", ToastKind.Error);
+                    ToastService.Show($"{g.Source.Info.DisplayName} 搜索失败{FormatError(g.Error)}", ToastKind.Error);
                 continue;
             }
             maxPages = Math.Max(maxPages, result.TotalPages);
@@ -329,6 +329,9 @@ public partial class SearchView : CardGridViewBase
         UpdatePaging(page, maxPages);
     }
 
+    private static string FormatError(string? error)
+        => string.IsNullOrWhiteSpace(error) ? "" : "：" + (error.Length > 160 ? error[..160] + "…" : error);
+
     private void RenderSingle(SourceSearchGroup group, long page, bool showError)
     {
         var result = group.Result;
@@ -337,7 +340,7 @@ public partial class SearchView : CardGridViewBase
             ShowState(StateKind.Empty);
             if (showError)
             {
-                ToastService.Show($"{group.Source.Info.DisplayName} 搜索失败", ToastKind.Error);
+                ToastService.Show($"{group.Source.Info.DisplayName} 搜索失败{FormatError(group.Error)}", ToastKind.Error);
             }
             return;
         }

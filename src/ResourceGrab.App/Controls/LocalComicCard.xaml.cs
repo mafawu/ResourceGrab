@@ -20,10 +20,13 @@ public partial class LocalComicCard : UserControl
 
     private void Card_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (CoverHost.ActualWidth > 0)
-        {
-            CoverHost.Height = CoverHost.ActualWidth * CoverAspect;
-        }
+        // 用网格绑定的显式 Width（滚动/回收时稳定）而非 ActualWidth（布局中会瞬变），
+        // 并做变化阈值判断，避免高度反复重算导致从底部上滚时闪烁。
+        var width = !double.IsNaN(Width) && Width > 0 ? Width : CoverHost.ActualWidth;
+        if (width <= 0) return;
+        var target = width * CoverAspect;
+        if (Math.Abs(CoverHost.Height - target) > 0.5)
+            CoverHost.Height = target;
     }
 
     private void Root_MouseEnter(object sender, MouseEventArgs e) => Overlay.Visibility = Visibility.Visible;

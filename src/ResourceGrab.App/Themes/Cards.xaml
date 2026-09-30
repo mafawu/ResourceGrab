@@ -160,7 +160,7 @@
 
     <Style x:Key="DownloadedBadgeStyle" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
-        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadiusXs}" />
         <Setter Property="Padding" Value="7,2" />
         <Setter Property="HorizontalAlignment" Value="Right" />
         <Setter Property="VerticalAlignment" Value="Top" />

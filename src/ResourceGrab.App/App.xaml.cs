@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using ResourceGrab.App.Common;
 using ResourceGrab.App.Controls;
 using ResourceGrab.App.Services;
@@ -61,7 +62,7 @@ public partial class App : Application
     protected void RunStartup(StartupEventArgs e)
     {
         AppDomain.CurrentDomain.UnhandledException += (s, e) => { try { var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, DataDirName, "logs"); System.IO.Directory.CreateDirectory(logDir); var ex = e.ExceptionObject as Exception; System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "crash-" + DateTime.Now.ToString("yyyyMMdd") + ".log"), "[" + DateTime.Now + "] AppDomain.UnhandledException\r\n" + ex + "\r\n\r\n"); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "jm_crash.log"), "[" + DateTime.Now + "] AppDomain.UnhandledException\r\n" + ex + "\r\n\r\n"); } catch { } };
-        DispatcherUnhandledException += (s, e) => { try { var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, DataDirName, "logs"); System.IO.Directory.CreateDirectory(logDir); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "crash-" + DateTime.Now.ToString("yyyyMMdd") + ".log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n"); System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "jm_crash.log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n"); } catch { } e.Handled = true; System.Windows.MessageBox.Show("发生未处理异常：" + e.Exception.Message, "崩溃", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error); };
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppPaths.DataDirName = DataDirName;
 
         // 把旧版 %APPDATA% 数据迁移到程序同目录数据文件夹
@@ -90,6 +91,9 @@ public partial class App : Application
             services.AddSingleton<SessionService>();
         }
         services.AddSingleton<LocalLibraryService>();
+        services.AddSingleton<MangaRelationsService>(sp => new MangaRelationsService(
+            sp.GetRequiredService<LocalLibraryService>(), sp.GetRequiredService<ILogger>()));
+        services.AddSingleton<RelatedCoverCache>(sp => new RelatedCoverCache(sp.GetRequiredService<ILogger>()));
         services.AddSingleton<JmMatchService>();
         services.AddSingleton<NovelIndexService>();
         services.AddSingleton<NovelReadingHistoryService>();
@@ -325,6 +329,33 @@ public partial class App : Application
         var window = new MainWindow();
         MainWindow = window;
         window.Show();
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var logDir = System.IO.Path.Combine(AppContext.BaseDirectory, DataDirName, "logs");
+            System.IO.Directory.CreateDirectory(logDir);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "crash-" + DateTime.Now.ToString("yyyyMMdd") + ".log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n");
+            System.IO.File.AppendAllText(System.IO.Path.Combine(logDir, "jm_crash.log"), "[" + DateTime.Now + "] DispatcherUnhandledException\r\n" + e.Exception + "\r\n\r\n");
+        }
+        catch { }
+        e.Handled = true;
+        if (IsBenignFlyleafShutdownError(e.Exception)) return;
+        System.Windows.MessageBox.Show("发生未处理异常：" + e.Exception.Message, "崩溃", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+    }
+
+    /// <summary>
+    /// Flyleaf 引擎未启动时（如发布包缺少 exe 旁 ffmpeg\ 目录），
+    /// 关闭主窗口会在 FlyleafHost.Dispose 里调用 Logger.Log，而该方法直接解引用 Engine.Config 抛 NRE。
+    /// 该异常发生在关窗阶段且无从修复（第三方库行为），静默忽略，避免误报"崩溃"。
+    /// </summary>
+    private static bool IsBenignFlyleafShutdownError(Exception ex)
+    {
+        if (ex is not NullReferenceException) return false;
+        var trace = ex.StackTrace ?? string.Empty;
+        return trace.Contains("FlyleafLib.Logger.Log") && trace.Contains("FlyleafHost.Dispose");
     }
 
     /// <summary>注册全部内容源。派生应用可覆盖为只注册自己的源。</summary>

@@ -197,15 +197,13 @@ public partial class VirtualizedCardGrid : UserControl
         double width;
         const double rightPadding = 8;
         const double scrollbarWidth = 7;
-        if (_scroller != null && _scroller.ViewportWidth > 0)
+        // 用 ScrollViewer.ActualWidth（不随纵向滚动条显隐变化）作基准，并始终预留滚动条宽度。
+        // 若用 ViewportWidth：滚动条显隐会改变它 → 卡片宽/高随之变 → 内容高变 → 滚动条又变，
+        // 形成「快速上下抖动再稳定」的反馈环（尤其卡片高度随宽度自适应时）。
+        if (_scroller != null && _scroller.ActualWidth > 0)
         {
-            width = _scroller.ViewportWidth - rightPadding;
-            // 覆盖式/悬浮滚动条：Viewport 不扣除滚动条宽度（Viewport≈ActualWidth），需额外预留
-            var viewportEqualsActual = Math.Abs(_scroller.ViewportWidth - _scroller.ActualWidth) < 1.0;
-            var isOverlay = viewportEqualsActual && _scroller.ScrollableHeight > 0;
-            if (isOverlay || _scroller.ComputedVerticalScrollBarVisibility != Visibility.Visible && _scroller.ScrollableHeight > 0)
-                width -= scrollbarWidth;
-            if (width <= 0) width = _scroller.ViewportWidth - rightPadding - (isOverlay ? scrollbarWidth : 0);
+            width = _scroller.ActualWidth - rightPadding - scrollbarWidth;
+            if (width <= 0) width = Math.Max(1, _scroller.ActualWidth - rightPadding);
         }
         else
         {

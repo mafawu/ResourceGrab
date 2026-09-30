@@ -40,6 +40,10 @@ public class LocalComic
     public string CoverPath { get; set; } = "";
     public List<string> Tags { get; set; } = new();
     public List<string> Author { get; set; } = new();
+
+    /// <summary>作品/系列名（JM album.json 的 works，如 ["原神","Genshin"]），同作品的多本共用；无元数据时为空，由本地库推荐退回首标签解析。</summary>
+    public List<string> Works { get; set; } = new();
+
     public int ChapterCount { get; set; }
     public long ImageCount { get; set; }
     public DateTime ModifiedAt { get; set; }
@@ -94,6 +98,7 @@ public class LocalComic
         CoverPath ??= "";
         Tags ??= new();
         Author ??= new();
+        Works ??= new();
         TotalViews ??= "";
         Likes ??= "";
         CommentTotal ??= "";

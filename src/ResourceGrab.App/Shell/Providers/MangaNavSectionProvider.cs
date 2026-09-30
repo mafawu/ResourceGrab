@@ -29,7 +29,7 @@ public sealed class MangaNavSectionProvider : INavSectionProvider
         if (_info.SupportsWeekly)
             discovery.Add(new NavItem("manga.weekly", "每周必看", Icons.Weekly));
 
-        var mine = new List<NavItem> { new("manga.local", "本地", Icons.Local) };
+        var mine = new List<NavItem> { new("manga.local", "本地", Icons.Local), new("manga.recommend", "推荐", Icons.Library) };
         if (_info.SupportsFavorites)
             mine.Add(new NavItem("manga.favorites", "收藏", Icons.FavoriteStar));
 

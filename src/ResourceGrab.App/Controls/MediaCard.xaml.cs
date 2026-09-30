@@ -83,6 +83,25 @@ public sealed class FavoriteTextConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>宽度 × 参数（高/宽比）→ 高度：按卡片宽度自适应封面高度（如 fanart 3:2 传 0.671）。</summary>
+public sealed class WidthToHeightConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is double width && !double.IsNaN(width) && width > 0
+            && parameter is string s
+            && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var ratio))
+        {
+            return width * ratio;
+        }
+        // 宽度尚未就绪时给一个兜底高度，避免封面塌成 0 再撑开造成闪烁
+        return 100d;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 /// <summary>根据 MediaVisualKind 选择卡片渲染模板。</summary>
 public sealed class MediaCardTemplateSelector : DataTemplateSelector
 {
