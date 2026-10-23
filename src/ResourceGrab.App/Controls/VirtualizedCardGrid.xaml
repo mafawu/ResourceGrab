@@ -5,11 +5,17 @@
     <!--
       虚拟化卡片网格：按 SlotWidth 把条目切成等宽行（行内横排卡片）。
       行列表必须用「ScrollViewer(CanContentScroll) > ItemsPresenter + VirtualizingStackPanel」
-      的模板结构才能触发真正的 UI 虚拟化（实测：10000 项只实例化可视行，容器回收复用）。
+      的模板结构才能触发真正的 UI 虚拟化（实测：10000 项只实例化可视行）。
+
+      坑：VirtualizationMode 必须是 Standard，不能图省事用 Recycling。
+      像素滚动（ScrollUnit=Pixel）下，被回收复用的行容器会沿用上一次的测量结果，
+      VirtualizingStackPanel 的 ExtentHeight 估算会在两个值之间来回跳（80 行实测
+      11800 ↔ 24522px），滚到底部再往上时视口就在一个范围内反复弹。
+      换成 Standard 后 extent 一次性算准，全程 ExtentHeightChange = 0。
     -->
     <ItemsControl x:Name="RowHost"
                   VirtualizingStackPanel.IsVirtualizing="True"
-                  VirtualizingStackPanel.VirtualizationMode="Recycling"
+                  VirtualizingStackPanel.VirtualizationMode="Standard"
                   VirtualizingPanel.ScrollUnit="Pixel">
         <ItemsControl.Template>
             <ControlTemplate TargetType="ItemsControl">
