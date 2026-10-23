@@ -22,3 +22,6 @@ config/
 .ref/
 .workbuddy/
 .zcode/
+
+# 本轮 UI 重构的工作区：截图与临时脚本，不入库（图标源码在 resources/icon/）
+.design/

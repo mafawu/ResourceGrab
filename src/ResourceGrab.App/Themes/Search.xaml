@@ -98,14 +98,16 @@
         <Setter Property="Margin" Value="0,0,2,0" />
     </Style>
 
+    <!-- DSO 药丸筛选（多选开关语义）：开启=中性填充 + 主文字；关闭=透明 + 弱化文字。
+         工具栏的源标签默认全开，所以「开启」必须是安静的状态，不能整排高亮。 -->
     <Style x:Key="FilterChipToggleStyle" TargetType="{x:Type primitives:ToggleButton}">
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Padding" Value="14,0" />
         <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Margin" Value="{StaticResource FilterChipSpacing}" />
@@ -120,7 +122,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            CornerRadius="15"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -128,14 +130,12 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHoverBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
-                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBgBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PrimarySubtleBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
-                            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DividerBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -151,17 +151,18 @@
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Padding" Value="14,0" />
         <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
         <Setter Property="MinWidth" Value="0" />
-        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Margin" Value="{StaticResource FilterChipSpacing}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="Margin" Value="0,0,6,0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -169,7 +170,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            CornerRadius="15"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -177,8 +178,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHoverBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DividerStrongBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
@@ -196,18 +196,14 @@
         </Setter>
     </Style>
 
-    <Style x:Key="FilterMultiTabStyle" TargetType="{x:Type primitives:ToggleButton}"
-           BasedOn="{StaticResource FilterChipToggleStyle}" />
-    <Style x:Key="FilterTabStyle" TargetType="RadioButton" BasedOn="{StaticResource FilterChipRadioStyle}" />
-
     <Style x:Key="ChipButtonStyle" TargetType="Button">
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Padding" Value="14,0" />
         <Setter Property="MinHeight" Value="{StaticResource ControlHeightSm}" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Margin" Value="{StaticResource FilterChipSpacing}" />
@@ -222,7 +218,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            CornerRadius="15"
                             Padding="{TemplateBinding Padding}"
                             MinHeight="{TemplateBinding MinHeight}">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -230,12 +226,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHoverBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DividerStrongBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBgBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PrimarySubtleBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -246,6 +241,10 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <Style x:Key="FilterMultiTabStyle" TargetType="{x:Type primitives:ToggleButton}"
+           BasedOn="{StaticResource FilterChipToggleStyle}" />
+    <Style x:Key="FilterTabStyle" TargetType="RadioButton" BasedOn="{StaticResource FilterChipRadioStyle}" />
 
     <!-- 侧栏导航与普通筛选使用同一色彩语言；仅放宽高度并左对齐以适应树状列表。 -->
     <Style x:Key="NavigationChipRadioStyle" TargetType="RadioButton"
@@ -286,6 +285,7 @@
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PrimarySubtleBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>

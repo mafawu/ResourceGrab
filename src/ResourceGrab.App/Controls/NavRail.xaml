@@ -11,9 +11,9 @@
         </Style>
 
         <Style x:Key="NavRailItemContainerStyle" TargetType="RadioButton">
-            <Setter Property="Height" Value="44" />
+            <Setter Property="Height" Value="42" />
             <!-- 上下各留 1px，悬浮/选中圆角之间有 2px 间隔，不再完全挨着 -->
-            <Setter Property="Margin" Value="2,1" />
+            <Setter Property="Margin" Value="0,1" />
             <Setter Property="Cursor" Value="Hand" />
             <!-- 显示样式会整体替换隐式样式：前景色必须在这里显式声明，
                  否则图标（绑定 RadioButton.Foreground）在暗色下继承窗口默认黑色 -->
@@ -21,12 +21,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="ItemBorder"
-                                CornerRadius="{DynamicResource RadiusMd}"
-                                Background="Transparent"
-                                Padding="10,0">
-                            <ContentPresenter VerticalAlignment="Center" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="ItemBorder"
+                                    CornerRadius="{DynamicResource RadiusMd}"
+                                    Background="Transparent"
+                                    Padding="10,0">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <!-- DSO：选中态用 3px 左侧指示条，替代整块实心/发光 -->
+                            <Border x:Name="Indicator" Width="3" Height="16" CornerRadius="2"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                    Margin="-4,0,0,0" Background="{DynamicResource PrimaryBrush}"
+                                    Visibility="Collapsed" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ItemBorder" Property="Background"
@@ -35,6 +42,8 @@
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="ItemBorder" Property="Background"
                                         Value="{DynamicResource PrimarySubtleBrush}" />
+                                <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4" />

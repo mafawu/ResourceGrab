@@ -1,74 +1,74 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- ================================================================
-         浅色主题 · 极简白 + 霓虹粉
-         干净高对比，卡片悬浮感，粉色仅作点睛
+         DSO UI · 浅色（Daylight）
+         Quiet Capture：中性冷灰画布 + 单一靛蓝强调色 + 发丝级描边。
+         颜色只承担层级，不承担装饰；阴影极轻，靠留白和描边分层。
          ================================================================ -->
-    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F5F7FB" />
     <SolidColorBrush x:Key="AppBackgroundTopBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="AppBackgroundBottomBrush" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="AppBackgroundBottomBrush" Color="#F5F7FB" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="CardBorderBrush" Color="#E8E8EC" />
-    <SolidColorBrush x:Key="DividerBrush" Color="#EAEAF0" />
-    <SolidColorBrush x:Key="DividerStrongBrush" Color="#DDDDE3" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#121214" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6B7280" />
-    <SolidColorBrush x:Key="TextDisabledBrush" Color="#9AA0A8" />
-    <SolidColorBrush x:Key="PrimaryBrush" Color="#E85D75" />
-    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#D94A64" />
-    <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#C23A54" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#E6EAF2" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#EDF0F7" />
+    <SolidColorBrush x:Key="DividerStrongBrush" Color="#DCE2EE" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#10141F" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5C667A" />
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="#9AA3B4" />
+    <SolidColorBrush x:Key="PrimaryBrush" Color="#4D6BFE" />
+    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#3E5BF0" />
+    <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#2F47CC" />
     <SolidColorBrush x:Key="PrimaryFgBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="PrimaryLightBrush" Color="#FF7A94" />
-    <SolidColorBrush x:Key="PrimarySubtleBrush" Color="#FEF0F3" />
-    <SolidColorBrush x:Key="PrimaryGradientStartBrush" Color="#E85D75" />
-    <SolidColorBrush x:Key="PrimaryGradientEndBrush" Color="#FF8A5B" />
+    <SolidColorBrush x:Key="PrimaryLightBrush" Color="#7A93FF" />
+    <SolidColorBrush x:Key="PrimarySubtleBrush" Color="#EEF1FF" />
+    <SolidColorBrush x:Key="PrimaryGradientStartBrush" Color="#5B7BFF" />
+    <SolidColorBrush x:Key="PrimaryGradientEndBrush" Color="#3F53E8" />
     <SolidColorBrush x:Key="DangerBrush" Color="#E5484D" />
-    <SolidColorBrush x:Key="SuccessBrush" Color="#2E9E6B" />
-    <SolidColorBrush x:Key="WarningBrush" Color="#E8A33D" />
-    <SolidColorBrush x:Key="WarningSubtleBrush" Color="#FFF3E0" />
-    <SolidColorBrush x:Key="NovelAccentBrush" Color="#7C6CF6" />
-    <SolidColorBrush x:Key="VideoAccentBrush" Color="#3DD598" />
-    <SolidColorBrush x:Key="PhotobookAccentBrush" Color="#C07A21" />
-    <SolidColorBrush x:Key="PhotobookSubtleBrush" Color="#FDF4E6" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="#12B981" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#F5A524" />
+    <SolidColorBrush x:Key="WarningSubtleBrush" Color="#FFF4E0" />
+    <SolidColorBrush x:Key="NovelAccentBrush" Color="#7C5CFF" />
+    <SolidColorBrush x:Key="VideoAccentBrush" Color="#12B981" />
+    <SolidColorBrush x:Key="PhotobookAccentBrush" Color="#E08A1E" />
+    <SolidColorBrush x:Key="PhotobookSubtleBrush" Color="#FFF5E6" />
     <SolidColorBrush x:Key="CardScrimBrush" Color="#66000000" />
     <SolidColorBrush x:Key="CardOverlayPanelBrush" Color="#B3000000" />
-    <SolidColorBrush x:Key="CardBadgeScrimBrush" Color="#CC000000" />
+    <SolidColorBrush x:Key="CardBadgeScrimBrush" Color="#B810141F" />
     <SolidColorBrush x:Key="OnMediaBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="OnMediaSecondaryBrush" Color="#E6FFFFFF" />
-    <SolidColorBrush x:Key="SelectionPanelBrush" Color="#EEFFFFFF" />
-    <SolidColorBrush x:Key="DangerSubtleBrush" Color="#33E53935" />
+    <SolidColorBrush x:Key="SelectionPanelBrush" Color="#F2FFFFFF" />
+    <SolidColorBrush x:Key="DangerSubtleBrush" Color="#1AE5484D" />
     <Color x:Key="CardScrimColor">#66000000</Color>
-    <SolidColorBrush x:Key="InputBorderBrush" Color="#E0E0E6" />
-    <SolidColorBrush x:Key="InputFocusBrush" Color="#E85D75" />
-    <SolidColorBrush x:Key="FocusGlowBrush" Color="#33E85D75" />
-    <SolidColorBrush x:Key="HoverBgBrush" Color="#0F121214" />
-    <!-- 阅读器衬底：白页要在这层上「浮起来」。原实现复用 HoverBgBrush（6% 黑）叠出来只有
-         #E8E8E9，与白页对比度 1.23:1，长时间阅读分不清页面边界。这层给到约 1.5:1。 -->
-    <SolidColorBrush x:Key="ReaderBackdropBrush" Color="#D2D2D8" />
-    <SolidColorBrush x:Key="ActiveNavBgBrush" Color="#14E85D75" />
-    <SolidColorBrush x:Key="SelectionBgBrush" Color="#1AE85D75" />
-    <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#3D9AA0A8" />
-    <SolidColorBrush x:Key="ScrollbarThumbHoverBrush" Color="#5A9AA0A8" />
+    <SolidColorBrush x:Key="InputBorderBrush" Color="#DDE3EF" />
+    <SolidColorBrush x:Key="InputFocusBrush" Color="#4D6BFE" />
+    <SolidColorBrush x:Key="FocusGlowBrush" Color="#334D6BFE" />
+    <SolidColorBrush x:Key="HoverBgBrush" Color="#0D101828" />
+    <!-- 阅读器衬底：白页要在这层上「浮起来」。与纯白页面的对比需 ≥1.4:1，长时间阅读才分得清页面边界。 -->
+    <SolidColorBrush x:Key="ReaderBackdropBrush" Color="#D3D8E3" />
+    <SolidColorBrush x:Key="ActiveNavBgBrush" Color="#144D6BFE" />
+    <SolidColorBrush x:Key="SelectionBgBrush" Color="#1F4D6BFE" />
+    <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#3D98A2B4" />
+    <SolidColorBrush x:Key="ScrollbarThumbHoverBrush" Color="#6698A2B4" />
     <SolidColorBrush x:Key="OverlayBrush" Color="#40000000" />
-    <SolidColorBrush x:Key="WindowControlHoverBrush" Color="#0F121214" />
+    <SolidColorBrush x:Key="WindowControlHoverBrush" Color="#0D101828" />
     <SolidColorBrush x:Key="CardHoverBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="CardHoverBorderBrush" Color="#EEC2CB" />
-    <SolidColorBrush x:Key="CardShadowBrush" Color="#1A000000" />
-    <SolidColorBrush x:Key="CardHoverShadowBrush" Color="#14E85D75" />
-    <SolidColorBrush x:Key="SkeletonBrush" Color="#EAEAF0" />
+    <SolidColorBrush x:Key="CardHoverBorderBrush" Color="#C7D2FE" />
+    <SolidColorBrush x:Key="CardShadowBrush" Color="#14101828" />
+    <SolidColorBrush x:Key="CardHoverShadowBrush" Color="#1A4D6BFE" />
+    <SolidColorBrush x:Key="SkeletonBrush" Color="#EDF0F7" />
     <SolidColorBrush x:Key="SnackbarBgBrush" Color="#F2FFFFFF" />
-    <SolidColorBrush x:Key="TextLinkBrush" Color="#D94A64" />
-    <Color x:Key="CardShadowColor">#1A000000</Color>
-    <Color x:Key="PrimaryGlowColor">#33E85D75</Color>
-    <Color x:Key="PrimaryGradientStartColor">#E85D75</Color>
-    <Color x:Key="PrimaryGradientEndColor">#FF8A5B</Color>
-    <Color x:Key="PrimaryHoverColor">#D94A64</Color>
-    <Color x:Key="PrimaryPressedColor">#C23A54</Color>
+    <SolidColorBrush x:Key="TextLinkBrush" Color="#3E5BF0" />
+    <Color x:Key="CardShadowColor">#14101828</Color>
+    <Color x:Key="PrimaryGlowColor">#334D6BFE</Color>
+    <Color x:Key="PrimaryGradientStartColor">#5B7BFF</Color>
+    <Color x:Key="PrimaryGradientEndColor">#3F53E8</Color>
+    <Color x:Key="PrimaryHoverColor">#3E5BF0</Color>
+    <Color x:Key="PrimaryPressedColor">#2F47CC</Color>
     <Color x:Key="AppBackgroundTopColor">#FFFFFF</Color>
-    <Color x:Key="AppBackgroundBottomColor">#F5F5F7</Color>
+    <Color x:Key="AppBackgroundBottomColor">#F5F7FB</Color>
     <LinearGradientBrush x:Key="WindowBorderBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#E8E0F0" Offset="0" />
-        <GradientStop Color="#E0D8EA" Offset="0.5" />
-        <GradientStop Color="#F0D8E0" Offset="1" />
+        <GradientStop Color="#E6EAF2" Offset="0" />
+        <GradientStop Color="#E2E8F5" Offset="0.5" />
+        <GradientStop Color="#EAEEF8" Offset="1" />
     </LinearGradientBrush>
 </ResourceDictionary>

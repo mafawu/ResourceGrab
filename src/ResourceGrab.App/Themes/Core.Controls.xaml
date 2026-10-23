@@ -5,7 +5,7 @@
   <Double x:Key="FontSizeEmphasis" xmlns="clr-namespace:System;assembly=System.Private.CoreLib">13</Double>
   <Double x:Key="FontSizeCardTitle" xmlns="clr-namespace:System;assembly=System.Private.CoreLib">15</Double>
   <Double x:Key="FontSizePageTitle" xmlns="clr-namespace:System;assembly=System.Private.CoreLib">19</Double>
-  <DropShadowEffect x:Key="CardShadowEffect" BlurRadius="16" ShadowDepth="3" Direction="270" Opacity="0.22" Color="{DynamicResource CardShadowColor}" />
+  <DropShadowEffect x:Key="CardShadowEffect" BlurRadius="22" ShadowDepth="2" Direction="270" Opacity="0.16" Color="{DynamicResource CardShadowColor}" />
   <Style x:Key="{x:Type TextBlock}" TargetType="{x:Type TextBlock}">
     <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
@@ -54,49 +54,27 @@
       </Setter.Value>
     </Setter>
   </Style>
+  <!-- 隐式按钮样式：此前未写样式的 Button 会回落到 WPF 默认银色 chrome，
+       与全局视觉割裂（如「重新扫描」「跳转」）。统一到同一个基础样式。 -->
+  <Style x:Key="{x:Type Button}" TargetType="{x:Type Button}" BasedOn="{StaticResource BaseButtonStyle}" />
+
+  <!-- DSO：实心单一强调色，不用渐变。渐变按钮在深浅两套主题里难以保持对比，且显得过时。 -->
   <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource BaseButtonStyle}">
     <Setter Property="Foreground" Value="{DynamicResource PrimaryFgBrush}" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Background">
-      <Setter.Value>
-        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-          <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
-          <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
-        </LinearGradientBrush>
-      </Setter.Value>
-    </Setter>
+    <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="{x:Type Button}">
-          <Border Name="Bd" CornerRadius="10" Padding="{TemplateBinding Control.Padding}" SnapsToDevicePixels="True">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
-                <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
-              </LinearGradientBrush>
-            </Border.Background>
+          <Border Name="Bd" Background="{TemplateBinding Control.Background}" CornerRadius="10" Padding="{TemplateBinding Control.Padding}" SnapsToDevicePixels="True">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="UIElement.IsMouseOver" Value="True">
-              <Setter TargetName="Bd" Property="Border.Background">
-                <Setter.Value>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="{DynamicResource PrimaryHoverColor}" Offset="0" />
-                    <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
-                  </LinearGradientBrush>
-                </Setter.Value>
-              </Setter>
+              <Setter TargetName="Bd" Value="{DynamicResource PrimaryHoverBrush}" Property="Border.Background" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="Bd" Property="Border.Background">
-                <Setter.Value>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="{DynamicResource PrimaryPressedColor}" Offset="0" />
-                    <GradientStop Color="{DynamicResource PrimaryHoverColor}" Offset="1" />
-                  </LinearGradientBrush>
-                </Setter.Value>
-              </Setter>
+              <Setter TargetName="Bd" Value="{DynamicResource PrimaryPressedBrush}" Property="Border.Background" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="UIElement.Opacity" Value="0.44" />
@@ -544,11 +522,13 @@
       </Setter.Value>
     </Setter>
   </Style>
+  <!-- DSO 分段控件：轨道用浅灰，选中项是浮起的白色药丸（内嵌阴影式描边），
+       取代原来的「选中即整块填强调色」。 -->
   <Style x:Key="KindPillGroupStyle" TargetType="{x:Type Border}">
-    <Setter Property="Background" Value="{DynamicResource HoverBgBrush}" />
+    <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Border.CornerRadius" Value="8" />
+    <Setter Property="Border.CornerRadius" Value="11" />
     <Setter Property="Border.Padding" Value="3" />
   </Style>
   <Style x:Key="KindPillRadioStyle" TargetType="{x:Type RadioButton}">
@@ -560,19 +540,19 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="{x:Type RadioButton}">
-          <Border Name="Bd" CornerRadius="8" Padding="{TemplateBinding Control.Padding}" Background="#00FFFFFF">
+          <Border Name="Bd" CornerRadius="9" Padding="{TemplateBinding Control.Padding}"
+                  Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="ToggleButton.IsChecked" Value="True">
-              <Setter TargetName="Bd" Value="{DynamicResource PrimaryBrush}" Property="Border.Background" />
-              <Setter Property="Foreground" Value="#FFFFFFFF" />
-            </Trigger>
             <Trigger Property="UIElement.IsMouseOver" Value="True">
-              <Setter TargetName="Bd" Value="{DynamicResource ActiveNavBgBrush}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{DynamicResource HoverBgBrush}" Property="Border.Background" />
+              <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             </Trigger>
             <Trigger Property="ToggleButton.IsChecked" Value="True">
-              <Setter TargetName="Bd" Value="{DynamicResource PrimaryBrush}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{DynamicResource SurfaceBrush}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{DynamicResource DividerStrongBrush}" Property="Border.BorderBrush" />
+              <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -650,51 +630,67 @@
       </Setter.Value>
     </Setter>
   </Style>
+  <!-- DSO 导航项：选中态用 8% 强调色底 + 强调色文字 + 左侧 3px 指示条。
+       比整块实心更安静，也不再有发光渐变。 -->
   <Style x:Key="NavItemStyle" TargetType="{x:Type RadioButton}">
     <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     <Setter Property="FrameworkElement.Cursor" Value="Hand" />
-    <Setter Property="Margin" Value="2,3" />
+    <Setter Property="Margin" Value="0,1" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="{x:Type RadioButton}">
           <Grid>
-            <Border Name="Glow" CornerRadius="11" Visibility="Collapsed" />
-            <Border Name="Bd" Background="#00FFFFFF" CornerRadius="11" Padding="12,10">
+            <Border Name="Bd" Background="Transparent" CornerRadius="10" Padding="10,9">
               <ContentPresenter HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" VerticalAlignment="Center" />
             </Border>
+            <Border Name="Indicator" Width="3" Height="16" CornerRadius="2"
+                    HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-6,0,0,0"
+                    Background="{DynamicResource PrimaryBrush}" Visibility="Collapsed" />
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="UIElement.IsMouseOver" Value="True">
               <Setter TargetName="Bd" Value="{DynamicResource HoverBgBrush}" Property="Border.Background" />
+              <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             </Trigger>
             <Trigger Property="ToggleButton.IsChecked" Value="True">
-              <Setter TargetName="Glow" Property="Visibility" Value="Visible" />
-              <Setter TargetName="Glow" Property="Border.Background">
-                <Setter.Value>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
-                    <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
-                  </LinearGradientBrush>
-                </Setter.Value>
-              </Setter>
-              <Setter TargetName="Glow" Property="UIElement.Effect">
-                <Setter.Value>
-                  <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.6" Color="{DynamicResource PrimaryGlowColor}" />
-                </Setter.Value>
-              </Setter>
-              <Setter TargetName="Bd" Property="Border.Background">
-                <Setter.Value>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
-                    <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
-                  </LinearGradientBrush>
-                </Setter.Value>
-              </Setter>
-              <Setter Property="Foreground" Value="#FFFFFFFF" />
+              <Setter TargetName="Bd" Value="{DynamicResource PrimarySubtleBrush}" Property="Border.Background" />
+              <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+              <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
               <Setter Property="FontWeight" Value="SemiBold" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- DSO 账号行：侧栏底部账号入口，沿用导航项的语言，仅保留 1px 描边表明可点。 -->
+  <Style x:Key="AccountButtonStyle" TargetType="{x:Type Button}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type Button}">
+          <Border Name="Bd" Background="{TemplateBinding Control.Background}" BorderBrush="{TemplateBinding Control.BorderBrush}" BorderThickness="{TemplateBinding Control.BorderThickness}" CornerRadius="10" Padding="{TemplateBinding Control.Padding}">
+            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="UIElement.IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Value="{DynamicResource HoverBgBrush}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{DynamicResource DividerStrongBrush}" Property="Border.BorderBrush" />
+              <Setter Value="{DynamicResource TextPrimaryBrush}" Property="Foreground" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Bd" Value="{DynamicResource ActiveNavBgBrush}" Property="Border.Background" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -705,7 +701,7 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Border.CornerRadius" Value="20" />
+    <Setter Property="Border.CornerRadius" Value="16" />
     <Setter Property="UIElement.SnapsToDevicePixels" Value="True" />
   </Style>
   <Style x:Key="CardPanelStyle" TargetType="{x:Type Border}" BasedOn="{StaticResource CardStyle}">

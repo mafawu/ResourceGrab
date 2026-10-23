@@ -1314,7 +1314,11 @@ private void OpenNovelLocal()
         else
         {
             // 未登录：用户图标圆底 + 登录文字，整块可点
-            var loginBtn = new Button { Cursor = System.Windows.Input.Cursors.Hand };
+            var loginBtn = new Button
+            {
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Style = (Style)FindResource("AccountButtonStyle"),
+            };
             loginBtn.Click += Login_Click;
             ToolTipService.SetToolTip(loginBtn, "登录以同步收藏");
 
@@ -1323,8 +1327,7 @@ private void OpenNovelLocal()
             var iconHolder = new Border
             {
                 Width = 28, Height = 28, CornerRadius = new CornerRadius(9),
-                BorderBrush = (Brush)FindResource("CardBorderBrush"),
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(0),
                 Margin = new Thickness(-2, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
             };

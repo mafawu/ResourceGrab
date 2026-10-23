@@ -40,7 +40,7 @@
         <!-- 顶部应用栏：品牌 + 源切换 + 操作区 + 窗口控制 -->
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"
-                Padding="18,8,6,8">
+                Padding="20,10,8,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -51,9 +51,9 @@
 
                 <!-- 品牌 -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Grid Width="32" Height="32">
-                        <!-- 专用阴影层：渐变背景 + 光晕，不承载文字 -->
-                        <Border CornerRadius="10" Effect="{StaticResource CardShadowEffect}">
+                    <!-- DSO 品牌标记：与 app.ico 同构（圆角方 + 取景角标 + 下箭头） -->
+                    <Grid Width="30" Height="30">
+                        <Border CornerRadius="9">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                     <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
@@ -61,13 +61,14 @@
                                 </LinearGradientBrush>
                             </Border.Background>
                         </Border>
-                        <!-- 内容层：文字不挂 Effect，避免被光栅化变糊 -->
-                        <Border CornerRadius="10">
-                            <TextBlock Text="JM" Foreground="White" FontSize="12" FontWeight="Bold"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        <Grid Width="15" Height="15">
+                            <Path Data="M1,4.6 L1,1 L4.6,1 M10.4,1 L14,1 L14,4.6 M14,10.4 L14,14 L10.4,14 M4.6,14 L1,14 L1,10.4"
+                                  Stroke="#FFFFFF" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            <Path Data="M7.5,4.4 L7.5,10.1 M4.9,7.7 L7.5,10.4 L10.1,7.7"
+                                  Stroke="#FFFFFF" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                        </Grid>
                     </Grid>
-                    <TextBlock Text="JM 下载器" FontSize="14" FontWeight="Bold"
+                    <TextBlock Text="抓资源" FontSize="14.5" FontWeight="Bold"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                     <Border Style="{StaticResource KindPillGroupStyle}" Margin="16,0,0,0" VerticalAlignment="Center" shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <StackPanel Orientation="Horizontal">
