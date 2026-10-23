@@ -1,6 +1,21 @@
 # 抓资源 ResourceGrab
 
-多源漫画 / 在线视频资源下载器与本地媒体库，基于 .NET 10 / WPF 的 Windows 桌面应用。
+<p align="center">
+  <img src="docs/images/icon.png" width="96" alt="ResourceGrab icon">
+</p>
+
+<p align="center">
+  多源漫画 / 在线视频资源下载器与本地媒体库，基于 .NET 10 / WPF 的 Windows 桌面应用。
+</p>
+
+<p align="center">
+  <sub>界面采用自研的 <a href="docs/DSO-UI.md">DSO UI</a> 设计系统：中性画布 + 单一强调色 + 发丝描边，深浅双主题。</sub>
+</p>
+
+![浅色主题](docs/images/ui-light.png)
+
+![深色主题](docs/images/ui-dark.png)
+
 支持禁漫天堂、拷贝漫画、包子漫画等多个内容源的搜索与下载，内置下载引擎、本地漫画库、视频库与小说阅读器。
 
 ## 内容源
@@ -32,14 +47,28 @@
 
 其他体验：保存账号密码后启动自动登录（DPAPI 加密）、接口域名失效自动轮换冷却、卡片分格大小统一调节并随窗口宽度自适应。
 
+## 界面与设计系统
+
+UI 基于自研的 **DSO UI**（见 [docs/DSO-UI.md](docs/DSO-UI.md)），核心约定：
+
+- **一个强调色**：全局只有 `PrimaryBrush`（靛蓝 #4D6BFE）表达选中与主操作，其余用中性灰阶分层
+- **发丝描边优先**：1px 描边 + 极轻阴影，不用整块实心高亮和发光渐变
+- **状态用填充**：筛选药丸开启=中性填充，关闭=透明弱化；导航选中=8% 强调底 + 3px 指示条
+- **深浅同构**：`Colors.xaml` / `DarkColors.xaml` 键名一致，切换只换字典，不动视图 XAML
+- **令牌驱动**：圆角、间距、字号集中在 `Themes/Tokens.xaml`
+
+应用图标的取景角标 + 下箭头与顶栏品牌块同构，由 `resources/icon/gen.py` 从代码生成多尺寸 ICO。
+
 ## 技术栈
 
 - .NET 10 / C#，纯 WPF（XAML），无 WebView2 依赖
 - `ResourceGrab.Core`：内容源适配（签名 / 解密 / HTML 解析）、下载引擎、图片重组、本地库服务
 - `ResourceGrab.App`：WPF 界面层
-- 主要依赖：AngleSharp、Polly、SixLabors.ImageSharp、Microsoft.Extensions.DependencyInjection
+- 主要依赖：AngleSharp、Polly、SixLabors.ImageSharp、Microsoft.Extensions.DependencyInjection、FlyleafLib（视频播放）
 
 ## 构建与发布
+
+环境：**.NET 10 SDK**（构建）/ **.NET 10 Desktop Runtime**（运行框架依赖版）。
 
 ```powershell
 # 还原并构建 Release
@@ -48,23 +77,37 @@ dotnet build ResourceGrab.slnx -c Release
 
 也可以直接双击 `build-release.bat` 一键编译。
 
-发布单文件（win-x64，框架依赖，输出到 `publish\`）：
+### 发布单文件（win-x64，框架依赖）
 
 ```powershell
 .\publish.ps1
 ```
 
-框架依赖包约 27MB（输出到 `BIN\release\`），目标电脑需安装 .NET 10 Desktop Runtime：
+产物在 `bin\Release\`，结构固定：
+
+| 路径 | 说明 |
+| --- | --- |
+| `ResourceGrab.App.exe` | 单文件主程序（约 35 MB，内含全部托管依赖） |
+| `ffmpeg\` | FFmpeg 9.0 共享库 + `ffmpeg.exe` / `ffprobe.exe`（约 180 MB） |
+
+两点必须注意：
+
+- **`ffmpeg\` 目录要和 exe 一起分发**。Flyleaf 按「exe 同级 `ffmpeg\` 目录中存在 `avformat-*.dll`」定位原生库，只拷 exe 会退回「找不到 FFmpeg 共享库」，在线视频无法播放。
+- 首次发布会从 GitHub 下载约 70 MB 的 FFmpeg 压缩包，已缓存在 `%TEMP%\flyleaf-ffmpeg-shared.zip`，重复发布不会重新下载；网络不通时可用 `-Proxy` 指定代理。
+
+目标机器需安装 .NET 10 Desktop Runtime：
 
 ```powershell
 winget install Microsoft.DotNet.DesktopRuntime.10
 ```
 
-免安装的自包含版（约 160MB）：
+### 发布免安装自包含版（约 160 MB）
 
 ```powershell
 dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o BIN\release
 ```
+
+自包含版不依赖目标机的 .NET 运行时，但同样需要把 `ffmpeg\` 目录放在 exe 旁边。
 
 ## 快速上手
 
@@ -106,15 +149,15 @@ dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true 
 
 ## UI 架构规则（贡献者必读）
 
-新增界面代码必须遵循以下规则，完整说明见 `docs/UI统一重构合并执行计划.md`：
+新增界面代码必须遵循以下规则，完整说明见 `docs/UI统一重构合并执行计划.md` 与 `docs/DSO-UI.md`：
 
 - **新页面必须走路由**：经 `ShellNavigator` 注册（`Shell/Routes/`），禁止直接给 `PageHost.Content` 赋值。
 - **新列表必须用统一结果区**：优先复用 `MediaResultHost` / `StateHostControl` + `VirtualizedCardGrid`，禁止手写 Loading/Empty/Error 面板逐个切 `Visibility`。
 - **新卡片必须继承 `MediaCardViewModel`**：经 `MediaCardAdapters` 适配，由 `MediaCard` 按 `MediaVisualKind` 渲染，不复制整张卡片 XAML。
 - **新筛选必须实现 `IFilterPanel`**：挂到 `SidebarHost`，事件收敛到 `FilterSelection`。
 - **新图标必须用矢量资源**：`Themes/Icons.xaml` 中的命名 Path，禁止 emoji 表达功能图标。
-- **视觉值必须走 token**：圆角/间距/字号/侧栏宽度引用 `Themes/Tokens.xaml`，视图 XAML 不写硬编码 `CornerRadius`。
+- **视觉值必须走 token**：圆角/间距/字号/侧栏宽度引用 `Themes/Tokens.xaml`，颜色只用 `Colors.xaml` 中已有的语义键，视图 XAML 不写硬编码颜色与 `CornerRadius`。
 
 ## 免责声明
 
-本工具仅作学习、研究、交流使用，请勿用于任何商业用途；使用本工具产生的 一切风险由用户自行承担，与开发者无关。
+本工具仅作学习、研究、交流使用，请勿用于任何商业用途；使用本工具产生的一切风险由用户自行承担，与开发者无关。
