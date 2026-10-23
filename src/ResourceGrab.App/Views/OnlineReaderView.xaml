@@ -9,68 +9,118 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 工具栏第 1 行：返回 / 标题 / 页码 / 翻页 / 章节 -->
+        <!-- 工具栏。两行各自是一个「左 Auto / 中 弹性 / 右 Auto」的三列 Grid：
+             之前的 DockPanel 把右侧按钮组放在最后一个子元素上，而 DockPanel.LastChildFill
+             默认 true —— 最后一个子元素会被拉伸填满剩余空间、Dock="Right" 被忽略，
+             结果按钮组紧贴标题左排，行尾空出半个窗口（实测第 1 行空 1231px、第 2 行空 1048px）。
+             两行分开用各自的 Grid，是为了让「左列宽度」互不牵连（返回键窄、查看方式宽）。 -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <DockPanel Grid.Row="0">
-                <Button x:Name="BackButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 返回"
-                        DockPanel.Dock="Left" Click="BackButton_Click" Padding="14,6" />
-                <TextBlock x:Name="TitleText" FontSize="16" FontWeight="Bold"
-                           MaxWidth="420" TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center" Margin="16,0,0,0" DockPanel.Dock="Left" />
+        <!-- 第 1 行：返回 / 标题（弹性截断）+ 章节位置 / 翻页 + 章节 -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="0" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+            <Button x:Name="BackButton" Grid.Column="0" Style="{StaticResource GhostButtonStyle}" Content="‹ 返回"
+                    Click="BackButton_Click" Padding="14,6" VerticalAlignment="Center" />
+
+            <!-- 标题必须放在 * 列里直接约束宽度，否则套一层水平 StackPanel 会给它无限宽度、TextTrimming 失效 -->
+            <Grid Grid.Column="1" Margin="16,0,16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="0" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TitleText" Grid.Column="0" FontSize="16" FontWeight="Bold"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <TextBlock x:Name="ChapterIndexText" Grid.Column="1" FontSize="12" Margin="10,0,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+            </Grid>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="PrevPageButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="‹ 上一页" ToolTip="上一页（← 或滚轮上）" Click="PrevPage_Click" Padding="10,6" />
+                <Button x:Name="PageButton" Style="{StaticResource GhostButtonStyle}"
+                        Margin="6,0,0,0" Padding="10,6" Click="PageButton_Click"
+                        ToolTip="点击跳到指定页">
                     <TextBlock x:Name="PageText" FontSize="12"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <Button x:Name="PrevPageButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="‹ 上一页" ToolTip="上一页（← 或滚轮上）" Click="PrevPage_Click" Padding="10,6" />
-                    <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="下一页 ›" ToolTip="下一页（→ 或滚轮下）" Margin="6,0,0,0"
-                            Click="NextPage_Click" Padding="10,6" />
-                    <Button x:Name="PrevChapterButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="上一章" Margin="10,0,0,0" Click="PrevChapter_Click" Padding="12,6" />
-                    <ComboBox x:Name="ChapterCombo" Width="220" Margin="8,0"
-                              SelectionChanged="ChapterCombo_SelectionChanged" />
-                    <Button x:Name="NextChapterButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="下一章" Click="NextChapter_Click" Padding="12,6" />
-                </StackPanel>
-            </DockPanel>
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </Button>
+                <Button x:Name="NextPageButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="下一页 ›" ToolTip="下一页（→ 或滚轮下）" Margin="6,0,0,0"
+                        Click="NextPage_Click" Padding="10,6" />
+                <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}" Margin="12,0" />
+                <Button x:Name="PrevChapterButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="上一章" Click="PrevChapter_Click" Padding="12,6" />
+                <ComboBox x:Name="ChapterCombo" MinWidth="200" MaxWidth="280" Margin="8,0"
+                          VerticalAlignment="Center"
+                          SelectionChanged="ChapterCombo_SelectionChanged"
+                          ToolTip="切换章节" />
+                <Button x:Name="NextChapterButton" Style="{StaticResource GhostButtonStyle}"
+                        Content="下一章" Click="NextChapter_Click" Padding="12,6" />
+            </StackPanel>
+        </Grid>
 
-            <!-- 工具栏第 2 行：阅读模式 / 适应方式 -->
-            <DockPanel Grid.Row="1" Margin="0,8,0,0">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                    <ToggleButton x:Name="ScrollModeButton" Style="{StaticResource ReaderModeToggleStyle}"
-                                  Content="滚动" IsChecked="False" Click="ModeToggle_Click" />
-                    <ToggleButton x:Name="PageModeButton" Style="{StaticResource ReaderModeToggleStyle}"
-                                  Content="翻页" Margin="4,0,0,0" IsChecked="True" Click="ModeToggle_Click" />
-                    <TextBlock x:Name="ModeHintText" FontSize="12"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               VerticalAlignment="Center" Margin="12,0,0,0"
-                               Text="翻页浏览 · ←/→ 或滚轮翻页 · 缩放：滑杆/± 或 Ctrl + 滚轮" />
-                    <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
-                            Margin="14,0,12,0" />
-                    <Button x:Name="FitWidthButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="适应宽度" Click="FitWidth_Click" Padding="10,5" ToolTip="条漫推荐：滚动模式 + 适应宽度" />
-                    <Button x:Name="FitHeightButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="适应高度" Margin="6,0,0,0" Click="FitHeight_Click" Padding="10,5" />
-                    <Button x:Name="FitPageButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="适应页面" Margin="6,0,0,0" Click="FitPage_Click" Padding="10,5" />
-                    <Button x:Name="ActualSizeButton" Style="{StaticResource GhostButtonStyle}"
-                            Content="实际大小" Margin="6,0,0,0" Click="ActualSize_Click" Padding="10,5" />
-                    <!-- 缩放控制：条漫时拖动滑杆/±按钮控制图片宽度，百分比点击复位 -->
-                    <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" Margin="12,0,0,0" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="ZoomOutButton" Style="{StaticResource GhostButtonStyle}" Content="−" Padding="10,5" Click="ZoomOut_Click" ToolTip="缩小 (Ctrl + -)" FontWeight="Bold" />
-                            <Slider x:Name="ZoomSlider" Width="110" Minimum="0.5" Maximum="3.0" TickFrequency="0.05" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="6,0,0,0" Value="1.0" ValueChanged="ZoomSlider_ValueChanged" ToolTip="拖动缩放图片（50% ~ 300%），条漫建议 100% ~ 200%" />
-                            <Button x:Name="ZoomResetButton" Style="{StaticResource GhostButtonStyle}" Content="100%" Margin="6,0,0,0" Padding="8,5" MinWidth="52" Click="ZoomReset_Click" ToolTip="点击恢复 100% (Ctrl + 0)" FontWeight="SemiBold" />
-                            <Button x:Name="ZoomInButton" Style="{StaticResource GhostButtonStyle}" Content="+" Margin="3,0,0,0" Padding="10,5" Click="ZoomIn_Click" ToolTip="放大 (Ctrl + +)" FontWeight="Bold" />
-                        </StackPanel>
-                    </Border>
+        <!-- 第 2 行：查看方式（左）/ 状态提示（中，弹性）/ 视图控制（右） -->
+        <Grid Grid.Row="1" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="0" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <ToggleButton x:Name="ScrollModeButton" Style="{StaticResource ReaderModeToggleStyle}"
+                              Content="滚动" IsChecked="False" Click="ModeToggle_Click"
+                              ToolTip="滚动浏览：单列纵向连续滚动（条漫推荐）" />
+                <ToggleButton x:Name="PageModeButton" Style="{StaticResource ReaderModeToggleStyle}"
+                              Content="翻页" Margin="4,0,0,0" IsChecked="True" Click="ModeToggle_Click"
+                              ToolTip="翻页浏览：一次一页，← / → 或滚轮翻页" />
+                <ToggleButton x:Name="WallModeButton" Style="{StaticResource ReaderModeToggleStyle}"
+                              Content="画墙" Margin="4,0,0,0" IsChecked="False" Click="ModeToggle_Click"
+                              Visibility="Collapsed"
+                              ToolTip="画墙浏览：整册图片平铺成缩略图墙，点击任意一张进入单图查看" />
+                <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}" Margin="10,0" />
+                <ToggleButton x:Name="SpreadToggleButton" Style="{StaticResource ReaderModeToggleStyle}"
+                              Content="双页" Click="SpreadToggle_Click"
+                              ToolTip="双页并排：宽屏下左右各放一页，接近翻倍地利用横向空间。跨页整幅图请关闭此模式" />
+            </StackPanel>
+
+            <TextBlock x:Name="ModeHintText" Grid.Column="1" Margin="16,0,16,0"
+                       FontSize="12" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       VerticalAlignment="Center"
+                       Text="← / → 翻页 · Ctrl + 滚轮缩放" />
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- 原「适应宽度/高度/页面/实际大小」四个按钮合并为一个下拉：它们是同一件事 -->
+                <ComboBox x:Name="FitModeCombo" MinWidth="104" FontSize="12" VerticalAlignment="Center"
+                          SelectionChanged="FitModeCombo_SelectionChanged"
+                          ToolTip="适应方式。条漫推荐「适应宽度」">
+                    <ComboBoxItem Content="适应宽度" />
+                    <ComboBoxItem Content="适应高度" />
+                    <ComboBoxItem Content="适应页面" />
+                    <ComboBoxItem Content="实际大小" />
+                </ComboBox>
+
+                <!-- 缩放控制：拖动滑杆/±按钮控制图片宽度，百分比点击复位 -->
+                <Border Background="{DynamicResource AppBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="3" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="ZoomOutButton" Style="{StaticResource GhostButtonStyle}" Content="−" Padding="10,5" Click="ZoomOut_Click" ToolTip="缩小 (Ctrl + -)" FontWeight="Bold" />
+                        <Slider x:Name="ZoomSlider" Width="110" Minimum="0.5" Maximum="3.0" TickFrequency="0.05" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="6,0,0,0" Value="1.0" ValueChanged="ZoomSlider_ValueChanged" ToolTip="拖动缩放图片（50% ~ 300%），条漫建议 100% ~ 200%" />
+                        <Button x:Name="ZoomResetButton" Style="{StaticResource GhostButtonStyle}" Content="100%" Margin="6,0,0,0" Padding="8,5" MinWidth="52" Click="ZoomReset_Click" ToolTip="点击恢复 100% (Ctrl + 0)" FontWeight="SemiBold" />
+                        <Button x:Name="ZoomInButton" Style="{StaticResource GhostButtonStyle}" Content="+" Margin="3,0,0,0" Padding="10,5" Click="ZoomIn_Click" ToolTip="放大 (Ctrl + +)" FontWeight="Bold" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 滚动速度：只在滚动模式下有意义，其他模式整组隐藏（原实现是常驻可拖但无效） -->
+                <StackPanel x:Name="ScrollSpeedPanel" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="1" Height="18" Background="{DynamicResource DividerBrush}"
                             Margin="14,0,12,0" />
                     <TextBlock Text="滚动速度" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
@@ -78,23 +128,44 @@
                     <Slider x:Name="ScrollSpeedSlider" Width="100" Minimum="0.3" Maximum="3.0"
                             TickFrequency="0.1" IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             Margin="8,0,0,0" ValueChanged="ScrollSpeedSlider_ValueChanged"
-                            ToolTip="仅滚动模式生效：拖动调节滚轮上下滚动速度" />
+                            ToolTip="拖动调节滚轮上下滚动速度" />
                     <TextBlock x:Name="ScrollSpeedValueText" FontSize="11"
                                Foreground="{DynamicResource TextSecondaryBrush}"
                                VerticalAlignment="Center" Margin="6,0,0,0" MinWidth="28" />
                 </StackPanel>
-            </DockPanel>
+            </StackPanel>
         </Grid>
 
-        <!-- 阅读区 -->
-        <Border Grid.Row="1" Background="{DynamicResource HoverBgBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="8">
+        </Grid>
+
+        <!-- 阅读区。底色用 ReaderBackdropBrush 而不是 HoverBgBrush：
+             HoverBgBrush 是 6% 黑（#0F121214），叠在 #F5F5F7 上实测只有 #E8E8E9，
+             与白页的对比度约 1.23:1，长时间阅读时分不清页面边界。 -->
+        <Border Grid.Row="1" Background="{DynamicResource ReaderBackdropBrush}" CornerRadius="{DynamicResource RadiusXl}" Padding="8">
             <Grid>
-                <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Auto"
-                              ScrollChanged="Scroller_ScrollChanged"
-                              SizeChanged="Scroller_SizeChanged"
-                              PreviewMouseWheel="Scroller_PreviewMouseWheel">
-                    <StackPanel x:Name="ImageStack" HorizontalAlignment="Center" />
+        <!-- 滚动 / 翻页模式：图片流。用 WrapPanel 而不是 StackPanel，是为了让「双页并排」成立：
+             单页时每页宽度 = 视口宽 → 每行自然只有一张（视觉上等同纵向堆叠）；
+             双页时把每页宽度减半 → WrapPanel 自动每行排两张。
+             注意 WrapPanel 是「超出即换行」，横向给无限约束就永远不会换行（画墙那个 ScrollViewer
+             因此必须用 Disabled）——这里靠代码按模式显式给 ImageStack.Width 来控制。 -->
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Auto"
+                      ScrollChanged="Scroller_ScrollChanged"
+                      SizeChanged="Scroller_SizeChanged"
+                      PreviewMouseWheel="Scroller_PreviewMouseWheel"
+                      PreviewMouseLeftButtonUp="Scroller_PreviewMouseLeftButtonUp">
+            <WrapPanel x:Name="ImageStack" HorizontalAlignment="Center" />
+        </ScrollViewer>
+
+                <!-- 画墙模式：整册图片平铺。必须用自己的 ScrollViewer + HorizontalScrollBarVisibility=Disabled：
+                     横向 Auto 会让内容拿到无限宽度约束，WrapPanel 就永远不会换行（退化成单行）。
+                     这里也不挂 PreviewMouseWheel —— 画墙用原生滚动，不接管滚轮做翻页。 -->
+                <ScrollViewer x:Name="WallScroller" Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              ScrollChanged="WallScroller_ScrollChanged">
+                    <WrapPanel x:Name="WallPanel" VerticalAlignment="Top"
+                               SizeChanged="WallPanel_SizeChanged" />
                 </ScrollViewer>
 
                 <!-- 章节级加载/失败状态 -->
@@ -110,6 +181,23 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- 页码跳转：点标题栏的「11 / 26」弹出，避免为一次输入开模态窗口 -->
+        <Popup x:Name="PageJumpPopup" Placement="Bottom" StaysOpen="False"
+               AllowsTransparency="True" PlacementTarget="{Binding ElementName=PageButton}">
+            <Border Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="{DynamicResource RadiusMd}" Padding="10" Margin="0,6,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="PageJumpBox" Width="64" FontSize="12" Padding="6,4"
+                             VerticalContentAlignment="Center" KeyDown="PageJumpBox_KeyDown" />
+                    <TextBlock x:Name="PageJumpTotalText" FontSize="12" VerticalAlignment="Center"
+                               Margin="6,0,0,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <Button Content="跳转" Style="{StaticResource GhostButtonStyle}" Padding="10,4"
+                            Margin="8,0,0,0" Click="PageJumpGo_Click" />
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </UserControl>
 

@@ -97,11 +97,16 @@ public sealed class ShellNavigator
         return false;
     }
 
+    /// <summary>
+    /// 由路由 Id 前缀推断媒体类型。注意这是硬编码白名单，新增一级类型必须在此登记，
+    /// 否则该类型的所有路由会被静默归入漫画返回栈。
+    /// </summary>
     private static MediaKind InferKind(string routeId)
     {
         if (routeId.StartsWith("manga.")) return MediaKind.Manga;
         if (routeId.StartsWith("video.")) return MediaKind.Video;
         if (routeId.StartsWith("novel.")) return MediaKind.Novel;
+        if (routeId.StartsWith("photobook.")) return MediaKind.Photobook;
         return MediaKind.Manga;
     }
 

@@ -74,6 +74,7 @@
                             <RadioButton x:Name="KindMangaPill" Content="漫画" IsChecked="True" Style="{StaticResource KindPillRadioStyle}" Tag="Manga" GroupName="KindGroup" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindVideoPill" Content="视频" Style="{StaticResource KindPillRadioStyle}" Tag="Video" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindNovelPill" Content="本地小说" Style="{StaticResource KindPillRadioStyle}" Tag="Novel" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
+                            <RadioButton x:Name="KindPhotobookPill" Content="写真" Style="{StaticResource KindPillRadioStyle}" Tag="Photobook" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -97,6 +98,12 @@
                                 <TextBlock Text="视频" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}"/>
                             </Border>
                             <TextBlock Text="敬请期待" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <StackPanel x:Name="PhotobookTopActions" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                            <Border CornerRadius="6" Background="{DynamicResource PhotobookSubtleBrush}" Padding="8,4" VerticalAlignment="Center">
+                                <TextBlock Text="写真" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PhotobookAccentBrush}"/>
+                            </Border>
+                            <TextBlock Text="在线图集浏览与下载" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                         </StackPanel>
                     </StackPanel>
                     <!-- 全局通用区 -->
@@ -261,7 +268,7 @@
                    </StackPanel>
                     <!-- 漫画源切换：仅漫画模式显示 -->
                     <StackPanel x:Name="SourceSwitcherHost" Margin="2,0,2,8">
-                        <TextBlock Text="漫画源" FontSize="10.5" FontWeight="SemiBold"
+                        <TextBlock x:Name="SourceSwitcherLabel" Text="漫画源" FontSize="10.5" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextDisabledBrush}"
                                    Margin="10,8,0,6" />
                         <ComboBox x:Name="SourceBox" Width="164"

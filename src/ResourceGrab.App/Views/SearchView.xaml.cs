@@ -59,6 +59,13 @@ public partial class SearchView : CardGridViewBase
         BuildSourceTabs();
     }
 
+    /// <summary>
+    /// 本页只服务漫画源。SourceManager.Sources 是扁平共享列表，写真源也注册在里面，
+    /// 必须在此按 Kind 排除，否则写真站会混进漫画搜索的源标签与「全部」搜索。
+    /// </summary>
+    private IReadOnlyList<IComicSource> MangaSources =>
+        _sourceManager.Sources.Where(s => s.Info.Kind == ResourceKind.Manga).ToList();
+
     private void BuildSourceTabs()
     {
         _sourceTabs.Clear();
@@ -72,7 +79,7 @@ public partial class SearchView : CardGridViewBase
         };
         _allTab.Click += AllTab_Click;
         Toolbar.Chips.Children.Add(_allTab);
-        foreach (var source in _sourceManager.Sources)
+        foreach (var source in MangaSources)
         {
             var tab = new System.Windows.Controls.Primitives.ToggleButton
             {
@@ -108,7 +115,7 @@ public partial class SearchView : CardGridViewBase
     private IReadOnlyList<IComicSource> GetSelectedSources()
     {
         if (_allTab.IsChecked == true)
-            return _sourceManager.Sources;
+            return MangaSources;
         return _sourceTabs.Where(t => t.IsChecked == true).Select(t => (IComicSource)t.Tag!).ToList();
     }
 

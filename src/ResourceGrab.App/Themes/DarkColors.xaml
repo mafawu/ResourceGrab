@@ -28,6 +28,8 @@
     <SolidColorBrush x:Key="WarningSubtleBrush" Color="#33F2B356" />
     <SolidColorBrush x:Key="NovelAccentBrush" Color="#8E7DFF" />
     <SolidColorBrush x:Key="VideoAccentBrush" Color="#3DD598" />
+    <SolidColorBrush x:Key="PhotobookAccentBrush" Color="#E8B054" />
+    <SolidColorBrush x:Key="PhotobookSubtleBrush" Color="#2E2618" />
     <SolidColorBrush x:Key="CardScrimBrush" Color="#99000000" />
     <SolidColorBrush x:Key="CardOverlayPanelBrush" Color="#CC000000" />
     <SolidColorBrush x:Key="CardBadgeScrimBrush" Color="#E6000000" />
@@ -40,6 +42,8 @@
     <SolidColorBrush x:Key="InputFocusBrush" Color="#E85D75" />
     <SolidColorBrush x:Key="FocusGlowBrush" Color="#40E85D75" />
     <SolidColorBrush x:Key="HoverBgBrush" Color="#14F2F2F5" />
+    <!-- 阅读器衬底：深色主题下比 AppBackground(#0F0F12) 再暗一档，让偏亮的漫画页浮起来 -->
+    <SolidColorBrush x:Key="ReaderBackdropBrush" Color="#08080A" />
     <SolidColorBrush x:Key="ActiveNavBgBrush" Color="#1FE85D75" />
     <SolidColorBrush x:Key="SelectionBgBrush" Color="#26E85D75" />
     <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#3D6B7280" />

@@ -28,6 +28,8 @@
     <SolidColorBrush x:Key="WarningSubtleBrush" Color="#FFF3E0" />
     <SolidColorBrush x:Key="NovelAccentBrush" Color="#7C6CF6" />
     <SolidColorBrush x:Key="VideoAccentBrush" Color="#3DD598" />
+    <SolidColorBrush x:Key="PhotobookAccentBrush" Color="#C07A21" />
+    <SolidColorBrush x:Key="PhotobookSubtleBrush" Color="#FDF4E6" />
     <SolidColorBrush x:Key="CardScrimBrush" Color="#66000000" />
     <SolidColorBrush x:Key="CardOverlayPanelBrush" Color="#B3000000" />
     <SolidColorBrush x:Key="CardBadgeScrimBrush" Color="#CC000000" />
@@ -40,6 +42,9 @@
     <SolidColorBrush x:Key="InputFocusBrush" Color="#E85D75" />
     <SolidColorBrush x:Key="FocusGlowBrush" Color="#33E85D75" />
     <SolidColorBrush x:Key="HoverBgBrush" Color="#0F121214" />
+    <!-- 阅读器衬底：白页要在这层上「浮起来」。原实现复用 HoverBgBrush（6% 黑）叠出来只有
+         #E8E8E9，与白页对比度 1.23:1，长时间阅读分不清页面边界。这层给到约 1.5:1。 -->
+    <SolidColorBrush x:Key="ReaderBackdropBrush" Color="#D2D2D8" />
     <SolidColorBrush x:Key="ActiveNavBgBrush" Color="#14E85D75" />
     <SolidColorBrush x:Key="SelectionBgBrush" Color="#1AE85D75" />
     <SolidColorBrush x:Key="ScrollbarThumbBrush" Color="#3D9AA0A8" />

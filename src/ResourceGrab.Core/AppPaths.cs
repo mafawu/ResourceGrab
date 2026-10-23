@@ -22,6 +22,7 @@ public static class AppPaths
     public static string VideoArtworkDir => Path.Combine(AppDataDir, "artwork", "videos");
     public static string VideoScrapeMetadataPath => Path.Combine(AppDataDir, "video-scrape-metadata.json");
     public static string VideoSourceCacheDir => Path.Combine(AppDataDir, "video-source-cache");
+    public static string PhotobookTaxonomyCacheDir => Path.Combine(AppDataDir, "photobook-taxonomy");
     public static string VideoSidebarCountsPath => Path.Combine(AppDataDir, "video-sidebar-counts.json");
     public static string VideoResourcesDir => Path.Combine(AppDataDir, "video-resources");
     public static string MetadataBackfillLogPath => Path.Combine(AppDataDir, "backfill-metadata.log");

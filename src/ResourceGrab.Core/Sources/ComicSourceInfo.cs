@@ -1,6 +1,10 @@
 namespace ResourceGrab.Core.Sources;
 
-public enum ResourceKind { Manga, Novel, Video }
+/// <summary>
+/// 内容种类，驱动顶栏一级胶囊（漫画 / 视频 / 本地小说 / 写真）。
+/// 注意：新增项一律追加到末尾，避免既有数值位移影响持久化数据。
+/// </summary>
+public enum ResourceKind { Manga, Novel, Video, Photobook }
 
 /// <summary>内容源元信息：UI 的站点切换、能力展示等均依赖此信息。</summary>
 public class ComicSourceInfo
@@ -22,6 +26,13 @@ public class ComicSourceInfo
 
     /// <summary>是否支持分类浏览。</summary>
     public bool SupportsCategories { get; init; }
+
+    /// <summary>
+    /// 该源支持的写真浏览维度（仅 <see cref="ResourceKind.Photobook"/> 源使用）。
+    /// 与 <see cref="SupportsCategories"/> 的分工：后者驱动漫画的「分类」入口，
+    /// 本属性驱动「写真」的六维入口，两者互不重叠。
+    /// </summary>
+    public IReadOnlyList<TaxonomyKind> Taxonomies { get; init; } = [];
 
     /// <summary>是否支持排行。</summary>
     public bool SupportsRank { get; init; }

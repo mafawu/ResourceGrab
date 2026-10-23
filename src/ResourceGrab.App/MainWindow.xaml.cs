@@ -47,11 +47,17 @@ public partial class MainWindow : Window
     private UserControl? _lastMangaContent;
     private UserControl? _lastNovelContent;
     private UserControl? _lastVideoContent;
+    private UserControl? _lastPhotobookContent;
     private NovelSearchPanel? _novelSearchPanel;
     private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
     private ScrapeToolsView? _scrapeToolsView;
     private AuthorSearchView? _authorSearchView;
+    private readonly Dictionary<TaxonomyKind, PhotobookBrowseView> _photobookViews = new();
+
+    /// <summary>「写真」列表页与「随机」页：同一视图的两种模式，各占一条独立路由。</summary>
+    private PhotobookGalleryView? _photobookHomeView;
+    private PhotobookGalleryView? _photobookRandomView;
 
     /// <summary>章节详情页缓存：按最近访问 LRU 淘汰，限制常驻内存。</summary>
     private const int MaxCachedChapterViews = 6;
@@ -195,7 +201,7 @@ public partial class MainWindow : Window
         var filtered = _sourceManager.Sources.Where(s => s.Info.Kind == kind).ToList();
         if (filtered.Count == 0)
         {
-            SourceBox.Items.Add(new ComboBoxItem { Content = kind == ResourceKind.Novel ? "小说源 · 敬请期待" : "视频源 · 敬请期待", IsEnabled = false });
+            SourceBox.Items.Add(new ComboBoxItem { Content = $"{KindLabel(kind)}源 · 敬请期待", IsEnabled = false });
             SourceBox.IsEnabled = false;
         }
         else
@@ -212,6 +218,36 @@ public partial class MainWindow : Window
 
     private bool IsNovelMode => PageHost != null && (PageHost.Content is NovelLocalView || PageHost.Content is NovelReaderView);
     private bool IsVideoMode => PageHost != null && PageHost.Content is VideoView;
+    private bool IsPhotobookMode => PageHost != null && PageHost.Content is ResourceGrab.App.Views.PhotobookBrowseView;
+
+    /// <summary>一级类型的中文名，用于顶栏与源下拉文案。</summary>
+    private static string KindLabel(ResourceKind kind) => kind switch
+    {
+        ResourceKind.Video => "视频",
+        ResourceKind.Novel => "小说",
+        ResourceKind.Photobook => "写真",
+        _ => "漫画",
+    };
+
+    /// <summary>
+    /// 写真维度路由是否由当前源支持。没有写真源时不作判定 —— 页面自会提示"未接入"，
+    /// 否则每次切源都会被判为不支持而反复回退。
+    /// </summary>
+    private bool PhotobookRouteSupported(string routeId)
+    {
+        if (_sourceManager.Current.Info.Kind != ResourceKind.Photobook) return true;
+
+        // 「写真」列表页所有写真源都具备；「随机」取决于源是否实现了随机能力。
+        // 这两条必须先判 —— 否则 routeId 的 "home"/"random" 会被当成维度名解析失败而误判为不支持。
+        if (routeId == PhotobookNavSectionProvider.HomeRouteId) return true;
+        if (routeId == PhotobookNavSectionProvider.RandomRouteId)
+            return _sourceManager.Current is IRandomPhotobookSource;
+
+        if (_sourceManager.Current is not ITaxonomySource) return false;
+        var dimension = routeId["photobook.".Length..];
+        return Enum.TryParse<TaxonomyKind>(dimension, ignoreCase: true, out var kind)
+               && _sourceManager.Current.Info.Taxonomies.Contains(kind);
+    }
 
     private void UpdateTopBarForKind()
     {
@@ -220,17 +256,22 @@ public partial class MainWindow : Window
             var isNovel = IsNovelMode;
             if (MangaTopActions != null) MangaTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Manga) ? Visibility.Visible : Visibility.Collapsed;
             if (VideoTopActions != null) VideoTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Video) ? Visibility.Visible : Visibility.Collapsed;
+            if (PhotobookTopActions != null) PhotobookTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Photobook) ? Visibility.Visible : Visibility.Collapsed;
 
+            // 漫画与写真都是多源站点，需要源下拉；视频/小说当前无源。
+            var supportsSourceSwitcher = _currentKind is ResourceKind.Manga or ResourceKind.Photobook;
+            if (SourceSwitcherLabel != null) SourceSwitcherLabel.Text = $"{KindLabel(_currentKind)}源";
+            if (SourceBox != null) SourceBox.ToolTip = $"当前{KindLabel(_currentKind)}源（影响搜索 / 排行 / 分类 / 收藏）";
             if (SourceSwitcherHost != null)
             {
                 SourceSwitcherHost.Visibility =
                     LeftNavHost.Visibility == Visibility.Visible &&
                     !isNovel &&
-                    _currentKind == ResourceKind.Manga
+                    supportsSourceSwitcher
                         ? Visibility.Visible
                         : Visibility.Collapsed;
             }
-            // 漫画源需要账号；视频和小说为本地/免登流程。
+            // 漫画源需要账号；视频/小说/写真为本地或免登流程。
             if (AccountHost != null) AccountHost.Visibility = _currentKind == ResourceKind.Manga ? Visibility.Visible : Visibility.Collapsed;
 
         } catch {}
@@ -245,6 +286,7 @@ public partial class MainWindow : Window
             {
                 if (IsNovelMode) _lastNovelContent = leaving;
                 else if (IsVideoMode) _lastVideoContent = leaving;
+                else if (IsPhotobookMode) _lastPhotobookContent = leaving;
                 else _lastMangaContent = leaving;
             }
             _currentKind = kind;
@@ -253,6 +295,7 @@ public partial class MainWindow : Window
             UpdateNavCapabilities();
             if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
             if (IsVideoMode && kind == ResourceKind.Manga) { ExitVideoMode(); return; }
+            if (IsPhotobookMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
             if (kind == ResourceKind.Novel && !IsNovelMode)
             {
                 // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
@@ -265,6 +308,13 @@ public partial class MainWindow : Window
                 // 首次进入视频走默认路由（在线搜索 + 隐藏边栏）；非首次恢复最近的子页
                 if (!_navigator.RestoreLast(MediaKind.Video))
                     _navigator.GoTo("video.online");
+                return;
+            }
+            if (kind == ResourceKind.Photobook && !IsPhotobookMode)
+            {
+                // 首次进入写真走默认路由；非首次恢复该类型最近的子页
+                if (!_navigator.RestoreLast(MediaKind.Photobook))
+                    _navigator.GoTo(PhotobookNavSectionProvider.HomeRouteId);
                 return;
             }
             UpdateTopBarForKind();
@@ -289,6 +339,7 @@ public partial class MainWindow : Window
         {
             ResourceKind.Video => new VideoNavSectionProvider(),
             ResourceKind.Novel => new NovelNavSectionProvider(),
+            ResourceKind.Photobook => new PhotobookNavSectionProvider(_sourceManager.Current),
             _ => new MangaNavSectionProvider(_sourceManager.Current.Info),
         };
         NavRailControl.Sections = provider.GetSections();
@@ -324,6 +375,13 @@ public partial class MainWindow : Window
             default:
                 CollapseRightPanel();
                 break;
+        }
+        if (route.RouteId.StartsWith("photobook."))
+        {
+            // NavRail 的分组是异步重建的（RadioButton 容器在布局期生成），
+            // 需等渲染之后再同步选中态，否则会被 Rebuild 的"默认选第一项"覆盖
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                new Action(() => NavRailControl.SelectItem(route.RouteId)));
         }
         UpdateTopBarForKind();
     }
@@ -399,6 +457,34 @@ public partial class MainWindow : Window
             _scrapeToolsView ??= new ScrapeToolsView();
             _scrapeToolsView.OnShown();
             return _scrapeToolsView;
+        });
+
+        // 写真：六个维度共用 PhotobookBrowseView，但各自一条独立路线。
+        // 路由没有参数化机制，且 CreateView 返回缓存实例，所以必须一维度一路由 Id。
+        foreach (var dimension in Enum.GetValues<TaxonomyKind>())
+        {
+            var kind = dimension;
+            _navigator.Register(PhotobookNavSectionProvider.RouteId(kind), () =>
+            {
+                if (!_photobookViews.TryGetValue(kind, out var view))
+                    _photobookViews[kind] = view = new PhotobookBrowseView(kind);
+                view.OnShown();
+                return view;
+            });
+        }
+
+        // 写真：列表页与随机页共用 PhotobookGalleryView 的两种模式，同样各占一条路由。
+        _navigator.Register(PhotobookNavSectionProvider.HomeRouteId, () =>
+        {
+            _photobookHomeView ??= new PhotobookGalleryView(PhotobookGalleryMode.Home);
+            _photobookHomeView.OnShown();
+            return _photobookHomeView;
+        });
+        _navigator.Register(PhotobookNavSectionProvider.RandomRouteId, () =>
+        {
+            _photobookRandomView ??= new PhotobookGalleryView(PhotobookGalleryMode.Random);
+            _photobookRandomView.OnShown();
+            return _photobookRandomView;
         });
 
         // 视频：子页暂为 VideoView 内部页签（SwitchNav），路由化后统一由 NavRail 驱动
@@ -659,10 +745,23 @@ public partial class MainWindow : Window
             (selectedId == "manga.rank" && !info.SupportsRank) ||
             (selectedId == "manga.category" && !info.SupportsCategories) ||
             (selectedId == "manga.weekly" && !info.SupportsWeekly) ||
-            (selectedId == "manga.favorites" && !info.SupportsFavorites);
+            (selectedId == "manga.favorites" && !info.SupportsFavorites) ||
+            (selectedId is not null && selectedId.StartsWith("photobook.") && !PhotobookRouteSupported(selectedId));
 
         if (onUnsupportedPage)
         {
+            // 回退到当前类型的安全落点（漫画→搜索；写真→首个受支持维度），
+            // 用 ReplaceCurrent 不压栈，避免返回时又落到不支持页
+            if (_currentKind == ResourceKind.Photobook)
+            {
+                // 写真回退到「写真」列表页（所有写真源都可用）
+                var fallbackId = PhotobookNavSectionProvider.DefaultRouteId;
+                if (_navigator.ReplaceCurrent(fallbackId))
+                {
+                    NavRailControl.SelectItem(fallbackId);
+                    return;
+                }
+            }
             NavRailControl.SelectItem("manga.search");
             selectedId = "manga.search";
             _lastPage = _searchView;

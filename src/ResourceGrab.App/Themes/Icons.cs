@@ -49,4 +49,8 @@ public static class Icons
     public static Geometry TaskProgress => G("M 4 6 L 20 6 M 4 12 L 14 12 M 4 18 L 17 18 M 17.5 15.5 L 19.5 17.5 L 22 13");
     public static Geometry User => G("M12 12 m-4 0 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M5 21 a7 7 0 0 1 14 0");
     public static Geometry FolderPlus => G("M 3 7 L 10 7 L 12 9 L 21 9 L 21 19 L 3 19 Z M 3 7 L 3 5.5 L 10 5.5 L 12 7.5 L 21 7.5 M 12 12 L 12 16 M 10 14 L 14 14");
+    public static Geometry Tag => G("M 4.6 4.6 H 10.8 L 19.6 13.4 L 13.4 19.6 L 4.6 10.8 Z M 8.5 8.5 a 1.2 1.2 0 1 0 0.01 0");
+    public static Geometry Character => G("M 12 3.2 L 13.9 9.1 L 19.8 11 L 13.9 12.9 L 12 18.8 L 10.1 12.9 L 4.2 11 L 10.1 9.1 Z");
+    public static Geometry Photobook => G("M 4.5 5.5 Q 4.5 4 6 4 H 18 Q 19.5 4 19.5 5.5 V 18.5 Q 19.5 20 18 20 H 6 Q 4.5 20 4.5 18.5 Z M 8.5 8.5 Q 8.5 7.5 9.5 7.5 H 14.5 Q 15.5 7.5 15.5 8.5 V 15.5 Q 15.5 16.5 14.5 16.5 H 9.5 Q 8.5 16.5 8.5 15.5 Z");
+    public static Geometry Shuffle => G("M 3.5 6.5 L 7 6.5 L 17 17.5 L 20.5 17.5 M 3.5 17.5 L 7 17.5 L 17 6.5 L 20.5 6.5 M 17.2 4.2 L 20.5 6.5 L 17.2 8.8 M 17.2 15.2 L 20.5 17.5 L 17.2 19.8");
 }

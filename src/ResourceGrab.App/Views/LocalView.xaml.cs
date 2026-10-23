@@ -11,6 +11,7 @@ using ResourceGrab.Core.Http;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Logging;
 using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Sources;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ResourceGrab.App.Views;
@@ -61,7 +62,8 @@ public partial class LocalView : CardGridViewBase
         _userData = App.Services.GetService(typeof(ComicUserDataService)) as ComicUserDataService;
         _logger = App.Services.GetService(typeof(ILogger)) as ILogger;
         SourceFilterBox.Items.Add(new ComboBoxItem { Content = "全部", Tag = "", IsSelected = true });
-        foreach (var src in _sourceManager.Sources)
+        // 只列漫画源：写真源同属 IComicSource 但有自己的入口，不应出现在本地漫画库的筛选里
+        foreach (var src in _sourceManager.Sources.Where(s => s.Info.Kind == ResourceKind.Manga))
         {
             SourceFilterBox.Items.Add(new ComboBoxItem { Content = src.Info.DisplayName, Tag = src.Info.Id });
         }

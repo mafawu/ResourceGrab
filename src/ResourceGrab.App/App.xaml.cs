@@ -20,6 +20,8 @@ using ResourceGrab.Core.Sources.Copymanga;
 using ResourceGrab.Core.Sources.Hitomi;
 using ResourceGrab.Core.Sources.Jm;
 using ResourceGrab.Core.Sources.Baozimh;
+using ResourceGrab.Core.Sources.LoveCutes;
+using ResourceGrab.Core.Sources.Mzt;
 using ResourceGrab.Core.Sources.Wnacg;
 using ResourceGrab.Core.Sources.VideoSources;
 using ResourceGrab.Core.Services.VideoScrape;
@@ -373,11 +375,21 @@ public partial class App : Application
         services.AddSingleton<BaozimhSource>();
         services.AddSingleton<CopymangaHttpClient>();
         services.AddSingleton<CopymangaSource>();
+        // 写真源：Kind=Photobook，只出现在「写真」入口，不参与漫画源下拉
+        services.AddSingleton<LoveCutesHttpClient>();
+        services.AddSingleton<LoveCutesSource>();
+        services.AddSingleton<MztHttpClient>();
+        services.AddSingleton<MztSource>();
+        // 写真维度条目（分类/标签/Coser/…）的磁盘缓存：先用上次结果立即出内容，再后台刷新覆盖
+        services.AddSingleton(sp => new PhotobookTaxonomyCache(
+            AppPaths.PhotobookTaxonomyCacheDir, sp.GetRequiredService<ILogger>()));
         services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<JmSource>());
         services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<WnacgSource>());
         services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<HitomiSource>());
         services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<BaozimhSource>());
         services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<CopymangaSource>());
+        services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<LoveCutesSource>());
+        services.AddSingleton<IComicSource>(sp => sp.GetRequiredService<MztSource>());
     }
 
     protected override void OnExit(ExitEventArgs e)
