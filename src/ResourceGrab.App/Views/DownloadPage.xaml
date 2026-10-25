@@ -1,0 +1,382 @@
+<UserControl x:Class="ResourceGrab.App.Views.DownloadPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ResourceGrab.App.ViewModels"
+             Background="Transparent">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="TransferRowStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusLg}" />
+            <Setter Property="Padding" Value="12,12,14,12" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource CardHoverBorderBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="KpiNumberStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas, Microsoft YaHei UI" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="KpiLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+
+        <Style x:Key="RowTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="RowMetaStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="RowSubStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontFamily" Value="Consolas, Microsoft YaHei UI" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,24,28,18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============ 标题 ============ -->
+        <Grid Grid.Row="0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="34" Height="34" CornerRadius="10" VerticalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="{DynamicResource PrimaryGradientStartColor}" Offset="0" />
+                            <GradientStop Color="{DynamicResource PrimaryGradientEndColor}" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Path Data="{StaticResource IconDownload}" Stroke="White" StrokeThickness="1.7"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Stretch="Uniform" Width="17" Height="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="下载" FontSize="19" FontWeight="Bold" />
+                    <TextBlock Text="漫画章节与视频文件的传输队列" FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,3,0,0" />
+                </StackPanel>
+            </StackPanel>
+
+            <Button x:Name="OpenDownloadDirButton" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Style="{StaticResource GhostButtonStyle}" Padding="14,0" MinHeight="34"
+                    Click="OpenDownloadDir_Click">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Path Data="{StaticResource IconFolderOpen}" Stroke="{DynamicResource TextPrimaryBrush}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Stretch="Uniform" Width="14" Height="14" VerticalAlignment="Center" />
+                    <TextBlock Text="打开下载目录" FontSize="12.5" Margin="6,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- ============ 总览 ============ -->
+        <Border Grid.Row="1" Style="{StaticResource CardPanelStyle}" Padding="14,12" Margin="0,18,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" MinWidth="64">
+                    <TextBlock Text="{Binding ActiveCount}" Foreground="{DynamicResource PrimaryBrush}"
+                               Style="{StaticResource KpiNumberStyle}" />
+                    <TextBlock Text="进行中" Style="{StaticResource KpiLabelStyle}" />
+                </StackPanel>
+                <Border Grid.Column="1" Width="1" Height="28" Margin="22,0" Background="{DynamicResource DividerBrush}" />
+
+                <StackPanel Grid.Column="2" MinWidth="64">
+                    <TextBlock Text="{Binding QueuedCount}" Style="{StaticResource KpiNumberStyle}" />
+                    <TextBlock Text="排队" Style="{StaticResource KpiLabelStyle}" />
+                </StackPanel>
+                <Border Grid.Column="3" Width="1" Height="28" Margin="22,0" Background="{DynamicResource DividerBrush}" />
+
+                <StackPanel Grid.Column="4" MinWidth="64">
+                    <TextBlock Text="{Binding FailedCount}" Foreground="{DynamicResource DangerBrush}"
+                               Style="{StaticResource KpiNumberStyle}" />
+                    <TextBlock Text="失败" Style="{StaticResource KpiLabelStyle}" />
+                </StackPanel>
+                <Border Grid.Column="5" Width="1" Height="28" Margin="22,0" Background="{DynamicResource DividerBrush}" />
+
+                <StackPanel Grid.Column="6" MinWidth="64">
+                    <TextBlock Text="{Binding TodayDoneCount}" Foreground="{DynamicResource SuccessBrush}"
+                               Style="{StaticResource KpiNumberStyle}" />
+                    <TextBlock Text="今日完成" Style="{StaticResource KpiLabelStyle}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="8" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding SpeedText}" FontFamily="Consolas, Microsoft YaHei UI" FontSize="18"
+                               FontWeight="Bold" HorizontalAlignment="Right" />
+                    <TextBlock Text="当前总速度" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                               HorizontalAlignment="Right" Margin="0,2,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============ 页签 + 类型筛选 ============ -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <StackPanel Orientation="Horizontal">
+                <Border Background="{DynamicResource DividerBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="3">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="CurrentTab" Content="当前" GroupName="DownloadTabs"
+                                     Style="{StaticResource SegmentedTabStyle}" IsChecked="True"
+                                     Click="Tab_Click" />
+                        <RadioButton x:Name="HistoryTab" Content="已完成" GroupName="DownloadTabs"
+                                     Style="{StaticResource SegmentedTabStyle}" Margin="2,0,0,0"
+                                     Click="Tab_Click" />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Margin="10,0,0,0" VerticalAlignment="Center">
+                    <RadioButton x:Name="FilterAll" Content="全部" GroupName="KindFilter" IsChecked="True"
+                                 Style="{StaticResource FilterTabStyle}" Click="Filter_Click" />
+                    <RadioButton x:Name="FilterManga" Content="漫画" GroupName="KindFilter"
+                                 Style="{StaticResource FilterTabStyle}" Margin="6,0,0,0" Click="Filter_Click" />
+                    <RadioButton x:Name="FilterVideo" Content="视频" GroupName="KindFilter"
+                                 Style="{StaticResource FilterTabStyle}" Margin="6,0,0,0" Click="Filter_Click" />
+                </StackPanel>
+            </StackPanel>
+
+            <Button x:Name="ClearHistoryButton" Content="清除记录" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Style="{StaticResource GhostButtonStyle}" FontSize="12" Padding="10,3"
+                    Visibility="Collapsed" Click="ClearHistory_Click" />
+        </Grid>
+
+        <!-- ============ 列表 ============ -->
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+
+            <!-- 当前 -->
+            <ScrollViewer x:Name="CurrentScroll" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="CurrentList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource TransferRowStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="38" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Grid Width="38" Height="38" VerticalAlignment="Center">
+                                        <Border x:Name="Tile" CornerRadius="10" Background="{DynamicResource PrimarySubtleBrush}" />
+                                        <Path x:Name="IconManga" Data="{StaticResource IconKindManga}"
+                                              Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.7"
+                                              StrokeLineJoin="Round" Stretch="Uniform" Width="18" Height="18" />
+                                        <Path x:Name="IconVideo" Data="{StaticResource IconVideo}"
+                                              Stroke="{DynamicResource VideoAccentBrush}" StrokeThickness="1.7"
+                                              StrokeLineJoin="Round" Stretch="Uniform" Width="18" Height="18"
+                                              Visibility="Collapsed" />
+                                    </Grid>
+
+                                    <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="NumberText" Text="{Binding Number}" FontFamily="Consolas"
+                                                       FontSize="13.5" FontWeight="Bold"
+                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                       Margin="0,0,6,0" Visibility="Collapsed" />
+                                            <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitleStyle}" />
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="MetaText" Text="{Binding Meta}"
+                                                   Style="{StaticResource RowMetaStyle}" />
+                                        <TextBlock x:Name="ErrorText" Text="{Binding ErrorText}"
+                                                   FontSize="11.5" Foreground="{DynamicResource DangerBrush}"
+                                                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                                                   Visibility="Collapsed" />
+
+                                        <ProgressBar x:Name="Bar" Height="5" Margin="0,8,0,0" Maximum="100"
+                                                     Value="{Binding Percent}"
+                                                     Style="{StaticResource ModernProgressBarStyle}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock x:Name="PercentText" Text="{Binding PercentText}" FontFamily="Consolas"
+                                                   FontSize="14" FontWeight="Bold" HorizontalAlignment="Right" />
+                                        <TextBlock Text="{Binding Sub}" Style="{StaticResource RowSubStyle}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"
+                                                Margin="10,0,0,0">
+                                        <Button Content="取消" Style="{StaticResource GhostButtonStyle}"
+                                                FontSize="11.5" Padding="10,3" MinHeight="28"
+                                                Visibility="{Binding ShowCancel, Converter={StaticResource BoolToVis}}"
+                                                Click="Cancel_Click" />
+                                        <Button Content="重试" Style="{StaticResource GhostButtonStyle}"
+                                                FontSize="11.5" Padding="10,3" MinHeight="28"
+                                                Visibility="{Binding ShowRetry, Converter={StaticResource BoolToVis}}"
+                                                Click="Retry_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Kind}" Value="Video">
+                                    <Setter TargetName="IconManga" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="IconVideo" Property="Visibility" Value="Visible" />
+                                    <Setter TargetName="Tile" Property="Background" Value="{DynamicResource SuccessBrush}" />
+                                    <Setter TargetName="Tile" Property="Opacity" Value="0.14" />
+                                    <Setter TargetName="NumberText" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasError}" Value="True">
+                                    <Setter TargetName="MetaText" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="ErrorText" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding StatusKey}" Value="failed">
+                                    <Setter TargetName="Bar" Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="PercentText" Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="PercentText" Property="FontSize" Value="12" />
+                                    <Setter TargetName="Tile" Property="Background" Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="Tile" Property="Opacity" Value="0.14" />
+                                    <Setter TargetName="IconManga" Property="Stroke" Value="{DynamicResource DangerBrush}" />
+                                    <Setter TargetName="IconVideo" Property="Stroke" Value="{DynamicResource DangerBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding StatusKey}" Value="queued">
+                                    <Setter TargetName="PercentText" Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                    <Setter TargetName="PercentText" Property="FontSize" Value="12" />
+                                    <Setter TargetName="PercentText" Property="FontWeight" Value="Normal" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 当前空状态 -->
+            <StackPanel x:Name="CurrentEmpty" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <Border Width="64" Height="64" CornerRadius="{DynamicResource RadiusXl}"
+                        Background="{DynamicResource PrimarySubtleBrush}" HorizontalAlignment="Center">
+                    <Path Data="{StaticResource IconDownload}" Stroke="{DynamicResource PrimaryBrush}" StrokeThickness="1.8"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Stretch="Uniform" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="没有正在下载的任务" FontSize="13.5" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,14,0,0" />
+                <TextBlock Text="在漫画章节页或视频详情页点击下载后，任务会出现在这里"
+                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center" Margin="0,6,0,0" />
+            </StackPanel>
+
+            <!-- 已完成 -->
+            <ScrollViewer x:Name="HistoryScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                <ItemsControl x:Name="HistoryList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding DayLabel}" FontSize="11.5"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="2,8,0,6"
+                                           Visibility="{Binding IsFirstOfDay, Converter={StaticResource BoolToVis}}" />
+                                <Border Style="{StaticResource TransferRowStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="38" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Width="38" Height="38" VerticalAlignment="Center">
+                                            <Border CornerRadius="10" Background="{DynamicResource SuccessBrush}" Opacity="0.12" />
+                                            <Path Data="{StaticResource IconCheck}" Stroke="{DynamicResource SuccessBrush}"
+                                                  StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                  Stretch="Uniform" Width="17" Height="17" />
+                                        </Grid>
+
+                                        <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Number}" FontFamily="Consolas" FontSize="13.5"
+                                                           FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"
+                                                           Margin="0,0,6,0" />
+                                                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitleStyle}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Meta}" Style="{StaticResource RowMetaStyle}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="打开文件" Style="{StaticResource GhostButtonStyle}"
+                                                    FontSize="11.5" Padding="10,3" MinHeight="28"
+                                                    Visibility="{Binding ShowOpenFile, Converter={StaticResource BoolToVis}}"
+                                                    Click="OpenFile_Click" />
+                                            <Button Content="打开目录" Style="{StaticResource GhostButtonStyle}"
+                                                    FontSize="11.5" Padding="10,3" MinHeight="28" Margin="4,0,0,0"
+                                                    Visibility="{Binding ShowOpenFolder, Converter={StaticResource BoolToVis}}"
+                                                    Click="OpenFolder_Click" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 已完成空状态 -->
+            <StackPanel x:Name="HistoryEmpty" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <Border Width="64" Height="64" CornerRadius="{DynamicResource RadiusXl}"
+                        Background="{DynamicResource HoverBgBrush}" HorizontalAlignment="Center">
+                    <Path Data="{StaticResource IconCheck}" Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="2"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Stretch="Uniform" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="还没有下载完成的记录" FontSize="13.5" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,14,0,0" />
+                <TextBlock Text="下载完成的内容会按日期归档在这里"
+                           FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center" Margin="0,6,0,0" />
+            </StackPanel>
+        </Grid>
+
+        <!-- ============ 说明 ============ -->
+        <Border Grid.Row="4" Margin="0,12,0,0" Padding="12,10"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                CornerRadius="{DynamicResource RadiusLg}" Background="{DynamicResource SurfaceBrush}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Path Data="{StaticResource IconInfo}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.6"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="Uniform" Width="13" Height="13"
+                      VerticalAlignment="Center" />
+                <TextBlock Text="关闭软件后，已完成的文件不会重复下载；未下完的会从头开始。"
+                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="8,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

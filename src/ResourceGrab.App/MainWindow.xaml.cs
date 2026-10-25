@@ -83,8 +83,9 @@ public partial class MainWindow : Window
     private LocalComicDetailPanel LocalDetailPanelView => _localDetailPanel ??= new LocalComicDetailPanel();
     private VideoSearchPanel VideoSearchPanelView => _videoSearchPanel ??= new VideoSearchPanel();
     private NovelReaderView NovelReaderViewInstance => _novelReaderView ??= new NovelReaderView();
-    private DownloadPanel? _downloadPanel;
-    private DownloadPanel DownloadPanelView => _downloadPanel ??= new DownloadPanel();
+    private DownloadPage? _downloadPage;
+    private DownloadPage DownloadPageView => _downloadPage ??= new DownloadPage();
+    private DownloadPageViewModel? _downloadPageViewModel;
 
     private LocalSearchPanel SearchPanelView
     {
@@ -118,6 +119,12 @@ public partial class MainWindow : Window
         RefreshNavRailSections();
         _config = App.Services.GetRequiredService<ConfigService>();
         _localLibrary = App.Services.GetRequiredService<LocalLibraryService>();
+
+        // 下载页视图模型在启动时就创建：事件订阅要覆盖页面未打开时开始的下载，顶栏角标才有数
+        _downloadPageViewModel = App.Services.GetRequiredService<DownloadPageViewModel>();
+        _downloadPageViewModel.StateChanged += (_, _) => UpdateDownloadBadge();
+        UpdateDownloadBadge();
+
         _searchView = new SearchView();
         _lastPage = _searchView;
         SetPage(_searchView);
@@ -254,9 +261,13 @@ public partial class MainWindow : Window
         try
         {
             var isNovel = IsNovelMode;
-            if (MangaTopActions != null) MangaTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Manga) ? Visibility.Visible : Visibility.Collapsed;
-            if (VideoTopActions != null) VideoTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Video) ? Visibility.Visible : Visibility.Collapsed;
-            if (PhotobookTopActions != null) PhotobookTopActions.Visibility = (!isNovel && _currentKind == ResourceKind.Photobook) ? Visibility.Visible : Visibility.Collapsed;
+            var isDownload = IsDownloadPage;
+            if (MangaTopActions != null) MangaTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Manga) ? Visibility.Visible : Visibility.Collapsed;
+            if (VideoTopActions != null) VideoTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Video) ? Visibility.Visible : Visibility.Collapsed;
+            if (PhotobookTopActions != null) PhotobookTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Photobook) ? Visibility.Visible : Visibility.Collapsed;
+            if (DownloadTopActions != null) DownloadTopActions.Visibility = isDownload ? Visibility.Visible : Visibility.Collapsed;
+            // 下载页没有侧栏，隐藏侧栏开关
+            if (PanelToggleButton != null) PanelToggleButton.Visibility = isDownload ? Visibility.Collapsed : Visibility.Visible;
 
             // 漫画与写真都是多源站点，需要源下拉；视频/小说当前无源。
             var supportsSourceSwitcher = _currentKind is ResourceKind.Manga or ResourceKind.Photobook;
@@ -272,7 +283,7 @@ public partial class MainWindow : Window
                         : Visibility.Collapsed;
             }
             // 漫画源需要账号；视频/小说/写真为本地或免登流程。
-            if (AccountHost != null) AccountHost.Visibility = _currentKind == ResourceKind.Manga ? Visibility.Visible : Visibility.Collapsed;
+            if (AccountHost != null) AccountHost.Visibility = (!isDownload && _currentKind == ResourceKind.Manga) ? Visibility.Visible : Visibility.Collapsed;
 
         } catch {}
     }
@@ -280,46 +291,81 @@ public partial class MainWindow : Window
 
     private void KindPill_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is RadioButton { Tag: string tag } rb && Enum.TryParse<ResourceKind>(tag, out var kind))
+        if (sender is not RadioButton { Tag: string tag } rb) return;
+
+        // 「下载」是跨媒体的独立页面，不参与 ResourceKind 切换（进入由 Checked 事件处理）
+        if (tag == "Download") return;
+
+        if (!Enum.TryParse<ResourceKind>(tag, out var kind)) return;
+
+        var wasDownload = IsDownloadPage;
+        if (PageHost?.Content is UserControl leaving && !wasDownload)
         {
-            if (PageHost?.Content is UserControl leaving)
-            {
-                if (IsNovelMode) _lastNovelContent = leaving;
-                else if (IsVideoMode) _lastVideoContent = leaving;
-                else if (IsPhotobookMode) _lastPhotobookContent = leaving;
-                else _lastMangaContent = leaving;
-            }
-            _currentKind = kind;
-            RefreshNavRailSections();
-            RefreshSourceBoxForKind(kind);
-            UpdateNavCapabilities();
-            if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
-            if (IsVideoMode && kind == ResourceKind.Manga) { ExitVideoMode(); return; }
-            if (IsPhotobookMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
-            if (kind == ResourceKind.Novel && !IsNovelMode)
-            {
-                // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
-                if (!_navigator.RestoreLast(MediaKind.Novel))
-                    _navigator.GoTo("novel.index");
-                return;
-            }
-            if (kind == ResourceKind.Video && !IsVideoMode)
-            {
-                // 首次进入视频走默认路由（在线搜索 + 隐藏边栏）；非首次恢复最近的子页
-                if (!_navigator.RestoreLast(MediaKind.Video))
-                    _navigator.GoTo("video.online");
-                return;
-            }
-            if (kind == ResourceKind.Photobook && !IsPhotobookMode)
-            {
-                // 首次进入写真走默认路由；非首次恢复该类型最近的子页
-                if (!_navigator.RestoreLast(MediaKind.Photobook))
-                    _navigator.GoTo(PhotobookNavSectionProvider.HomeRouteId);
-                return;
-            }
-            UpdateTopBarForKind();
+            if (IsNovelMode) _lastNovelContent = leaving;
+            else if (IsVideoMode) _lastVideoContent = leaving;
+            else if (IsPhotobookMode) _lastPhotobookContent = leaving;
+            else _lastMangaContent = leaving;
         }
+        _currentKind = kind;
+        RefreshNavRailSections();
+        RefreshSourceBoxForKind(kind);
+        UpdateNavCapabilities();
+
+        // 从下载页切回某个媒体：恢复该媒体最近的页面，没有则回默认页
+        if (wasDownload)
+        {
+            LeftNavHost.Visibility = Visibility.Visible;
+            UpdateTopBarForKind();
+            if (!_navigator.RestoreLast(ToMediaKind(kind)))
+                _navigator.GoTo(DefaultRouteFor(kind));
+            return;
+        }
+
+        if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
+        if (IsVideoMode && kind == ResourceKind.Manga) { ExitVideoMode(); return; }
+        if (IsPhotobookMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
+        if (kind == ResourceKind.Novel && !IsNovelMode)
+        {
+            // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
+            if (!_navigator.RestoreLast(MediaKind.Novel))
+                _navigator.GoTo("novel.index");
+            return;
+        }
+        if (kind == ResourceKind.Video && !IsVideoMode)
+        {
+            // 首次进入视频走默认路由（在线搜索 + 隐藏边栏）；非首次恢复最近的子页
+            if (!_navigator.RestoreLast(MediaKind.Video))
+                _navigator.GoTo("video.online");
+            return;
+        }
+        if (kind == ResourceKind.Photobook && !IsPhotobookMode)
+        {
+            // 首次进入写真走默认路由；非首次恢复该类型最近的子页
+            if (!_navigator.RestoreLast(MediaKind.Photobook))
+                _navigator.GoTo(PhotobookNavSectionProvider.HomeRouteId);
+            return;
+        }
+        UpdateTopBarForKind();
     }
+
+    /// <summary>当前是否停在下载页（沉浸式页面，隐藏左右栏）。</summary>
+    private bool IsDownloadPage => _currentRoute?.Kind == MediaKind.Download;
+
+    private static MediaKind ToMediaKind(ResourceKind kind) => kind switch
+    {
+        ResourceKind.Video => MediaKind.Video,
+        ResourceKind.Novel => MediaKind.Novel,
+        ResourceKind.Photobook => MediaKind.Photobook,
+        _ => MediaKind.Manga,
+    };
+
+    private static string DefaultRouteFor(ResourceKind kind) => kind switch
+    {
+        ResourceKind.Video => "video.online",
+        ResourceKind.Novel => "novel.index",
+        ResourceKind.Photobook => PhotobookNavSectionProvider.HomeRouteId,
+        _ => "manga.search",
+    };
 
 
 
@@ -360,7 +406,9 @@ public partial class MainWindow : Window
     private void OnRouteChanged(object? sender, ShellRoute route)
     {
         _currentRoute = route;
-        LeftNavHost.Visibility = Visibility.Visible;
+        // 下载页是「沉浸式」的：占满左中右，导航栏与右栏都收起
+        var isDownload = route.Kind == Shell.MediaKind.Download;
+        LeftNavHost.Visibility = isDownload ? Visibility.Collapsed : Visibility.Visible;
         SetPage(route.CreateView());
         switch (route.SidebarPolicy.Mode)
         {
@@ -375,6 +423,18 @@ public partial class MainWindow : Window
             default:
                 CollapseRightPanel();
                 break;
+        }
+        if (isDownload)
+        {
+            // 右栏强制收起（下载页没有侧栏），并同步顶栏页签选中态
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+            if (KindDownloadPill is not null && KindDownloadPill.IsChecked != true)
+            {
+                _syncingKindPill = true;
+                KindDownloadPill.IsChecked = true;
+                _syncingKindPill = false;
+            }
         }
         if (route.RouteId.StartsWith("photobook."))
         {
@@ -524,6 +584,9 @@ public partial class MainWindow : Window
             _videoView?.SwitchNav("actors");
             return _videoView!;
         });
+
+        // 下载页：跨媒体共用一个视图，独立 MediaKind（返回栈与各媒体的「最近路由」互不干扰）
+        _navigator.Register("download.page", () => DownloadPageView, new SidebarPolicy(SidebarMode.Hidden));
 
         // 小说
         _navigator.Register("novel.index", () => { OpenNovelLocal(); return _novelView!; },
@@ -838,6 +901,27 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    /// <summary>顶栏下载入口（与 漫画/视频 同组的页签）。</summary>
+    private void OpenDownloadPage() => _navigator.GoTo("download.page");
+
+    /// <summary>同步页签选中态时置位，避免 Checked 递归触发导航。</summary>
+    private bool _syncingKindPill;
+
+    /// <summary>下载页签被选中：鼠标、键盘、UI 自动化都会走到这里。</summary>
+    private void KindDownloadPill_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_syncingKindPill) return;
+        OpenDownloadPage();
+    }
+
+    /// <summary>顶栏角标：进行中 + 排队数量，0 时隐藏。</summary>
+    private void UpdateDownloadBadge()
+    {
+        var count = _downloadPageViewModel?.RunningTotal ?? 0;
+        DownloadBadge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DownloadBadgeText.Text = count > 99 ? "99+" : count.ToString();
+    }
+
     private void PanelToggle_Click(object sender, RoutedEventArgs e)
     {
         _rightPanelVisible = !_rightPanelVisible;
@@ -846,9 +930,16 @@ public partial class MainWindow : Window
             ApplyRightPanelVisibility();
             return;
         }
-        // 展开时确保右栏与当前页面完全对应（本地=标签/详情、视频本地=视频筛选、小说本地=小说筛选，
-        // 其余页面为下载队列），不会残留上一页的面板。
-        SetSidebarPanel(ResolveSidebarPanelForCurrentPage(keepCurrent: true), visible: true);
+        // 展开时确保右栏与当前页面完全对应（本地=标签/详情、视频本地=视频筛选、小说本地=小说筛选），
+        // 不会残留上一页的面板；当前页面没有专属面板时保持收起。
+        var panel = ResolveSidebarPanelForCurrentPage(keepCurrent: true);
+        if (panel is null)
+        {
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+            return;
+        }
+        SetSidebarPanel(panel, visible: true);
     }
 
     /// <summary>只控制右侧面板列的展开收起，不影响左侧导航。</summary>
@@ -897,7 +988,7 @@ public partial class MainWindow : Window
         var content = PageHost?.Content;
         if (content is ReaderView) return new[] { "context.manga.local" };
         if (content is LocalView) return new[] { "filter.manga", "context.manga.local" };
-        if (content is MangaRecommendView) return new[] { "task.downloads", "context.manga.local" };
+        if (content is MangaRecommendView) return new[] { "context.manga.local" };
         if (content is NovelLocalView) return new[] { "filter.novel" };
         if (content is VideoView)
         {
@@ -905,14 +996,15 @@ public partial class MainWindow : Window
             var panelId = _currentRoute?.SidebarPolicy.PanelId;
             return string.IsNullOrWhiteSpace(panelId) ? Array.Empty<string>() : new[] { panelId };
         }
-        return new[] { "task.downloads" };
+        // 下载页等没有专属侧栏的页面：不再兜底到下载面板（下载已升级为独立页面）
+        return Array.Empty<string>();
     }
 
     /// <summary>
     /// 按当前页面解析右栏面板；keepCurrent=true 且当前面板仍属于该页时沿用
-    /// （用于本地页在「标签/详情」之间保持用户当前选择）。
+    /// （用于本地页在「标签/详情」之间保持用户当前选择）。无面板时返回 null。
     /// </summary>
-    private UserControl ResolveSidebarPanelForCurrentPage(bool keepCurrent)
+    private UserControl? ResolveSidebarPanelForCurrentPage(bool keepCurrent)
     {
         var ids = ValidSidebarPanelIdsForCurrentPage();
         if (keepCurrent && _currentSidebarPanel is { } current)
@@ -924,13 +1016,12 @@ public partial class MainWindow : Window
         {
             if (PanelFor(id) is { } panel) return panel;
         }
-        return DownloadPanelView;
+        return null;
     }
 
     /// <summary>按路由声明的 PanelId 解析右栏面板。</summary>
     private UserControl? PanelFor(string? panelId) => panelId switch
     {
-        "task.downloads" => DownloadPanelView,
         "filter.manga" => SearchPanelView,
         "filter.novel" => NovelSearchPanelView,
         "filter.video" => VideoSearchPanelView,
@@ -940,7 +1031,16 @@ public partial class MainWindow : Window
 
     /// <summary>隐藏右栏，并把内容复位为当前页面对应的面板（不影响左栏）。</summary>
     private void CollapseRightPanel()
-        => SetSidebarPanel(ResolveSidebarPanelForCurrentPage(keepCurrent: true), visible: false);
+    {
+        var panel = ResolveSidebarPanelForCurrentPage(keepCurrent: true);
+        if (panel is null)
+        {
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+            return;
+        }
+        SetSidebarPanel(panel, visible: false);
+    }
 
     /// <summary>视频本地详情开关：打开时收起右侧本地搜索面板，由 VideoView 内置详情栏顶替其位置；关闭时恢复。</summary>
     private void SetVideoDetailPanelOpen(bool open)

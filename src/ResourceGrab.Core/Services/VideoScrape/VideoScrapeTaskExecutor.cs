@@ -117,6 +117,14 @@ public sealed class VideoScrapeTaskExecutor
                 var speed = VideoDownloadService.FormatBytes(p.SpeedBytesPerSec);
                 var eta = p.EtaSeconds >= 0 ? $" · 剩余约{VideoDownloadService.FormatEta(p.EtaSeconds)}" : "";
                 if (p.Percent >= 0) task.Completed = (int)Math.Clamp(p.Percent, 0, 100);
+                // 结构化进度：下载页按字节/速度/剩余时间展示，不解析日志文本
+                task.DownloadedBytes = p.DownloadedBytes;
+                task.SpeedBytesPerSec = p.SpeedBytesPerSec;
+                task.EtaSeconds = p.EtaSeconds;
+                if (p.Percent > 0)
+                {
+                    task.TotalBytes = (long)(p.DownloadedBytes / (p.Percent / 100.0));
+                }
                 // 看板行直接读 Logs[0] 展示，时长未知时也至少能看到速度
                 task.Logs = [$"已下载 {size} · {speed}{eta}"];
                 task.Error = "";
@@ -129,6 +137,18 @@ public sealed class VideoScrapeTaskExecutor
         {
             task.DownloadOutputPath = result.OutputPath;
             task.Completed = 100;
+            task.SpeedBytesPerSec = 0;
+            task.EtaSeconds = 0;
+            try
+            {
+                var finalSize = new FileInfo(result.OutputPath).Length;
+                task.DownloadedBytes = finalSize;
+                task.TotalBytes = finalSize;
+            }
+            catch
+            {
+                // 文件信息读不到不影响任务结论
+            }
             if (result.Skipped)
             {
                 task.Status = VideoTaskStatus.Skipped;

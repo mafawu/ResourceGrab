@@ -55,6 +55,22 @@ public class DownloadHistoryService
             // 历史保存失败不阻塞下载
         }
     }
+
+    /// <summary>清空历史记录（只清列表，不动已下载的图片目录）。</summary>
+    public void Clear()
+    {
+        try
+        {
+            if (File.Exists(_filePath))
+            {
+                File.Delete(_filePath);
+            }
+        }
+        catch
+        {
+            // 忽略
+        }
+    }
 }
 
 /// <summary>一条下载历史记录。</summary>

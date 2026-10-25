@@ -12,6 +12,7 @@ public static class AppPaths
     public static string MangaRelationsCachePath => Path.Combine(AppDataDir, "manga-relations-cache.json");
     public static string RelatedCoversDir => Path.Combine(AppDataDir, "related-covers");
     public static string DownloadHistoryPath => Path.Combine(AppDataDir, "download-history.json");
+    public static string VideoDownloadHistoryPath => Path.Combine(AppDataDir, "video-download-history.json");
     public static string NovelHistoryPath => Path.Combine(AppDataDir, "novel-history.json");
     public static string NovelIndexPath => Path.Combine(AppDataDir, "novel-index.json");
     public static string NovelReaderSettingsPath => Path.Combine(AppDataDir, "novel-reader-settings.json");

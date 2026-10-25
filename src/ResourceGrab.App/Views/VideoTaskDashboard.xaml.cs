@@ -66,16 +66,18 @@ public partial class VideoTaskDashboard : UserControl
             return;
         }
 
-        var progress = _taskQueue.GetProgress();
-        var allTasks = _taskQueue.GetAllTasks().ToList();
+        // 视频下载任务已由「下载」页接管，这里只保留刮削类任务，避免同一任务出现在两个页面
+        var allTasks = _taskQueue.GetAllTasks()
+            .Where(t => t.Type != VideoTaskType.DownloadVideo)
+            .ToList();
 
         // Update stats
         TotalCountText.Text = allTasks.Count.ToString();
-        RunningText.Text = progress.Running.ToString();
-        PendingText.Text = progress.Pending.ToString();
-        CompletedText.Text = progress.Completed.ToString();
-        FailedText.Text = progress.Failed.ToString();
-        SkippedText.Text = progress.Skipped.ToString();
+        RunningText.Text = allTasks.Count(t => t.Status == VideoTaskStatus.Running).ToString();
+        PendingText.Text = allTasks.Count(t => t.Status is VideoTaskStatus.Pending or VideoTaskStatus.WaitingRetry).ToString();
+        CompletedText.Text = allTasks.Count(t => t.Status == VideoTaskStatus.Completed).ToString();
+        FailedText.Text = allTasks.Count(t => t.Status == VideoTaskStatus.Failed).ToString();
+        SkippedText.Text = allTasks.Count(t => t.Status == VideoTaskStatus.Skipped).ToString();
 
         // Show/hide empty state
         EmptyState.Visibility = allTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;

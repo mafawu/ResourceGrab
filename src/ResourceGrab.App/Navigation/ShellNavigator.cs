@@ -107,6 +107,7 @@ public sealed class ShellNavigator
         if (routeId.StartsWith("video.")) return MediaKind.Video;
         if (routeId.StartsWith("novel.")) return MediaKind.Novel;
         if (routeId.StartsWith("photobook.")) return MediaKind.Photobook;
+        if (routeId.StartsWith("download.")) return MediaKind.Download;
         return MediaKind.Manga;
     }
 

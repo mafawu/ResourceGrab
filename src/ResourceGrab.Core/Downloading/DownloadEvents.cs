@@ -89,10 +89,14 @@ public class OverallProgressEventArgs : EventArgs
 /// <summary>下载速度（每秒更新）。</summary>
 public class SpeedEventArgs : EventArgs
 {
-    public SpeedEventArgs(string speed)
+    public SpeedEventArgs(string speed, long bytesPerSecond = 0)
     {
         Speed = speed;
+        BytesPerSecond = bytesPerSecond;
     }
 
     public string Speed { get; }
+
+    /// <summary>原始速度（字节/秒），供跨任务汇总总速度时使用。</summary>
+    public long BytesPerSecond { get; }
 }

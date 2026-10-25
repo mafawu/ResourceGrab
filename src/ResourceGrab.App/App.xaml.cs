@@ -252,7 +252,10 @@ public partial class App : Application
         services.AddSingleton<VideoGraphScrapeOrchestrator>();
         // 在线搜索兜底：MissAV 关键词搜不到且关键词为番号时，按 contentRoutes 顺序换源按番号取详情
         services.AddSingleton<OnlineVideoFallbackSearchService>();
-        services.AddSingleton<DownloadPanelViewModel>();
+        // 下载页：合并漫画章节下载与视频直存下载的同一条传输队列
+        services.AddSingleton<DownloadHistoryService>();
+        services.AddSingleton<VideoDownloadHistoryService>();
+        services.AddSingleton<DownloadPageViewModel>();
         Services = services.BuildServiceProvider();
 
         try

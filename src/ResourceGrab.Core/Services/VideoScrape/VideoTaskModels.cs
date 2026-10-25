@@ -78,6 +78,16 @@ public sealed class VideoScrapeTask
     public string? DownloadMasterUrl { get; set; }
     /// <summary>用户所选档位名（如 "720p"），空表示默认最高档。</summary>
     public string? DownloadVariantLabel { get; set; }
+
+    // ---- DownloadVideo 任务运行期进度（仅供下载页展示，不参与业务判断） ----
+    /// <summary>已下载字节数。</summary>
+    public long DownloadedBytes { get; set; }
+    /// <summary>估计的总字节数（由百分比反推；未知为 0）。</summary>
+    public long TotalBytes { get; set; }
+    /// <summary>当前速度（字节/秒）。</summary>
+    public double SpeedBytesPerSec { get; set; }
+    /// <summary>剩余秒数；无法估算为 -1。</summary>
+    public double EtaSeconds { get; set; } = -1;
 }
 
 /// <summary>批内单条刮削的明细：命中来源、刮到的标题、耗时或失败原因。</summary>

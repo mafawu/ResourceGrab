@@ -6,5 +6,8 @@ public enum MediaKind
     Manga,
     Video,
     Novel,
-    Photobook
+    Photobook,
+
+    /// <summary>跨媒体的下载页：独立返回栈，不占用各媒体自己的「最近路由」。</summary>
+    Download
 }

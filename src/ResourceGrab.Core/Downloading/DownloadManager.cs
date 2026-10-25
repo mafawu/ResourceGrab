@@ -119,7 +119,7 @@ public class DownloadManager : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(1), ct);
                 var bytePerSec = Interlocked.Exchange(ref _bytePerSec, 0);
                 var megaBytePerSec = bytePerSec / 1024.0 / 1024.0;
-                SpeedChanged?.Invoke(this, new SpeedEventArgs($"{megaBytePerSec:F2}MB/s"));
+                SpeedChanged?.Invoke(this, new SpeedEventArgs($"{megaBytePerSec:F2}MB/s", bytePerSec));
             }
         }
         catch (OperationCanceledException)
