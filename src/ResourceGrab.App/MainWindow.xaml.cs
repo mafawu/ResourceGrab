@@ -311,10 +311,23 @@ public partial class MainWindow : Window
         RefreshSourceBoxForKind(kind);
         UpdateNavCapabilities();
 
-        // 从下载页切回某个媒体：恢复该媒体最近的页面，没有则回默认页
+        // 从下载页切回某个媒体：恢复进入下载页之前的那一页
+        // （阅读器/详情页不在路由里，只按路由恢复会退回列表，所以优先还原保存的内容）
         if (wasDownload)
         {
             LeftNavHost.Visibility = Visibility.Visible;
+            var saved = SavedContentFor(kind);
+            if (_downloadReturnKind == kind && saved is not null)
+            {
+                // 先按路由恢复导航态（页签、返回栈、右栏策略），再把内容覆盖回进入前那一页
+                if (!_navigator.RestoreLast(ToMediaKind(kind)))
+                    _navigator.GoTo(DefaultRouteFor(kind));
+                if (saved is ReaderView) ShowSidebarPanel(LocalDetailPanelView);
+                SetPage(saved);
+                _lastPage = saved;
+                UpdateTopBarForKind();
+                return;
+            }
             UpdateTopBarForKind();
             if (!_navigator.RestoreLast(ToMediaKind(kind)))
                 _navigator.GoTo(DefaultRouteFor(kind));
@@ -902,7 +915,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>顶栏下载入口（与 漫画/视频 同组的页签）。</summary>
-    private void OpenDownloadPage() => _navigator.GoTo("download.page");
+    private void OpenDownloadPage()
+    {
+        // 进入下载页前记住当前页：阅读器/详情页不是路由，靠路由恢复会退回列表
+        if (!IsDownloadPage && PageHost?.Content is UserControl leaving)
+        {
+            if (IsNovelMode) _lastNovelContent = leaving;
+            else if (IsVideoMode) _lastVideoContent = leaving;
+            else if (IsPhotobookMode) _lastPhotobookContent = leaving;
+            else _lastMangaContent = leaving;
+            _downloadReturnKind = _currentKind;
+        }
+        _navigator.GoTo("download.page");
+    }
+
+    /// <summary>进入下载页时所在的媒体类型；null 表示不是从媒体页进入的。</summary>
+    private ResourceKind? _downloadReturnKind;
+
+    private UserControl? SavedContentFor(ResourceKind kind) => kind switch
+    {
+        ResourceKind.Video => _lastVideoContent,
+        ResourceKind.Novel => _lastNovelContent,
+        ResourceKind.Photobook => _lastPhotobookContent,
+        _ => _lastMangaContent,
+    };
 
     /// <summary>同步页签选中态时置位，避免 Checked 递归触发导航。</summary>
     private bool _syncingKindPill;
