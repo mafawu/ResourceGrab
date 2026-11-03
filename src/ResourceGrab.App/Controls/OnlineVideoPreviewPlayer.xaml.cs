@@ -607,9 +607,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             host.DetachedNoOwner = true;              // 主窗口最小化时小窗不跟着消失
             host.DetachedMinWidth = 260;
             host.DetachedMinHeight = 150;
-            // 小窗定位在“小”：最大只占工作区 60%，再大请用完整详情页
-            host.DetachedMaxWidth = Math.Max(480, SystemParameters.WorkArea.Width * 0.6);
-            host.DetachedMaxHeight = Math.Max(320, SystemParameters.WorkArea.Height * 0.6);
+            // 不设 DetachedMaxWidth/Height：小窗可一直放大到屏幕大小。
+            host.DetachedMaxWidth = double.PositiveInfinity;
+            host.DetachedMaxHeight = double.PositiveInfinity;
             host.DetachedRememberPosition = false;
             host.DetachedRememberSize = false;
             // 首次小窗居中于主程序窗口，而不是屏幕右下角；之后仍可拖动。
@@ -724,24 +724,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         var ratio = VideoAspectRatio > 0 ? VideoAspectRatio : 16.0 / 9.0;
         var minWidth = 260.0;
         var minHeight = 150.0;
-        var maxWidth = Math.Max(480.0, SystemParameters.WorkArea.Width * 0.6);
-        var maxHeight = Math.Max(320.0, SystemParameters.WorkArea.Height * 0.6);
 
         var width = Math.Max(size.Width, minWidth);
         var height = width / ratio;
         if (height < minHeight)
         {
             height = minHeight;
-            width = height * ratio;
-        }
-        if (width > maxWidth)
-        {
-            width = maxWidth;
-            height = width / ratio;
-        }
-        if (height > maxHeight)
-        {
-            height = maxHeight;
             width = height * ratio;
         }
         return new Size(Math.Round(width), Math.Round(height));
@@ -1350,13 +1338,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         };
         player.PlaybackStopped += (_, _) =>
         {
-            // Stop() 已同步切到 Idle，这里只处理自然播完
+            // Stop() 已同步切到 Idle，这里只处理自然播完。
+            // 注意 Flyleaf 在 Pause() 时也会发 PlaybackStopped：必须用状态区分，
+            // 否则暂停会被误判成播完，画面回到海报、看起来就像“停止”。
             Dispatcher.InvokeAsync(() =>
             {
                 // 切 Tab 离场时宿主销毁 Surface 也可能触发本事件；此时已主动 Pause，
                 // 不能把状态改成 Idle，否则回来会显示海报并从 0 重开。
                 if (KeepAliveOnUnload && !IsVisible) return;
-                if (_state is PlayerState.Playing or PlayerState.Paused)
+                if (_state == PlayerState.Paused) return;
+                if (_player?.Status == Status.Paused) return;
+                if (_state == PlayerState.Playing)
                     SetState(PlayerState.Idle);
             });
         };
