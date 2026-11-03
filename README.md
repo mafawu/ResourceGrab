@@ -28,8 +28,22 @@
 | hitomi | 漫画 | 搜索、热门排行 |
 | wnacg | 漫画 | 搜索、日 / 周 / 月 / 年排行 |
 | MissAV | 视频 | 在线搜索，解析 m3u8 直链，调用系统默认播放器播放 |
+| 西瓜短剧（xigua） | 短剧 | 推荐 / 最新 / 四个频道 / 榜单 / 搜索，内置播放器选集连播，可整剧下载离线观看 |
 
 界面顶部下拉切换当前源，导航与页面按源能力自动适配；聚合搜索可同时查询多个源。
+
+### 短剧
+
+「短剧」是独立的一级类型（与漫画/视频/小说/写真并列），单源接入：
+
+- **浏览**：推荐、最近上新、榜单（热播/推荐/潜力 TOP20）、成人短剧/成人漫剧/AI魔改/西瓜原创四个频道、关键词搜索；
+- **播放**：内置 Flyleaf 播放器，右侧选集面板点哪集播哪集；播放地址为站点签名短链，**每次播放实时换取**（约 2 小时过期）；
+- **下载**：详情页「下载」可下本集 / 未下载的集 / 全剧，经 FFmpeg 直存 mp4（`-c copy` 不转码），一部剧一个文件夹，含 `drama.json` 元数据与封面；
+- **下载队列**：短剧任务和视频任务一起显示在「下载」页（标题是「剧名 · 第N集」，副标题标「短剧」），可取消、完成后可打开所在剧集文件夹；左栏「本地」只管**已下载完**的剧集（离线播放、删除走回收站）；
+- **线路自愈**：站点域名会轮换，线路卡点「⟳」会读取官方发布页（`/go-home/`）自动换线；也可在「设置 → 短剧」里手填线路。
+- **封面**：站点把封面加密后放 CDN（AES-128-CBC，密钥在页面 `crypto-worker.js` 里），程序下载后**本地解密**再按剧集 id 缓存到 `config\drama-covers\`；解密失败才回落到渐变色 + 剧名首字。
+- **竖屏适配**：播放器会读视频实际宽高比，竖屏（如 720×1280）自动把播放框收成手机比例并居中，横屏则铺满整列，不再出现"竖屏片塞进宽框、两侧全黑边"。
+- **导入本地短剧**：本地页「导入本地短剧」选一个根目录（每部剧一个子文件夹），程序按目录名/文件名猜剧名与集号 → 去站点搜同名剧 → 补上简介、评分、标签、解密封面，写 `drama.json`/`poster.jpg` 并登记进本地库。**视频文件不移动、不复制、不重命名**；匹配不到会如实报告，不做强行关联。
 
 ## 下载引擎
 
@@ -101,7 +115,24 @@ dotnet build ResourceGrab.slnx -c Release
 winget install Microsoft.DotNet.DesktopRuntime.10
 ```
 
-### 发布免安装自包含版（约 160 MB）
+### 发布免安装自包含单文件（推荐分发）
+
+```powershell
+.\publish-standalone.ps1
+```
+
+产物在 `bin\release-standalone\`：
+
+| 路径 | 说明 |
+| --- | --- |
+| `ResourceGrab.App.exe` | 自包含单文件（**约 76 MB**，自带 .NET 10 运行时，目标机无需安装任何依赖） |
+| `ffmpeg\` | FFmpeg 9.0 共享库 + `ffmpeg.exe` / `ffprobe.exe`（约 180 MB，**必须和 exe 一起分发**） |
+| `config\` | 首次运行自动生成（配置、日志、短剧下载/封面缓存） |
+
+想要"连 ffmpeg 都塞进一个文件"也可以做（把 180 MB 原生库内嵌、首次启动解包到 `config\ffmpeg\`，产物约 300 MB），
+代价是首次启动多等 3–5 秒；当前**按目录随行**，和 `config\` 一样属于数据目录。
+
+### 发布免安装自包含版（手写命令）
 
 ```powershell
 dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o BIN\release
@@ -125,10 +156,23 @@ dotnet publish src/ResourceGrab.App -c Release -r win-x64 --self-contained true 
 | `config.json` | 全局配置（账号、下载参数、接口域名、翻译等） |
 | `download-history.json` | 下载历史 |
 | `video-library.json` / `video-folders.json` | 视频库数据与根目录 |
+| `短剧下载\` | 短剧本体：每部剧一个文件夹（mp4 + `drama.json` + `poster.jpg`） |
+| `drama-covers\` | 解密后的短剧封面缓存（按剧集 id 命名，删掉会自动重新生成） |
+| `drama-imports.json` | 导入的本地短剧目录登记（视频仍在用户原位置） |
 | `novel-*.json` | 小说索引、阅读进度与排版设置 |
 | `logs\` | 运行日志 |
 
 安全说明：配置文件中的用户名、密码和翻译 API key 在 Windows 上使用 DPAPI（当前用户作用域）加密存储，旧明文配置会在首次启动时自动迁移为加密格式。
+
+**短剧下载目录**：默认 `config\短剧下载`，可在「设置 → 短剧」里改到其它磁盘（短剧体积大，一部 6 集剧约 300 MB）。对应 `config.json` 的 `shortDrama.downloadDir`，留空即用默认目录：
+
+```json
+"shortDrama": {
+  "downloadDir": "D:\\短剧",
+  "baseUrl": "",
+  "downloadConcurrency": 2
+}
+```
 
 **接口域名轮换**：禁漫 API 域名失效时（登录 / 搜索报 404 等），程序自动在域名列表中轮换，失效域名临时冷却跳过。可在 `config.json` 中自定义域名列表，无需重新编译：
 

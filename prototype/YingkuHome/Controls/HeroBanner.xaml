@@ -1,0 +1,96 @@
+<UserControl x:Class="YingkuHome.Controls.HeroBanner"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Self">
+    <Grid ClipToBounds="True" Background="#0B0D12">
+
+        <!-- backdrop crossfade pair -->
+        <Image x:Name="BackA" Stretch="UniformToFill" Opacity="1"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <Image x:Name="BackB" Stretch="UniformToFill" Opacity="0"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+
+        <Rectangle Fill="{StaticResource HeroLeftScrim}" />
+        <Rectangle Height="200" VerticalAlignment="Bottom" Fill="{StaticResource HeroBottomScrim}" />
+
+        <!-- wide still, flush to the right edge -->
+        <Grid HorizontalAlignment="Right" Width="620" ClipToBounds="True">
+            <Image x:Name="StillImage" Stretch="UniformToFill"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+            <Rectangle Fill="#14000000" />
+            <Rectangle Width="72" HorizontalAlignment="Left">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#990B0D12" Offset="0" />
+                        <GradientStop Color="#000B0D12" Offset="1" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle Width="1" HorizontalAlignment="Left" Fill="#38FFFFFF" />
+        </Grid>
+
+        <!-- copy -->
+        <Grid Margin="40,0,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="620" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,56,10" MaxWidth="760">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="5" Height="5" Fill="#6E86FF" VerticalAlignment="Center" />
+                    <TextBlock Text="此刻推荐" FontSize="11.5" Foreground="#B9C2D4" Margin="8,1,0,0" />
+                </StackPanel>
+
+                <TextBlock x:Name="TitleText" Margin="0,16,0,0" FontSize="40" LineHeight="54"
+                           FontWeight="Medium" TextWrapping="Wrap" Foreground="#F5F8FC"
+                           FontFamily="{StaticResource DisplayFont}" />
+
+                <TextBlock x:Name="MetaText" Margin="0,20,0,0" FontSize="12.5" Foreground="#939DB0" />
+
+                <Grid Margin="0,20,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="主演" FontSize="12.5" Foreground="#6B7488" Margin="0,1,0,10" />
+                    <TextBlock x:Name="ActorsText" Grid.Column="1" FontSize="13" Foreground="#D3DBE8"
+                               Margin="0,0,0,10" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="1" Text="剧情简介" FontSize="12.5" Foreground="#6B7488" Margin="0,1,0,0" />
+                    <TextBlock x:Name="DescText" Grid.Row="1" Grid.Column="1" FontSize="13" LineHeight="22"
+                               Foreground="#C3CCDA" TextWrapping="Wrap" MaxWidth="600" />
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,28,0,0">
+                    <Button Style="{StaticResource HeroPrimaryButton}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE768;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                                       Foreground="#0B0D12" VerticalAlignment="Center" />
+                            <TextBlock Text="播放" Margin="9,0,0,0" Foreground="#0B0D12" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource HeroGhostButton}" Margin="10,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                       Foreground="#F2F5FA" VerticalAlignment="Center" />
+                            <TextBlock Text="影片信息" Margin="9,0,0,0" Foreground="#F2F5FA" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource HeroIconButton}" Margin="10,0,0,0">
+                        <TextBlock Text="&#x21BB;" FontFamily="{StaticResource UiFont}" FontSize="16"
+                                   Foreground="#F2F5FA" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
+

@@ -109,6 +109,9 @@ public sealed class MediaCardTemplateSelector : DataTemplateSelector
     public DataTemplate? WideThumbTemplate { get; set; }
     public DataTemplate? TextCoverTemplate { get; set; }
 
+    /// <summary>短剧 4:5 竖版卡（评分/集数/角标压在封面上，标题在下方）。</summary>
+    public DataTemplate? DramaTemplate { get; set; }
+
     public override DataTemplate? SelectTemplate(object item, DependencyObject container)
     {
         if (item is not MediaCardViewModel vm) return null;
@@ -117,6 +120,7 @@ public sealed class MediaCardTemplateSelector : DataTemplateSelector
             MediaVisualKind.PortraitCover => PortraitTemplate,
             MediaVisualKind.WideThumb => WideThumbTemplate,
             MediaVisualKind.TextCover => TextCoverTemplate,
+            MediaVisualKind.DramaCover => DramaTemplate ?? PortraitTemplate,
             _ => PortraitTemplate
         };
     }

@@ -148,8 +148,21 @@ public partial class DownloadPage : UserControl
         manga.Click += (_, _) => OpenInExplorer(null, false, _viewModel.MangaDownloadDir);
         var video = new MenuItem { Header = "视频下载目录" };
         video.Click += (_, _) => OpenInExplorer(null, false, _viewModel.VideoDownloadDir);
+        var drama = new MenuItem { Header = "短剧下载目录" };
+        drama.Click += (_, _) =>
+        {
+            // 没下过短剧时目录还不存在，先建出来再打开（否则只会弹「目录不存在」）
+            try
+            {
+                var dir = _viewModel.ShortDramaDownloadDir;
+                if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+            }
+            catch { /* 建不出来就交给下面按"目录不存在"提示 */ }
+            OpenInExplorer(null, false, _viewModel.ShortDramaDownloadDir);
+        };
         menu.Items.Add(manga);
         menu.Items.Add(video);
+        menu.Items.Add(drama);
         menu.IsOpen = true;
     }
 

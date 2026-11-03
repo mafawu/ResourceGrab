@@ -14,6 +14,20 @@
         </controls:VirtualizedCardGrid>
     </DataTemplate>
 
+    <!-- 短剧：4:5 竖版卡，与漫画卡共用同一套状态机与虚拟化网格 -->
+    <DataTemplate x:Key="DramaCardResultTemplate">
+        <controls:VirtualizedCardGrid ItemsSource="{Binding Result, RelativeSource={RelativeSource AncestorType=controls:StateHostControl}}"
+                                      SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=controls:StateHostControl}}"
+                                      DesiredColumns="{Binding DesiredColumns, RelativeSource={RelativeSource AncestorType=controls:StateHostControl}}"
+                                      CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:StateHostControl}}">
+            <controls:VirtualizedCardGrid.ItemTemplate>
+                <DataTemplate>
+                    <controls:MediaCard Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}" />
+                </DataTemplate>
+            </controls:VirtualizedCardGrid.ItemTemplate>
+        </controls:VirtualizedCardGrid>
+    </DataTemplate>
+
     <!-- StateHostControl 的完整状态模板集中管理。 -->
 <DataTemplate x:Key="HintTemplate">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">

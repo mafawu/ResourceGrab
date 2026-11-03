@@ -106,6 +106,13 @@ public partial class SettingsDialog : Window
         PopulateSourceToggles(scraping);
         PopulateContentRoutes(scraping);
 
+        var drama = config.ShortDrama ?? new ShortDramaSettings();
+        DramaDownloadDirBox.Text = drama.DownloadDir;
+        DramaDefaultDirText.Text = AppPaths.ShortDramaDownloadDir;
+        DramaBaseUrlBox.Text = drama.BaseUrl;
+        DramaConcurrencyBox.Text = Math.Clamp(drama.DownloadConcurrency, 1, 4).ToString();
+        DramaAutoDownloadBox.IsChecked = drama.AutoDownloadNewEpisodes;
+
         var general = config.General ?? new GeneralSettings();
         SelectComboByTag(LanguageBox, general.InterfaceLanguage);
         DarkThemeRadio.IsChecked = ThemeManager.IsDark;
@@ -133,7 +140,7 @@ public partial class SettingsDialog : Window
 
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
-        if (MangaPage is null || NovelPage is null || VideoPage is null || GeneralPage is null)
+        if (MangaPage is null || NovelPage is null || VideoPage is null || DramaPage is null || GeneralPage is null)
         {
             return;
         }
@@ -148,6 +155,7 @@ public partial class SettingsDialog : Window
         MangaPage.Visibility = nav == MangaNavItem ? Visibility.Visible : Visibility.Collapsed;
         NovelPage.Visibility = nav == NovelNavItem ? Visibility.Visible : Visibility.Collapsed;
         VideoPage.Visibility = nav == VideoNavItem ? Visibility.Visible : Visibility.Collapsed;
+        DramaPage.Visibility = nav == DramaNavItem ? Visibility.Visible : Visibility.Collapsed;
         GeneralPage.Visibility = nav == GeneralNavItem ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -207,6 +215,13 @@ public partial class SettingsDialog : Window
     private void BrowseVideoDownloadDir_Click(object sender, RoutedEventArgs e)
         => BrowseFolder(VideoDownloadDirBox, "选择视频下载目录");
 
+    private void BrowseDramaDownloadDir_Click(object sender, RoutedEventArgs e)
+        => BrowseFolder(DramaDownloadDirBox, "选择短剧下载目录");
+
+    /// <summary>恢复默认：清空输入框即可（留空 = config\短剧下载）。</summary>
+    private void ResetDramaDownloadDir_Click(object sender, RoutedEventArgs e)
+        => DramaDownloadDirBox.Text = "";
+
     private static void BrowseFolder(TextBox target, string title)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog { Title = title };
@@ -240,6 +255,7 @@ public partial class SettingsDialog : Window
             TitleTranslate = new TitleTranslateOptions(),
             VideoPlayback = new VideoPlaybackSettings(),
             VideoScraping = new VideoScrapeSettings(),
+            ShortDrama = new ShortDramaSettings(),
             General = new GeneralSettings { MediaLibraryDir = downloadDir },
         };
     }
@@ -340,6 +356,18 @@ public partial class SettingsDialog : Window
         if (int.TryParse(ScrapeIntervalBox.Text, out var interval)) scraping.RequestIntervalMs = Math.Clamp(interval, 0, 10000);
         SaveSourceToggles(scraping);
         SaveContentRoutes(scraping);
+
+        // 短剧：下载目录留空表示用默认目录（config\短剧下载），不做 GetFullPath 强制填充
+        config.ShortDrama ??= new ShortDramaSettings();
+        config.ShortDrama.DownloadDir = string.IsNullOrWhiteSpace(DramaDownloadDirBox.Text)
+            ? ""
+            : Path.GetFullPath(DramaDownloadDirBox.Text.Trim());
+        config.ShortDrama.BaseUrl = DramaBaseUrlBox.Text.Trim();
+        if (int.TryParse(DramaConcurrencyBox.Text, out var dramaConcurrency))
+        {
+            config.ShortDrama.DownloadConcurrency = Math.Clamp(dramaConcurrency, 1, 4);
+        }
+        config.ShortDrama.AutoDownloadNewEpisodes = DramaAutoDownloadBox.IsChecked == true;
 
         config.General ??= new GeneralSettings();
         if (LanguageBox.SelectedItem is ComboBoxItem { Tag: string uiLanguage })

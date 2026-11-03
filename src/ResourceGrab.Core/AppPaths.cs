@@ -11,6 +11,8 @@ public static class AppPaths
     public static string LocalLibraryCachePath => Path.Combine(AppDataDir, "local-library-cache.json");
     public static string MangaRelationsCachePath => Path.Combine(AppDataDir, "manga-relations-cache.json");
     public static string RelatedCoversDir => Path.Combine(AppDataDir, "related-covers");
+    /// <summary>短剧封面缓存：CDN 返回的是加密字节，解密后落在这里（按剧集 id 命名，可长期复用）。</summary>
+    public static string ShortDramaCoverDir => Path.Combine(AppDataDir, "drama-covers");
     public static string DownloadHistoryPath => Path.Combine(AppDataDir, "download-history.json");
     public static string VideoDownloadHistoryPath => Path.Combine(AppDataDir, "video-download-history.json");
     public static string NovelHistoryPath => Path.Combine(AppDataDir, "novel-history.json");
@@ -25,9 +27,14 @@ public static class AppPaths
     public static string VideoSourceCacheDir => Path.Combine(AppDataDir, "video-source-cache");
     public static string PhotobookTaxonomyCacheDir => Path.Combine(AppDataDir, "photobook-taxonomy");
     public static string VideoSidebarCountsPath => Path.Combine(AppDataDir, "video-sidebar-counts.json");
+    public static string ShortDramaMarksPath => Path.Combine(AppDataDir, "short-drama-marks.json");
+    public static string ShortDramaProgressPath => Path.Combine(AppDataDir, "short-drama-progress.json");
     public static string VideoResourcesDir => Path.Combine(AppDataDir, "video-resources");
     public static string MetadataBackfillLogPath => Path.Combine(AppDataDir, "backfill-metadata.log");
     public static string LogsDir => Path.Combine(AppDataDir, "logs");
+
+    /// <summary>短剧下载默认根目录（每部剧一个子目录：mp4 + drama.json + 封面）。</summary>
+    public static string ShortDramaDownloadDir => Path.Combine(AppDataDir, "短剧下载");
     public static void MigrateLegacyData()
     {
         try

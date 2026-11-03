@@ -1,0 +1,99 @@
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.ShortDramaBrowseView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views">
+    <Grid Margin="24,16,24,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 页头：标题 + 线路状态 + 密度 -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="短剧"
+                           FontSize="{DynamicResource FontPageTitle}" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="SubtitleText" Margin="12,0,0,0" VerticalAlignment="Center"
+                           FontSize="{DynamicResource FontBody}"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <!-- 线路卡：短剧是单源，这里替代其它页的「源切换」 -->
+                <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1" CornerRadius="{DynamicResource RadiusMd}" Padding="9,0"
+                        Height="{DynamicResource ControlHeightSm}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse x:Name="LineDot" Width="6" Height="6" Fill="{DynamicResource SuccessBrush}"
+                                 VerticalAlignment="Center" />
+                        <TextBlock x:Name="LineHostText" Margin="7,0,0,0" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" Text="线路检测中…" />
+                        <Button x:Name="RefreshLineButton" Style="{StaticResource IconButtonStyle}"
+                                Width="24" Height="24" Margin="4,0,0,0" ToolTip="换线路（读取官方发布页）"
+                                Click="RefreshLine_Click">
+                            <Path Data="{StaticResource IconRefresh}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.7" Stretch="Uniform" Width="13" Height="13" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+                <controls:CardSizeSlider Margin="10,0,0,0" VerticalAlignment="Center"
+                                         Columns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 搜索行 -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- 复用全站搜索样式：焦点描边落在整条边框上（SearchFieldBorderStyle 的 IsKeyboardFocusWithin 触发器），
+                 占位文案由 SearchWatermarkTextStyle 自己按 TextBox.Text 显隐 —— 手写占位块会因为没绑 TextChanged 而一直盖住输入内容。 -->
+            <Border x:Name="SearchField" Width="360" Height="{DynamicResource ToolbarHeight}"
+                    Style="{StaticResource SearchFieldBorderStyle}"
+                    MouseDown="SearchField_MouseDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Path Data="{StaticResource IconSearch}" Margin="12,0,0,0" Stretch="Uniform"
+                          Width="14" Height="14" VerticalAlignment="Center" IsHitTestVisible="False"
+                          Stroke="{DynamicResource TextDisabledBrush}" StrokeThickness="1.8" />
+                    <TextBox x:Name="SearchBox" Grid.Column="1" Margin="8,0,8,0"
+                             Style="{StaticResource SearchInputTextStyle}"
+                             KeyDown="SearchBox_KeyDown" />
+                    <TextBlock x:Name="SearchPlaceholder" Grid.Column="1" Margin="10,0,0,0"
+                               Text="搜索剧名、标签或频道（回车）"
+                               Style="{StaticResource SearchWatermarkTextStyle}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 结果区：状态机 + 虚拟化网格 -->
+        <controls:StateHostControl x:Name="StateHost" Grid.Row="2"
+                                   ResultTemplate="{StaticResource DramaCardResultTemplate}"
+                                   SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   EmptyTitle="没有找到相关短剧"
+                                   EmptyDescription="换个关键词，或点左侧频道看看"
+                                   ErrorTitle="线路暂时不可用"
+                                   RetryText="换线路重试" />
+
+        <!-- 分页 -->
+        <StackPanel x:Name="PagingPanel" Grid.Row="3" Orientation="Horizontal"
+                    HorizontalAlignment="Center" Margin="0,12,0,0">
+            <Button x:Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页"
+                    Click="PrevPage_Click" Padding="12,5" />
+            <TextBlock x:Name="PageText" FontSize="12" VerticalAlignment="Center" Margin="14,0"
+                       Foreground="{DynamicResource TextSecondaryBrush}" TextAlignment="Center" MinWidth="90" />
+            <Button x:Name="NextButton" Style="{StaticResource GhostButtonStyle}" Content="下一页 ›"
+                    Click="NextPage_Click" Padding="12,5" />
+        </StackPanel>
+    </Grid>
+</controls:CardGridViewBase>

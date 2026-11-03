@@ -108,7 +108,8 @@ public sealed class VideoScrapeTaskExecutor
         var request = new VideoDownloadRequest(
             task.Number, task.DownloadTitle ?? "", task.DownloadUrl,
             task.DownloadReferer ?? "", task.DownloadProxy, task.DownloadDurationText ?? "",
-            task.DownloadMasterUrl ?? "", task.DownloadVariantLabel ?? "");
+            task.DownloadMasterUrl ?? "", task.DownloadVariantLabel ?? "", task.DownloadOutputDir,
+            task.DownloadCategory);
         var progress = new Progress<VideoDownloadProgress>(p =>
         {
             lock (task)

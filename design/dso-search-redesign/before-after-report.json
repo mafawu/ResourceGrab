@@ -1,0 +1,55 @@
+[
+  {
+    "file": "stitch.png",
+    "width": 1344,
+    "height": 928,
+    "columns": 2,
+    "items": [
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 24,
+        "y": 24,
+        "label": "现状 · 深色",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 680,
+        "y": 24,
+        "label": "新设计 · 深色",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 24,
+        "y": 472,
+        "label": "现状 · 浅色",
+        "labelY": 880
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 680,
+        "y": 472,
+        "label": "新设计 · 浅色",
+        "labelY": 880
+      }
+    ],
+    "issues": []
+  }
+]

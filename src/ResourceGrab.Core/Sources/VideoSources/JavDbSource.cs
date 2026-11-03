@@ -316,7 +316,15 @@ public sealed class JavDbSource : IVideoSource
             var size = cells.Count > 1 ? WebUtility.HtmlDecode(cells[1].TextContent.Trim()) : "";
             var date = cells.Count > 2 ? WebUtility.HtmlDecode(cells[2].TextContent.Trim()) : "";
 
-            result.Add(new OnlineMagnetLink { Name = name, Size = size, Date = date, Url = url });
+            result.Add(new OnlineMagnetLink
+            {
+                Name = name,
+                Size = size,
+                Date = date,
+                Url = url,
+                // JavDB 磁力页没有「字幕」角标，按标题后缀兜底（-C / -UC / -CH…）
+                Tags = MagnetTagHelper.MergeFromName(Array.Empty<string>(), name),
+            });
         }
         return result;
     }

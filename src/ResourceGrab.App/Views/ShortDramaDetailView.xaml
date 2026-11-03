@@ -1,0 +1,395 @@
+<UserControl x:Class="ResourceGrab.App.Views.ShortDramaDetailView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+
+    <UserControl.Resources>
+        <!-- 选集格：6 列紧凑按钮；选中态由代码改 Background/Foreground/BorderBrush -->
+        <Style x:Key="EpisodeButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource RadiusSm}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush"
+                                        Value="{DynamicResource DividerStrongBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 自动连播开关 -->
+        <Style x:Key="SwitchToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Track" CornerRadius="11"
+                                Background="{DynamicResource DividerStrongBrush}">
+                            <Grid>
+                                <Ellipse x:Name="Thumb" Width="16" Height="16" Fill="White"
+                                         HorizontalAlignment="Left" Margin="3,0,0,0" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background"
+                                        Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="Thumb" Property="Margin" Value="0,0,3,0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DramaInfoLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDisabledBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DramaInfoValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="TagPillStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource HoverBgBrush}" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusXs}" />
+            <Setter Property="Padding" Value="9,3" />
+            <Setter Property="Margin" Value="0,0,6,6" />
+        </Style>
+        <Style x:Key="TagPillTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="PageRoot" Margin="24,12,24,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 面包屑：返回 + 短剧 / 频道 / 标题 -->
+        <StackPanel x:Name="BreadcrumbRow" Grid.Row="0" Orientation="Horizontal"
+                    Margin="0,0,0,10" VerticalAlignment="Center">
+            <Button x:Name="BackButton" Style="{StaticResource IconButtonStyle}" Width="26" Height="26"
+                    Click="Back_Click" ToolTip="返回列表">
+                <Path Data="{StaticResource IconBack}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round" Stretch="Uniform" Width="13" Height="13" />
+            </Button>
+            <TextBlock x:Name="CrumbText" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12"
+                       Foreground="{DynamicResource TextSecondaryBrush}" Text="短剧"
+                       TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <ScrollViewer x:Name="PageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,2,0">
+            <StackPanel>
+                <Grid x:Name="DramaLayout">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="SideColumn" Width="318" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 左列：播放器 + 标题/操作 + 简介 -->
+                    <StackPanel x:Name="DramaMain" Grid.Column="0" Margin="0,0,22,0">
+                        <!-- 播放舞台：横屏按 16:9 撑满，竖屏居中收窄；高度由代码按宽度/比例算 -->
+                        <Border x:Name="PlayerStage" MinHeight="320" Background="{DynamicResource PlayerStageBrush}"
+                                CornerRadius="{DynamicResource RadiusXl}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                                ClipToBounds="True" SizeChanged="PlayerStage_SizeChanged">
+                            <Grid>
+                                <Grid x:Name="PlayerFrame" HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch" ClipToBounds="True">
+                                    <controls:OnlineVideoPreviewPlayer x:Name="Player" ShowPlayButton="True" />
+                                    <TextBlock x:Name="PlayerHint" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5"
+                                               Text="正在获取播放地址…" IsHitTestVisible="False" />
+                                </Grid>
+                                <Button x:Name="ExitFocusButton" Content="退出全屏" Style="{StaticResource GhostButtonStyle}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12,12,0,0"
+                                        Padding="10,4" Panel.ZIndex="10" Click="ExitFocus_Click"
+                                        Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+
+                        <StackPanel x:Name="TitleSection" Margin="0,16,0,0">
+                            <TextBlock x:Name="TitleText" FontSize="22" FontWeight="Bold" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock x:Name="MetaText" Margin="0,8,0,0" FontSize="11.5"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                    <Button x:Name="PlayButton" Style="{StaticResource PrimaryButtonStyle}"
+                                            Padding="16,6" Click="Play_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path x:Name="PlayButtonIcon" Data="{StaticResource IconPlay}" Fill="White" Stretch="Uniform"
+                                                  Width="11" Height="11" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="PlayButtonText" Text="立即播放" Margin="7,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="DownloadButton" Style="{StaticResource GhostButtonStyle}"
+                                            Margin="8,0,0,0" Padding="12,6" Click="DownloadButton_Click"
+                                            ToolTip="下载到本地（可离线播放）">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconDownload}" Stretch="Uniform" Width="13" Height="13"
+                                                  VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.8" />
+                                            <TextBlock Text="下载" Margin="6,0,0,0" />
+                                            <Path Data="{StaticResource IconChevronDown}" Stretch="Uniform" Width="10" Height="10"
+                                                  Margin="5,0,0,0" VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.8" />
+                                        </StackPanel>
+                                        <Button.ContextMenu>
+                                            <ContextMenu x:Name="DownloadMenu">
+                                                <MenuItem x:Name="MenuDownloadEpisode" Header="下载本集" Click="MenuDownloadEpisode_Click" />
+                                                <MenuItem x:Name="MenuDownloadMissing" Header="下载未看集" Click="MenuDownloadMissing_Click" />
+                                                <MenuItem x:Name="MenuDownloadAll" Header="下载全集" Click="MenuDownloadAll_Click" />
+                                                <Separator />
+                                                <MenuItem x:Name="MenuOpenFolder" Header="打开下载文件夹" Click="MenuOpenFolder_Click" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+
+                                    <Button x:Name="FollowButton" Style="{StaticResource GhostButtonStyle}"
+                                            Margin="8,0,0,0" Padding="12,6" Click="Follow_Click" ToolTip="追剧（本地记录）">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path x:Name="FollowIcon" Data="{StaticResource IconPlus}" Stretch="Uniform" Width="12" Height="12"
+                                                  VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.8" />
+                                            <TextBlock x:Name="FollowButtonText" Text="追剧" Margin="5,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="FavoriteButton" Style="{StaticResource GhostButtonStyle}"
+                                            Margin="8,0,0,0" Padding="12,6" Click="Favorite_Click" ToolTip="收藏（本地记录）">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path x:Name="FavoriteIcon" Data="{StaticResource IconHeart}" Stretch="Uniform" Width="13" Height="13"
+                                                  VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.7" />
+                                            <TextBlock x:Name="FavoriteButtonText" Text="收藏" Margin="5,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="ShareButton" Style="{StaticResource IconButtonStyle}"
+                                            Margin="8,0,0,0" Width="32" Height="32" Click="Share_Click" ToolTip="复制链接">
+                                        <Path Data="{StaticResource IconShare}"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" />
+                                    </Button>
+
+                                    <Button x:Name="SourcePageButton" Style="{StaticResource IconButtonStyle}"
+                                            Margin="6,0,0,0" Width="32" Height="32" Click="OpenDetailPage_Click"
+                                            ToolTip="在浏览器打开源站详情页">
+                                        <Path Data="{StaticResource IconExternal}"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" />
+                                    </Button>
+                                </WrapPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                    <Button x:Name="RefreshButton" Style="{StaticResource GhostButtonStyle}"
+                                            Padding="12,6" Click="Refresh_Click" ToolTip="重新获取播放地址（签名约 2 小时有效）">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconRefresh}" Stretch="Uniform" Width="13" Height="13"
+                                                  VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.8" />
+                                            <TextBlock Text="刷新地址" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="DeleteButton" Style="{StaticResource DangerButtonStyle}"
+                                            Margin="8,0,0,0" Padding="12,6" Content="删除本剧"
+                                            Click="DeleteDrama_Click" Visibility="Collapsed"
+                                            ToolTip="删除整部剧（进回收站）" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel x:Name="SynopsisSection" Margin="0,16,0,0">
+                            <TextBlock Text="剧情简介" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock x:Name="DescText" Margin="0,6,0,0" FontSize="12.5" LineHeight="22"
+                                       TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" MaxHeight="46" />
+                            <Button x:Name="DescToggleButton" Content="展开全部" Style="{StaticResource GhostButtonStyle}"
+                                    HorizontalAlignment="Left" Padding="0" Margin="0,2,0,0" FontSize="11.5"
+                                    Foreground="{DynamicResource TextLinkBrush}" Click="DescToggle_Click" />
+                            <ItemsControl x:Name="TagList" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource TagPillStyle}">
+                                            <TextBlock Text="{Binding}" Style="{StaticResource TagPillTextStyle}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- 右列：选集 + 自动连播 + 已看进度 + 元信息 -->
+                    <Border x:Name="DramaSide" Grid.Column="1" Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                            CornerRadius="{DynamicResource RadiusXl}" Padding="16" VerticalAlignment="Top">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,12">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="选集" FontSize="13" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                    <TextBlock x:Name="EpisodeCountText" Margin="8,0,0,0" FontSize="10.5"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextDisabledBrush}" />
+                                </StackPanel>
+                                <TextBlock x:Name="CurrentEpisodeText" HorizontalAlignment="Right" FontSize="10.5"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </Grid>
+
+                            <ScrollViewer MaxHeight="198" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                                <WrapPanel x:Name="EpisodePanel" />
+                            </ScrollViewer>
+
+                            <Grid Margin="0,14,0,0">
+                                <TextBlock Text="自动连播下一集" FontSize="11.5" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <ToggleButton x:Name="AutoPlayToggle" Style="{StaticResource SwitchToggleStyle}"
+                                              HorizontalAlignment="Right" IsChecked="True"
+                                              Click="AutoPlayToggle_Click" ToolTip="当前集播完自动播放下一集" />
+                            </Grid>
+
+                            <Grid Margin="0,11,0,0">
+                                <TextBlock x:Name="WatchedText" Text="已看 0/0" FontSize="10.5"
+                                           Foreground="{DynamicResource TextDisabledBrush}" VerticalAlignment="Center" />
+                                <ProgressBar x:Name="WatchedBar" Height="3" Minimum="0" Maximum="100" Value="0"
+                                             Margin="70,0,0,0" VerticalAlignment="Center">
+                                    <ProgressBar.Template>
+                                        <ControlTemplate TargetType="ProgressBar">
+                                            <Grid>
+                                                <Border Background="{DynamicResource DividerBrush}" CornerRadius="2" />
+                                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                                        Background="{DynamicResource PrimaryBrush}" CornerRadius="2" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </ProgressBar.Template>
+                                </ProgressBar>
+                            </Grid>
+
+                            <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,12,0,0" />
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="评分" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="ScoreValueText" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="1" Text="状态" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="StateValueText" Grid.Row="1" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="2" Text="时长" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="DurationValueText" Grid.Row="2" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="3" Text="上线" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="ReleaseValueText" Grid.Row="3" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="4" Text="播放" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="ViewsValueText" Grid.Row="4" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="5" Text="本地" Style="{StaticResource DramaInfoLabelStyle}" />
+                                <TextBlock x:Name="LocalValueText" Grid.Row="5" Grid.Column="1" Style="{StaticResource DramaInfoValueStyle}" />
+                            </Grid>
+
+                            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}"
+                                    Margin="0,12,0,0" Padding="0,10,0,0">
+                                <TextBlock x:Name="SideNoteText" FontSize="10.5" LineHeight="17"
+                                           Foreground="{DynamicResource TextDisabledBrush}" TextWrapping="Wrap"
+                                           Text="播放地址为 2 小时有效的签名链接，每次播放自动换取，不可离线分享。" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- 猜你喜欢：同类型推荐，点卡片直接在详情页内换片 -->
+                <StackPanel x:Name="RelatedSection" Margin="0,28,0,0" Visibility="Collapsed">
+                    <Grid Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="猜你喜欢" FontSize="15" FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock x:Name="RelatedSubtitleText" Margin="10,0,0,0" FontSize="11.5"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextDisabledBrush}" />
+                        </StackPanel>
+                        <Button x:Name="RelatedRefreshButton" Style="{StaticResource GhostButtonStyle}"
+                                HorizontalAlignment="Right" Padding="10,4" Click="RelatedRefresh_Click"
+                                ToolTip="换一批推荐">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconRefresh}" Stretch="Uniform" Width="12" Height="12"
+                                      VerticalAlignment="Center"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.8" />
+                                <TextBlock Text="换一批" Margin="5,0,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                    <ItemsControl x:Name="RelatedHost">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="7" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <controls:MediaCard Margin="0,0,10,0" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

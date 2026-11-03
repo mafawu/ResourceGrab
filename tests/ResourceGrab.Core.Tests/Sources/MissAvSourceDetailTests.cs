@@ -1,4 +1,5 @@
 using ResourceGrab.Core.Logging;
+using ResourceGrab.Core.Sources;
 using ResourceGrab.Core.Sources.VideoSources;
 using Xunit;
 
@@ -59,5 +60,87 @@ public class MissAvSourceDetailTests
     public void ParsePreviewImages_ReturnsEmptyWhenSectionMissing()
     {
         Assert.Empty(MissAvSource.ParsePreviewImages("<html><body><p>沒有預覽的頁面</p></body></html>"));
+    }
+
+    // 磁力名称单元格里紧跟链接的 <span> 角标（站点服务端渲染），必须跟名称一起取出来
+    private const string MagnetBadgeHtml = """
+        <html><body><table>
+        <tr>
+            <td class="py-4 w-full text-sm text-nord13 font-medium space-x-1">
+                <a rel="nofollow" href="magnet:?xt=urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&amp;dn=IPZZ-961-C" target="_blank">
+                    IPZZ-961-C
+                </a>
+                <span class="bg-primary inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white">
+                    高清
+                </span>
+                <span class="bg-nord10 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white">
+                    字幕
+                </span>
+            </td>
+            <td class="whitespace-nowrap pl-4 text-right text-sm text-gray-400 font-mono">7.68GB</td>
+            <td class="hidden sm:table-cell whitespace-nowrap pl-4 text-right text-sm text-gray-400 font-mono">2026-10-13</td>
+            <td class="whitespace-nowrap pl-4 text-right"><a href="https://keepshare.org/x/magnet:?xt=urn:btih:AAAA">下載</a></td>
+        </tr>
+        <tr>
+            <td class="py-4 w-full text-sm text-nord13 font-medium space-x-1">
+                <a rel="nofollow" href="magnet:?xt=urn:btih:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB&amp;dn=IPZZ-961-UC" target="_blank">
+                    IPZZ-961-UC
+                </a>
+                <span class="bg-primary inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white">
+                    高清
+                </span>
+            </td>
+            <td class="whitespace-nowrap pl-4 text-right text-sm text-gray-400 font-mono">5.14GB</td>
+            <td class="hidden sm:table-cell whitespace-nowrap pl-4 text-right text-sm text-gray-400 font-mono">2026-10-20</td>
+        </tr>
+        </table></body></html>
+        """;
+
+    [Fact]
+    public void ParseMagnets_CapturesBadgeTagsFromNameCell()
+    {
+        var magnets = MissAvSource.ParseMagnets(MagnetBadgeHtml);
+
+        Assert.Equal(2, magnets.Count);
+
+        Assert.Equal("IPZZ-961-C", magnets[0].Name);
+        Assert.Equal("7.68GB", magnets[0].Size);
+        Assert.Equal("2026-10-13", magnets[0].Date);
+        Assert.Contains("高清", magnets[0].Tags);
+        Assert.Contains("字幕", magnets[0].Tags);
+        Assert.True(magnets[0].HasHd);
+        Assert.True(magnets[0].HasChineseSubtitle);
+
+        // -UC 只有「高清」角标：不能因为番号带 C 就当字幕（已由角标判定优先）
+        Assert.Equal("IPZZ-961-UC", magnets[1].Name);
+        Assert.Contains("高清", magnets[1].Tags);
+        Assert.False(magnets[1].HasChineseSubtitle);
+    }
+
+    [Theory]
+    [InlineData("IPZZ-961-C", true)]
+    [InlineData("ipzz-961ch", true)]
+    [InlineData("IPZZ-961-CHS", true)]
+    [InlineData("IPZZ-961 中文字幕 完全版", true)]
+    [InlineData("IPZZ-961", false)]
+    [InlineData("IPZZ-961-UC", false)]
+    [InlineData("IPZZ-961-U", false)]
+    [InlineData("IPZZ-961-AI", false)]
+    [InlineData("118877.xyz SSIS-971", false)]
+    public void MergeFromName_InfersSubtitleOnlyFromKnownSuffixes(string name, bool expected)
+    {
+        var tags = MagnetTagHelper.MergeFromName(Array.Empty<string>(), name);
+
+        Assert.Equal(expected, tags.Contains("字幕"));
+    }
+
+    [Fact]
+    public void MergeFromName_KeepsExplicitBadgesAndDoesNotDuplicate()
+    {
+        var tags = MagnetTagHelper.MergeFromName(["字幕", "高清"], "IPZZ-961-C");
+
+        Assert.Equal(2, tags.Count);
+        Assert.Contains("字幕", tags);
+        Assert.Contains("高清", tags);
     }
 }

@@ -78,6 +78,11 @@ public sealed class VideoScrapeTask
     public string? DownloadMasterUrl { get; set; }
     /// <summary>用户所选档位名（如 "720p"），空表示默认最高档。</summary>
     public string? DownloadVariantLabel { get; set; }
+    /// <summary>指定落盘目录（短剧按剧分文件夹）；null 表示用全局下载目录。</summary>
+    public string? DownloadOutputDir { get; set; }
+
+    /// <summary>任务分类（"shortdrama" = 短剧），下载页据此区分标题/副标题。</summary>
+    public string? DownloadCategory { get; set; }
 
     // ---- DownloadVideo 任务运行期进度（仅供下载页展示，不参与业务判断） ----
     /// <summary>已下载字节数。</summary>

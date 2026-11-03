@@ -159,6 +159,48 @@ public partial class App : Application
         // 在线详情内存缓存：搜索回填与详情侧栏共用，应用生命周期内同一详情不重复请求
         services.AddSingleton<OnlineVideoDetailCache>();
 
+        // —— 短剧（西瓜短剧）——
+        // 单源：一个 HttpClient + 一个换线客户端 + 一个源实现。线路/UA/节流全部收敛在 XiguaDramaHttpClient。
+        services.AddSingleton(sp => new ResourceGrab.Core.Sources.ShortDrama.XiguaDramaHttpClient(
+            CreateMissAvHttpClient(configService),
+            sp.GetRequiredService<ILogger>(),
+            (configService.Current.ShortDrama ?? new ShortDramaSettings()).BaseUrl));
+        services.AddSingleton<ResourceGrab.Core.Sources.ShortDrama.IShortDramaSource>(sp =>
+            new ResourceGrab.Core.Sources.ShortDrama.XiguaDramaSource(
+                sp.GetRequiredService<ResourceGrab.Core.Sources.ShortDrama.XiguaDramaHttpClient>(),
+                sp.GetRequiredService<ILogger>()));
+        // 封面：CDN 返回加密字节，下载后本地解密再落盘（密钥见 DramaCoverCipher）
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.DramaCoverService(
+            CreateMissAvHttpClient(configService),
+            sp.GetRequiredService<ILogger>()));
+        // 本地库：读各剧目录下的 drama.json（离线）
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.ShortDramaLibraryService(
+            () => configService.Current.ShortDrama ?? new ShortDramaSettings(),
+            sp.GetRequiredService<ILogger>()));
+        // 追剧/收藏：短剧详情页的「我的」标记，本地 JSON 持久化
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.DramaMarkService(
+            AppPaths.ShortDramaMarksPath,
+            sp.GetRequiredService<ILogger>()));
+        // 观看进度：上次看到第几集 + 已看完集号
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.DramaWatchProgressService(
+            AppPaths.ShortDramaProgressPath,
+            sp.GetRequiredService<ILogger>()));
+        // 本地导入：把用户原有的短剧目录接进本地库（视频留在原处，只补 drama.json/poster.jpg）
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.DramaLocalImportService(
+            sp.GetRequiredService<ResourceGrab.Core.Sources.ShortDrama.IShortDramaSource>(),
+            sp.GetRequiredService<ResourceGrab.Core.Services.ShortDrama.ShortDramaLibraryService>(),
+            sp.GetRequiredService<ResourceGrab.Core.Services.ShortDrama.DramaCoverService>(),
+            sp.GetRequiredService<ILogger>()));
+        // 下载编排：只组请求 + 管落盘 + 回填元数据，真正的 ffmpeg 拉流复用 VideoDownloadService
+        services.AddSingleton(sp => new ResourceGrab.Core.Services.ShortDrama.ShortDramaDownloadService(
+            sp.GetRequiredService<ResourceGrab.Core.Sources.ShortDrama.IShortDramaSource>(),
+            sp.GetRequiredService<VideoScrapeTaskQueue>(),
+            sp.GetRequiredService<ResourceGrab.Core.Services.ShortDrama.ShortDramaLibraryService>(),
+            CreateMissAvHttpClient(configService),
+            () => configService.Current.ShortDrama ?? new ShortDramaSettings(),
+            () => (configService.Current.VideoScraping ?? new VideoScrapeSettings()).Proxy,
+            sp.GetRequiredService<ILogger>()));
+
         // —— 视频刮削新管道（图引擎）——
         // per-source 配置与全局设置：取用户当前配置实例，用户改配置后重启生效。
         var videoScrapeSettings = configService.Current.VideoScraping ?? new VideoScrapeSettings();

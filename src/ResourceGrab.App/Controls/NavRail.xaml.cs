@@ -18,6 +18,8 @@ public partial class NavRail : UserControl
     public event EventHandler<NavItem>? ItemClicked;
 
     private readonly List<RadioButton> _radioButtons = new();
+    /// <summary>容器尚未生成时暂存的目标选中项，等 CollectRadioButtons 完成后补选。</summary>
+    private string? _pendingSelectionId;
 
     public IReadOnlyList<NavSection>? Sections
     {
@@ -49,6 +51,19 @@ public partial class NavRail : UserControl
         Dispatcher.BeginInvoke(() =>
         {
             CollectRadioButtons(SectionsHost);
+
+            // 路由同步可能早于容器生成：优先应用外部指定的选中项。
+            if (!string.IsNullOrEmpty(_pendingSelectionId))
+            {
+                var pending = FindRadioButtonByContent(_pendingSelectionId);
+                if (pending != null)
+                {
+                    _pendingSelectionId = null;
+                    pending.IsChecked = true;
+                    return;
+                }
+            }
+
             if (!string.IsNullOrEmpty(selectedItemId))
             {
                 var restored = FindRadioButtonByContent(selectedItemId);
@@ -97,7 +112,16 @@ public partial class NavRail : UserControl
                 if (item.Id == itemId)
                 {
                     var rb = FindRadioButtonByContent(itemId);
-                    if (rb != null) rb.IsChecked = true;
+                    if (rb != null)
+                    {
+                        _pendingSelectionId = null;
+                        rb.IsChecked = true;
+                    }
+                    else
+                    {
+                        // 容器还没生成：先记下，Rebuild/Collect 完成后补选。
+                        _pendingSelectionId = itemId;
+                    }
                     return;
                 }
             }

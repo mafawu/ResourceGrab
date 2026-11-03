@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.IO;
 using System.Net.Http;
@@ -122,15 +122,30 @@ public static class ImageLoader
             {
                 return;
             }
-            image.Source = bitmap;
+            SetSource(image, token, bitmap);
         }
         catch
         {
-            if (Equals(image.Tag, token))
-            {
-                image.Source = null;
-            }
+            SetSource(image, token, null);
         }
+    }
+
+    /// <summary>
+    /// 回到 UI 线程再写 Source。
+    /// <c>async void</c> 的续体在**没有 DispatcherSynchronizationContext** 的宿主里会跑在线程池上
+    /// （例如用脚本直接实例化控件、或从后台线程建视图），此时直接碰 DependencyObject 会抛
+    /// "调用线程无法访问此对象"。这里统一兜一层，正常 WPF 应用里 CheckAccess 为 true 不会有额外开销。
+    /// </summary>
+    private static void SetSource(Image image, Guid token, BitmapImage? bitmap)
+    {
+        if (!image.Dispatcher.CheckAccess())
+        {
+            image.Dispatcher.BeginInvoke(new Action(() => SetSource(image, token, bitmap)),
+                System.Windows.Threading.DispatcherPriority.Background);
+            return;
+        }
+        if (!Equals(image.Tag, token)) return;
+        image.Source = bitmap;
     }
 
     /// <summary>网络图片：带可选请求头下载。</summary>

@@ -101,6 +101,8 @@ public sealed class VideoScrapeTaskQueue : IDisposable
             DownloadDurationText = request.DurationText,
             DownloadMasterUrl = request.MasterUrl,
             DownloadVariantLabel = request.VariantLabel,
+            DownloadOutputDir = request.OutputDirectory,
+                    DownloadCategory = request.Category,
         };
         _tasks[task.Id] = task;
         _channel.Writer.TryWrite(task);

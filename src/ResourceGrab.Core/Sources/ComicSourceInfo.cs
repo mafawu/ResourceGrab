@@ -1,10 +1,10 @@
 namespace ResourceGrab.Core.Sources;
 
 /// <summary>
-/// 内容种类，驱动顶栏一级胶囊（漫画 / 视频 / 本地小说 / 写真）。
+/// 内容种类，驱动顶栏一级胶囊（漫画 / 视频 / 本地小说 / 写真 / 短剧）。
 /// 注意：新增项一律追加到末尾，避免既有数值位移影响持久化数据。
 /// </summary>
-public enum ResourceKind { Manga, Novel, Video, Photobook }
+public enum ResourceKind { Manga, Novel, Video, Photobook, ShortDrama }
 
 /// <summary>内容源元信息：UI 的站点切换、能力展示等均依赖此信息。</summary>
 public class ComicSourceInfo

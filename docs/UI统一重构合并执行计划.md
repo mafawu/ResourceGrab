@@ -72,7 +72,7 @@
 
 ### 2.5 必须保留的既有行为（易回退点）
 
-1. **三播放器接力**：`VideoView.xaml.cs` 的 `TransferPlayback`（侧栏播放器 / 整页播放器 / 小窗 `PopoutPlayerWindow` 之间保持进度接力）。拆分 `VideoView` 时原样搬到新的 `VideoSearchView`。
+1. **播放接力**：`VideoView.xaml.cs` 的 `TransferPlayback` 负责侧栏 / 整页两个播放器实例之间的进度交接；小窗不再是第三个实例，而是 `OnlineVideoPreviewPlayer.EnterMiniWindow()` 把同一个 Player 挂到独立置顶窗口（不重连、进度连续）。拆分 `VideoView` 时原样搬到新的 `VideoSearchView`。
 2. **280ms 双击判定窗口**：`VideoPosterCard.xaml.cs:30-80` 是刻意设计（避免侧栏遮罩吞掉双击），上移到 `MediaCard` 时必须保留，不能退化成「单击立即开侧栏」。
 3. **`DetailShell` / `ReaderShell`**：已是好设计，沉浸式阅读/播放保持独立，不并入浏览层。
 4. 漫画侧 `CardGridViewBase` → `StateHostControl` → `VirtualizedCardGrid` 四层抽象继续作为所有列表页的地基。
@@ -260,12 +260,12 @@ MediaDetailHost
 
 ### Phase 4：拆分 VideoView，NavRail 全量接管视频子页
 
-1. 新建 `VideoSearchView`（在线搜索）：`BrowserToolbar` + `StateHostControl` + `VirtualizedCardGrid` + `MediaCard`，对齐 `SearchView` 结构；`TransferPlayback` 三播放器接力原样搬入。
+1. 新建 `VideoSearchView`（在线搜索）：`BrowserToolbar` + `StateHostControl` + `VirtualizedCardGrid` + `MediaCard`，对齐 `SearchView` 结构；带 `TransferPlayback`（侧栏 ↔ 整页接力）与小窗入口原样搬入。
 2. 新建 `VideoLocalView`（本地库）：对齐 `LocalView` 结构，详情侧栏换 `DetailDrawerShell` + `MediaDetailHost`。
 3. `VideoRecommendView`、`ScrapeToolsView`、`VideoTaskDashboard`、`ActorListView`、`ActorProfileView` 接入 `VideoNavSectionProvider` 全量路由。
 4. 删除 `VideoView` 内部导航（`SwitchNav` 系列）与所有 `Visibility` 子页切换；`VideoView` 缩成薄协调层或直接删除。
 
-**验收**：视频全部子页经 NavRail 可达；搜索 → 详情 → 播放全链路（含小窗接力）无回退；千条结果滚动流畅。
+**验收**：视频全部子页经 NavRail 可达；搜索 → 详情 → 播放全链路（含小窗进出、进度不丢）无回退；千条结果滚动流畅。
 
 ### Phase 5：MediaResultHost 全面接入
 
@@ -289,7 +289,7 @@ MediaDetailHost
 1. 新增 `MediaDetailHost`、`DetailDrawerShell`、`DetailPageShell`。
 2. 视频在线详情（抽屉 + 整页）、视频本地详情迁入双壳。
 3. 漫画章节详情 `ChapterView` 换 `DetailPageShell`；本地漫画详情 `LocalComicDetailPanel` 换 `DetailDrawerShell`（列表页保留轻量 context 快速预览）。
-4. 交互统一：单击开抽屉、双击/「完整详情 →」进整页、`⛶ 放大` 进 `PopoutPlayerWindow`。
+4. 交互统一：单击开抽屉、双击/「完整详情 →」进整页、`▣ 小窗` 经 `OnlineVideoPreviewPlayer.EnterMiniWindow()` 进独立置顶窗口。
 
 **验收**：详情返回、标题截断、主按钮位置一致；有流视频抽屉自动起播；返回不污染列表筛选状态；阅读历史不回退。
 
@@ -325,7 +325,7 @@ MediaDetailHost
           超过一页 / 超过 1000 条
 ```
 
-关键链路（每阶段必测）：**视频：搜索 → 单击抽屉 → 双击整页 → 三播放器接力 → 小窗 → 返回列表抽屉态恢复**；**漫画：搜索 → 详情 → 阅读 → 返回 → 筛选状态保留**。
+关键链路（每阶段必测）：**视频：搜索 → 单击抽屉 → 双击整页 → 侧栏/整页接力 → 小窗进出（进度不丢） → 返回列表抽屉态恢复**；**漫画：搜索 → 详情 → 阅读 → 返回 → 筛选状态保留**。
 
 ---
 

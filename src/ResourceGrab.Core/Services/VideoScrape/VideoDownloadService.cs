@@ -21,7 +21,11 @@ public sealed record VideoDownloadRequest(
     string? Proxy = null,
     string DurationText = "",
     string MasterUrl = "",
-    string VariantLabel = "");
+    string VariantLabel = "",
+    /// <summary>指定落盘目录（短剧按「一部剧一个文件夹」传它）；null 表示用全局下载目录。</summary>
+    string? OutputDirectory = null,
+    /// <summary>任务分类标签（如 "shortdrama"），供下载页区分展示；null 表示普通视频。</summary>
+    string? Category = null);
 
 /// <summary>下载进度（Percent &lt; 0 表示总时长未知，仅上报已下载字节与速率；
 /// EtaSeconds &lt; 0 表示无法估算剩余时间）。</summary>
@@ -308,8 +312,11 @@ public sealed class VideoDownloadService
             throw new InvalidOperationException("未找到 ffmpeg，请先安装 FFmpeg 后再下载（视频库缩略图也依赖它）");
 
         var configuredDir = _downloadDirProvider?.Invoke();
-        var outputPath = BuildOutputPath(request.Number, request.Title,
-            string.IsNullOrEmpty(configuredDir) ? DefaultDownloadDir : configuredDir);
+        // 短剧等「按剧分文件夹」的场景直接指定目录，优先级高于全局下载目录
+        var targetDir = string.IsNullOrWhiteSpace(request.OutputDirectory)
+            ? (string.IsNullOrEmpty(configuredDir) ? DefaultDownloadDir : configuredDir)
+            : request.OutputDirectory!;
+        var outputPath = BuildOutputPath(request.Number, request.Title, targetDir);
         if (File.Exists(outputPath) && new FileInfo(outputPath).Length > 0)
         {
             _logger?.Info($"[VideoDownload] 已存在，跳过: {outputPath}");

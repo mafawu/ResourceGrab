@@ -4,16 +4,178 @@
              xmlns:fl="clr-namespace:FlyleafLib.Controls.WPF;assembly=FlyleafLib"
              xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
 
+    <UserControl.Resources>
+        <!-- 进度条：对齐设计稿 19 的 3px 细线。无可见滑块，hover/拖动时出现 7px 白点；
+             已完成段用强调蓝，未完成段用 20% 白。Track 的 Decrease/Increase 自动按 Value 分界。 -->
+        <Style x:Key="PlayerSeekSliderStyle" TargetType="Slider">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Height="24" Background="Transparent" SnapsToDevicePixels="True">
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="3" Background="#7C92FF" CornerRadius="2" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="12" Height="18" Background="Transparent" Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Background="Transparent">
+                                                    <!-- 透明 Thumb 会占 12px，若不补线会在填充/轨道之间留缺口；
+                                                         左半强调色 + 右半轨道色，正好接上两侧。 -->
+                                                    <Border Height="3" CornerRadius="2">
+                                                        <Border.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                <GradientStop Color="#7C92FF" Offset="0" />
+                                                                <GradientStop Color="#7C92FF" Offset="0.5" />
+                                                                <GradientStop Color="#33FFFFFF" Offset="0.5" />
+                                                                <GradientStop Color="#33FFFFFF" Offset="1" />
+                                                            </LinearGradientBrush>
+                                                        </Border.Background>
+                                                    </Border>
+                                                    <Ellipse x:Name="SeekDot" Width="7" Height="7"
+                                                             Fill="#F2FFFFFF" Opacity="0" />
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="SeekDot" Property="Opacity" Value="1" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsDragging" Value="True">
+                                                        <Setter TargetName="SeekDot" Property="Opacity" Value="1" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False" IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="3" Background="#33FFFFFF" CornerRadius="2" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 竖屏音量浮层：3px 竖向轨道 + 强调色填充，和进度条同一套视觉语言 -->
+        <Style x:Key="PlayerVolumeSliderStyle" TargetType="Slider">
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="86" />
+            <Setter Property="Orientation" Value="Vertical" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Width="26" Height="86" Background="Transparent" SnapsToDevicePixels="True">
+                            <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="False"
+                                   HorizontalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Width="3" Background="#7C92FF" CornerRadius="1.5" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width="10" Height="10" Focusable="False">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Width="10" Height="10" Background="#F2FFFFFF"
+                                                        CornerRadius="5" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False" IsTabStop="False">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Width="3" Background="#33FFFFFF" CornerRadius="1.5" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 小窗顶栏按钮：视频画面上的深色半透明条，hover 只提亮背景 -->
+        <Style x:Key="PlayerOverlayTextButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#F2FFFFFF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="Margin" Value="2,0,0,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontFamily="{TemplateBinding FontFamily}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <!--
       在线视频预览/全片播放器（源无关）：吃 OnlineVideoDetail 的 StreamUrl + Referer 契约。
       FlyleafHost 经 DirectComposition 直接进 DWM 合成，无空域问题：
       覆盖层可放任意位置、鼠标事件正常、滚动跟随裁剪均由 WPF 处理。
+
+      小窗模式复用同一个 Player：FlyleafHost.IsAttached=false 只是把 Surface（视频画面）
+      与 Overlay（控制条）从页面搬到独立置顶窗口，解码/网络连接原样保留，进入/退出都不重连。
     -->
     <Grid x:Name="PlayerRoot" Background="#FF101418"
           MouseEnter="PlayerRoot_MouseEnter" MouseMove="PlayerRoot_MouseMove" MouseLeave="PlayerRoot_MouseLeave">
         <!-- 播放器宿主：非播放态折叠，避免黑块挡住海报 -->
         <fl:FlyleafHost x:Name="VideoHost" Visibility="Collapsed">
-            <Grid>
+            <Grid x:Name="VideoContent" Background="Transparent"
+                  MouseEnter="VideoContent_MouseEnter" MouseMove="VideoContent_MouseMove"
+                  MouseLeave="VideoContent_MouseLeave">
                 <!-- 加载态 -->
                 <Grid x:Name="LoadingLayer" Background="#E6101418" Visibility="Collapsed">
                     <controls:LoadingIndicator VerticalAlignment="Center" HorizontalAlignment="Center"
@@ -22,9 +184,10 @@
 
                 <!-- 错误态 -->
                 <Grid x:Name="ErrorLayer" Background="#E6101418" Visibility="Collapsed">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="播放失败，视频可能已下架或网络受限" FontSize="12"
-                                   Foreground="#B3FFFFFF" HorizontalAlignment="Center" />
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="520">
+                        <TextBlock x:Name="ErrorText" Text="播放失败，视频可能已下架或网络受限" FontSize="12"
+                                   Foreground="#B3FFFFFF" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" TextAlignment="Center" />
                         <Button Content="重试" Style="{StaticResource LibraryActionButtonStyle}"
                                 Click="Retry_Click" HorizontalAlignment="Center" Margin="0,10,0,0" />
                     </StackPanel>
@@ -36,15 +199,29 @@
                                                RingSize="34" Foreground="#CCFFFFFF" />
                 </Grid>
 
-                <!-- 底部控制条：暂停/继续 + 当前时间 + 进度滑条 + 总时长 + 画质 + 静音 + 音量 + 停止
+                <!-- 底部控制条：播放/继续 + 时间 + 进度 + 画质 + 音量 + 短剧选集/上下集/倍速/全屏 + 小窗/设置/停止
                      （播放/暂停态显示，5 秒无操作自动隐藏） -->
-                <Border x:Name="ControlBar" VerticalAlignment="Bottom" Background="#99000000"
+                <Border x:Name="ControlBar" VerticalAlignment="Bottom"
                         Padding="12,8" Visibility="Collapsed" MouseMove="ControlBar_MouseMove">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
+                            <GradientStop Color="#E604070C" Offset="0" />
+                            <GradientStop Color="#0004070C" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -78,18 +255,35 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <TextBlock x:Name="CurrentTimeText" Grid.Column="1" Text="0:00" FontSize="12"
-                                   FontWeight="SemiBold" Foreground="#F2FFFFFF"
-                                   VerticalAlignment="Center" Margin="10,0,10,0" />
-                        <Slider x:Name="SeekSlider" Grid.Column="2" Minimum="0" Maximum="100"
-                                VerticalAlignment="Center" ToolTip="拖动跳转进度"
+                        <TextBlock x:Name="CurrentTimeText" Grid.Column="1" Text="0:00" FontSize="10.5"
+                                   FontFamily="Consolas" FontWeight="SemiBold" Foreground="#F2FFFFFF"
+                                   VerticalAlignment="Center" Margin="8,0,2,0" />
+                        <TextBlock x:Name="DurationText" Grid.Column="2" Text="/ --:--" FontSize="10.5"
+                                   FontFamily="Consolas" Foreground="#6BFFFFFF"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <Slider x:Name="SeekSlider" Grid.Column="3" Minimum="0" Maximum="100"
+                                Style="{StaticResource PlayerSeekSliderStyle}"
+                                VerticalAlignment="Center"
+                                ToolTip="点击或拖动跳转进度"
+                                IsMoveToPointEnabled="True"
+                                PreviewMouseLeftButtonDown="SeekSlider_PreviewMouseLeftButtonDown"
                                 ValueChanged="SeekSlider_ValueChanged"
                                 Thumb.DragStarted="SeekSlider_DragStarted"
                                 Thumb.DragCompleted="SeekSlider_DragCompleted" />
-                        <TextBlock x:Name="DurationText" Grid.Column="3" Text="--:--" FontSize="12"
-                                   Foreground="#B3FFFFFF" VerticalAlignment="Center" Margin="10,0,0,0" />
+
+                        <!-- 短剧专属：上一集 / 下一集 / 选集（默认隐藏，ConfigureForDrama 打开） -->
+                        <Button x:Name="PrevEpisodeButton" Grid.Column="4" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="‹ 上一集" FontSize="10.5" Click="PrevEpisode_Click"
+                                ToolTip="上一集" Visibility="Collapsed" />
+                        <Button x:Name="NextEpisodeButton" Grid.Column="5" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="下一集 ›" FontSize="10.5" Click="NextEpisode_Click"
+                                ToolTip="下一集" Visibility="Collapsed" />
+                        <Button x:Name="EpisodeListButton" Grid.Column="6" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="选集" FontSize="10.5" Click="EpisodeList_Click"
+                                ToolTip="展开选集" Visibility="Collapsed" />
+
                         <!-- 画质：点击弹出档位菜单；有多档时才显示，文字为当前档位 -->
-                        <Button x:Name="QualityButton" Grid.Column="4" MinWidth="40" Height="32"
+                        <Button x:Name="QualityButton" Grid.Column="7" MinWidth="40" Height="32"
                                 Background="Transparent" BorderThickness="0"
                                 Click="QualityButton_Click" ToolTip="切换画质" Visibility="Collapsed"
                                 Margin="10,0,0,0">
@@ -114,9 +308,10 @@
                         </Button>
 
                         <!-- 静音 / 取消静音：矢量图标随状态切换（不用 emoji，避免被彩色字形渲染） -->
-                        <Button x:Name="MuteToggleButton" Grid.Column="5" Width="32" Height="32"
+                        <Button x:Name="MuteToggleButton" Grid.Column="8" Width="32" Height="32"
                                 Background="Transparent" BorderThickness="0"
-                                Click="MuteToggle_Click" ToolTip="静音 / 取消静音" Margin="4,0,0,0">
+                                Click="MuteToggle_Click" ToolTip="静音 / 取消静音" Margin="4,0,0,0"
+                                MouseEnter="VolumeHover_MouseEnter" MouseLeave="VolumeHover_MouseLeave">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">
                                     <Border x:Name="Bd" Background="{TemplateBinding Background}"
@@ -145,13 +340,59 @@
                         </Button>
 
                         <!-- 音量滑条：0-100，跨会话记住 -->
-                        <Slider x:Name="VolumeSlider" Grid.Column="6" Width="70" Minimum="0" Maximum="100"
+                        <Slider x:Name="VolumeSlider" Grid.Column="9" Width="70" Minimum="0" Maximum="100"
                                 VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="音量"
                                 ValueChanged="VolumeSlider_ValueChanged"
                                 Thumb.DragCompleted="VolumeSlider_DragCompleted" />
 
+                        <!-- 画面比例：自动识别竖/横屏；点击手动切换，设置菜单可恢复自动 -->
+                        <Button x:Name="RatioButton" Grid.Column="10" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="竖屏" FontSize="10.5" Click="RatioButton_Click"
+                                ToolTip="切换播放器横/竖屏比例" Visibility="Collapsed" />
+
+                        <!-- 设置：页面全屏 / 电脑全屏 / 小窗播放（短剧专属） -->
+                        <Button x:Name="SettingsButton" Grid.Column="11" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="⚙" FontFamily="Segoe UI Symbol" FontSize="13"
+                                Click="SettingsButton_Click" ToolTip="播放设置" Visibility="Collapsed" />
+
+                        <!-- 倍速：文字按钮 + 档位菜单（短剧专属） -->
+                        <Button x:Name="SpeedButton" Grid.Column="12" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="1.0x" FontSize="10.5" Click="SpeedButton_Click"
+                                ToolTip="播放速度" Visibility="Collapsed" />
+
+                        <!-- 页面全屏（短剧专属，隐藏侧栏/标题/简介让播放区铺满） -->
+                        <Button x:Name="PageFullScreenButton" Grid.Column="13" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                Content="全屏" FontSize="10.5" Click="PageFullScreenButton_Click"
+                                ToolTip="页面全屏" Visibility="Collapsed" />
+
+                        <!-- 小窗：同一个播放器搬到独立置顶窗口，不重连、进度连续 -->
+                        <Button x:Name="MiniButton" Grid.Column="14" Width="32" Height="32"
+                                Background="Transparent" BorderThickness="0"
+                                Click="MiniButton_Click" ToolTip="小窗播放（置顶、可拖动缩放）"
+                                Margin="8,0,0,0" Visibility="Collapsed">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                            CornerRadius="8" SnapsToDevicePixels="True">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#4DFFFFFF" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Path Data="{StaticResource IconMiniWindow}" Stroke="White" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Stretch="Uniform" Width="16" Height="16" />
+                        </Button>
+
                         <!-- 停止：白色图标 -->
-                        <Button x:Name="StopButton" Grid.Column="7" Width="32" Height="32"
+                        <Button x:Name="StopButton" Grid.Column="15" Width="32" Height="32"
                                 Background="Transparent" BorderThickness="0"
                                 FontFamily="Segoe UI Symbol"
                                 Foreground="White" Content="■" Margin="10,0,0,0" Click="StopButton_Click" ToolTip="停止播放">
@@ -177,12 +418,66 @@
                         </Button>
                     </Grid>
                 </Border>
+
+                <!-- 小窗顶栏：标题 + 置顶 + 返回页面 + 关闭；随控制条一起 5 秒自动隐藏，
+                     拖动条上空白处即可移动小窗（FlyleafHost.DetachedDragMove） -->
+                <Border x:Name="MiniBar" Panel.ZIndex="20" VerticalAlignment="Top" Height="34"
+                        Background="#CC0B0E14" Visibility="Collapsed" MouseMove="ControlBar_MouseMove">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <Path Data="{StaticResource IconMiniWindow}" Stroke="#B3FFFFFF"
+                                  StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" Stretch="Uniform" Width="13" Height="13" />
+                            <TextBlock x:Name="MiniTitleText" Text="小窗播放" Margin="6,0,0,0"
+                                       FontSize="11.5" FontWeight="SemiBold" Foreground="#F2FFFFFF"
+                                       VerticalAlignment="Center" MaxWidth="200"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="MiniEpisodeText" Margin="7,0,0,0" FontSize="10"
+                                       Foreground="#99FFFFFF" VerticalAlignment="Center"
+                                       Visibility="Collapsed" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" Margin="0,0,6,0">
+                            <Button x:Name="MiniPinButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                    Content="置顶" Click="MiniPin_Click" ToolTip="置顶 / 取消置顶" />
+                            <Button x:Name="MiniReturnButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                    Content="返回页面" Click="MiniReturn_Click"
+                                    ToolTip="回到页面继续播放（进度不丢）" />
+                            <Button x:Name="MiniCloseButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                    Content="✕" Click="MiniClose_Click"
+                                    ToolTip="关闭小窗并回到页面" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
         </fl:FlyleafHost>
 
+        <!-- 小窗播放时页面占位：视频画面已经搬到独立窗口，这里保留一个返回入口 -->
+        <Grid x:Name="MiniPlaceholder" Background="#FF101418" Visibility="Collapsed">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Path Data="{StaticResource IconMiniWindow}" Stroke="#80FFFFFF" StrokeThickness="1.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Stretch="Uniform" Width="34" Height="34" HorizontalAlignment="Center" />
+                <TextBlock Text="正在小窗播放" FontSize="14" FontWeight="SemiBold"
+                           Foreground="#E6FFFFFF" HorizontalAlignment="Center" Margin="0,12,0,0" />
+                <TextBlock Text="画面在独立置顶窗口中，进度不会中断" FontSize="11.5"
+                           Foreground="#80FFFFFF" HorizontalAlignment="Center" Margin="12,5,12,0"
+                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280" />
+                <Button Content="回到页面" Style="{StaticResource LibraryActionButtonStyle}"
+                        Click="MiniReturn_Click" HorizontalAlignment="Center" Margin="0,14,0,0" />
+            </StackPanel>
+        </Grid>
+
         <!-- 海报占位 + 播放大按钮（空闲态）：封面全亮显示，按钮浮于其上不压暗画面 -->
         <Grid x:Name="PosterLayer">
-            <Image x:Name="PosterImage" Stretch="Uniform" Opacity="1" />
+            <!-- 海报兜底层：调用方给了 PosterFallbackBrush 且海报解不出来时才显示（短剧封面 CDN 返回加密字节） -->
+                <Border x:Name="PosterFallback" Visibility="Collapsed">
+                    <!-- 左下角水印式首字：中央被播放键占着，放中间会撞在一起 -->
+                    <TextBlock x:Name="PosterFallbackLabel" FontSize="64" FontWeight="Bold" Foreground="#2EFFFFFF"
+                               HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                               Margin="26,0,0,22" IsHitTestVisible="False" />
+                </Border>
+                <Image x:Name="PosterImage" Stretch="Uniform" Opacity="1" />
             <StackPanel x:Name="PlayHost" VerticalAlignment="Center" HorizontalAlignment="Center"
                         Cursor="Hand" MouseLeftButtonUp="PlayHost_Click">
                 <Border Width="64" Height="64" CornerRadius="999"
@@ -193,5 +488,28 @@
                 </Border>
             </StackPanel>
         </Grid>
+
+        <!-- 右上角来源水印（短剧页显示频道名；小窗里隐藏）。放在播放器外层，
+             空闲态海报上也能看到，不会随 FlyleafHost 折叠。 -->
+        <TextBlock x:Name="SourceWatermark" Panel.ZIndex="5" HorizontalAlignment="Right" VerticalAlignment="Top"
+                   Margin="0,12,16,0" FontSize="10.5" Foreground="#73FFFFFF"
+                   IsHitTestVisible="False" Visibility="Collapsed" />
+
+        <!-- 竖屏紧凑控制条：悬浮音量图标时向上弹出竖向音量条。Popup 避免被控制条高度裁切。 -->
+        <Popup x:Name="VolumePopup" Placement="Top" StaysOpen="True" AllowsTransparency="True"
+               PopupAnimation="Fade" VerticalOffset="-6">
+            <Border Background="#F20B0E14" BorderBrush="#33FFFFFF" BorderThickness="1"
+                    CornerRadius="10" Padding="5,8"
+                    MouseEnter="VolumePopup_MouseEnter" MouseLeave="VolumePopup_MouseLeave">
+                <StackPanel>
+                    <Slider x:Name="VolumeFlyoutSlider" Style="{StaticResource PlayerVolumeSliderStyle}"
+                            Minimum="0" Maximum="100" IsMoveToPointEnabled="True" ToolTip="音量"
+                            ValueChanged="VolumeFlyoutSlider_ValueChanged"
+                            Thumb.DragCompleted="VolumeFlyoutSlider_DragCompleted" />
+                    <TextBlock x:Name="VolumePopupText" Text="100%" FontSize="9.5" Foreground="#CCFFFFFF"
+                               HorizontalAlignment="Center" Margin="0,5,0,0" />
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </UserControl>

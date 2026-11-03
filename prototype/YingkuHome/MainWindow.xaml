@@ -1,0 +1,140 @@
+<Window x:Class="YingkuHome.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:YingkuHome.Controls"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="抓资源 · 首页原型"
+        Width="1600" Height="980"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanResize"
+        Background="{StaticResource AppBgBrush}"
+        FontFamily="{StaticResource UiFont}"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        KeyDown="Window_KeyDown">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid Background="{StaticResource AppBgBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ================= header ================= -->
+        <Grid Grid.Row="0" Background="{StaticResource AppBgBrush}"
+              MouseLeftButtonDown="Header_MouseLeftButtonDown">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="40,0,0,0">
+                <Canvas Width="22" Height="22" VerticalAlignment="Center">
+                    <Polygon Points="3,20 7,3 11,3 7,20" Fill="#F2F5FA" />
+                    <Polygon Points="10,20 14,3 18,3 14,20" Fill="#6E86FF" />
+                </Canvas>
+
+                <TextBlock Text="抓资源" FontSize="15" FontWeight="SemiBold" Margin="10,1,0,0"
+                           VerticalAlignment="Center" Foreground="#F2F5FA" />
+
+                <StackPanel Orientation="Horizontal" Margin="28,0,0,0" VerticalAlignment="Center">
+                    <RadioButton Style="{StaticResource NavPill}" Content="首页" IsChecked="True" />
+                    <RadioButton Style="{StaticResource NavPill}" Content="影片" Margin="4,0,0,0" />
+                    <RadioButton Style="{StaticResource NavPill}" Content="演员" Margin="4,0,0,0" />
+                    <RadioButton Style="{StaticResource NavPill}" Content="系列" Margin="4,0,0,0" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,40,0">
+                <Border Width="300" Height="36" CornerRadius="10" Background="#0F131B"
+                        BorderBrush="#262D3B" BorderThickness="1" VerticalAlignment="Center">
+                    <Grid Margin="12,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                   Foreground="#6B7488" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="番号、标题、演员、标签" FontSize="12.5"
+                                   Foreground="#5F6A7D" VerticalAlignment="Center" Margin="9,0,0,0" />
+                    </Grid>
+                </Border>
+
+                <Border Width="36" Height="36" CornerRadius="10" Background="#16202E"
+                        BorderBrush="#24303F" BorderThickness="1" Margin="12,0,0,0">
+                    <TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" FontSize="15"
+                               Foreground="#9FB6D4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- ================= page ================= -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <controls:HeroBanner x:Name="Hero" Height="490" />
+
+                <Grid Margin="40,26,40,0">
+                    <TextBlock Text="最近播放" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Content="查看全部  →" Style="{StaticResource SectionAction}"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+
+                <ScrollViewer x:Name="RecentScroller" Margin="40,12,0,0"
+                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              PreviewMouseWheel="Row_PreviewMouseWheel">
+                    <Border Padding="0,10,0,14">
+                        <ItemsControl ItemsSource="{Binding RecentItems}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:MediaCard Item="{Binding}" Loaded="Card_Loaded"
+                                                        Activated="Card_Activated" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </ScrollViewer>
+
+                <Grid Margin="40,26,40,0">
+                    <TextBlock Text="最近加入" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Content="查看全部  →" Style="{StaticResource SectionAction}"
+                            HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+
+                <ScrollViewer x:Name="AddedScroller" Margin="40,12,0,0"
+                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                              PreviewMouseWheel="Row_PreviewMouseWheel">
+                    <Border Padding="0,10,0,14">
+                        <ItemsControl ItemsSource="{Binding AddedItems}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <controls:MediaCard Item="{Binding}" Loaded="Card_Loaded"
+                                                        Activated="Card_Activated" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </ScrollViewer>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

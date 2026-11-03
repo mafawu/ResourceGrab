@@ -16,6 +16,8 @@ using ResourceGrab.App.ViewModels;
 using ResourceGrab.App.Views;
 using ResourceGrab.App.Shell;
 using ResourceGrab.App.Shell.Providers;
+using ResourceGrab.Core.Services.ShortDrama;
+using ResourceGrab.Core.Sources.ShortDrama;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Services;
@@ -48,6 +50,14 @@ public partial class MainWindow : Window
     private UserControl? _lastNovelContent;
     private UserControl? _lastVideoContent;
     private UserControl? _lastPhotobookContent;
+
+    // —— 短剧 ——
+    private ShortDramaBrowseView? _dramaBrowseView;
+    private ShortDramaDetailView? _dramaDetailView;
+    private ShortDramaLocalView? _dramaLocalView;
+    private UserControl? _lastDramaContent;
+    /// <summary>详情页自己的返回目标（进入详情前的列表/搜索/本地页）；与 Tab 恢复用的 _lastDramaContent 分开。</summary>
+    private UserControl? _dramaBackTarget;
     private NovelSearchPanel? _novelSearchPanel;
     private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
@@ -226,6 +236,7 @@ public partial class MainWindow : Window
     private bool IsNovelMode => PageHost != null && (PageHost.Content is NovelLocalView || PageHost.Content is NovelReaderView);
     private bool IsVideoMode => PageHost != null && PageHost.Content is VideoView;
     private bool IsPhotobookMode => PageHost != null && PageHost.Content is ResourceGrab.App.Views.PhotobookBrowseView;
+    private bool IsDramaMode => PageHost?.Content is ShortDramaBrowseView or ShortDramaDetailView or ShortDramaLocalView;
 
     /// <summary>一级类型的中文名，用于顶栏与源下拉文案。</summary>
     private static string KindLabel(ResourceKind kind) => kind switch
@@ -233,6 +244,7 @@ public partial class MainWindow : Window
         ResourceKind.Video => "视频",
         ResourceKind.Novel => "小说",
         ResourceKind.Photobook => "写真",
+        ResourceKind.ShortDrama => "短剧",
         _ => "漫画",
     };
 
@@ -265,11 +277,12 @@ public partial class MainWindow : Window
             if (MangaTopActions != null) MangaTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Manga) ? Visibility.Visible : Visibility.Collapsed;
             if (VideoTopActions != null) VideoTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Video) ? Visibility.Visible : Visibility.Collapsed;
             if (PhotobookTopActions != null) PhotobookTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.Photobook) ? Visibility.Visible : Visibility.Collapsed;
+            if (DramaTopActions != null) DramaTopActions.Visibility = (!isNovel && !isDownload && _currentKind == ResourceKind.ShortDrama) ? Visibility.Visible : Visibility.Collapsed;
             if (DownloadTopActions != null) DownloadTopActions.Visibility = isDownload ? Visibility.Visible : Visibility.Collapsed;
             // 下载页没有侧栏，隐藏侧栏开关
             if (PanelToggleButton != null) PanelToggleButton.Visibility = isDownload ? Visibility.Collapsed : Visibility.Visible;
 
-            // 漫画与写真都是多源站点，需要源下拉；视频/小说当前无源。
+            // 漫画与写真都是多源站点，需要源下拉；视频/短剧/小说当前无源（短剧是单源，线路在页面内换）。
             var supportsSourceSwitcher = _currentKind is ResourceKind.Manga or ResourceKind.Photobook;
             if (SourceSwitcherLabel != null) SourceSwitcherLabel.Text = $"{KindLabel(_currentKind)}源";
             if (SourceBox != null) SourceBox.ToolTip = $"当前{KindLabel(_currentKind)}源（影响搜索 / 排行 / 分类 / 收藏）";
@@ -304,6 +317,7 @@ public partial class MainWindow : Window
             if (IsNovelMode) _lastNovelContent = leaving;
             else if (IsVideoMode) _lastVideoContent = leaving;
             else if (IsPhotobookMode) _lastPhotobookContent = leaving;
+            else if (IsDramaMode) _lastDramaContent = leaving;
             else _lastMangaContent = leaving;
         }
         _currentKind = kind;
@@ -337,6 +351,7 @@ public partial class MainWindow : Window
         if (IsNovelMode && kind == ResourceKind.Manga) { ExitNovelMode(); return; }
         if (IsVideoMode && kind == ResourceKind.Manga) { ExitVideoMode(); return; }
         if (IsPhotobookMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
+        if (IsDramaMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
         if (kind == ResourceKind.Novel && !IsNovelMode)
         {
             // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
@@ -358,6 +373,22 @@ public partial class MainWindow : Window
                 _navigator.GoTo(PhotobookNavSectionProvider.HomeRouteId);
             return;
         }
+        if (kind == ResourceKind.ShortDrama && !IsDramaMode)
+        {
+            // 首次进入短剧走推荐页；非首次先恢复导航态（页签/右栏），
+            // 再把上次离开时的内容覆盖回来——在线详情页不在路由里，只按路由恢复会退回推荐列表。
+            var savedDrama = _lastDramaContent;
+            if (!_navigator.RestoreLast(MediaKind.ShortDrama))
+                _navigator.GoTo(ShortDramaNavSectionProvider.RecommendRouteId);
+            if (savedDrama is not null && !ReferenceEquals(PageHost?.Content, savedDrama))
+            {
+                SetPage(savedDrama);
+                _lastPage = savedDrama;
+                if (savedDrama is ShortDramaLocalView local) local.OnShown();
+            }
+            UpdateTopBarForKind();
+            return;
+        }
         UpdateTopBarForKind();
     }
 
@@ -369,6 +400,7 @@ public partial class MainWindow : Window
         ResourceKind.Video => MediaKind.Video,
         ResourceKind.Novel => MediaKind.Novel,
         ResourceKind.Photobook => MediaKind.Photobook,
+        ResourceKind.ShortDrama => MediaKind.ShortDrama,
         _ => MediaKind.Manga,
     };
 
@@ -377,6 +409,7 @@ public partial class MainWindow : Window
         ResourceKind.Video => "video.online",
         ResourceKind.Novel => "novel.index",
         ResourceKind.Photobook => PhotobookNavSectionProvider.HomeRouteId,
+        ResourceKind.ShortDrama => ShortDramaNavSectionProvider.RecommendRouteId,
         _ => "manga.search",
     };
 
@@ -399,6 +432,7 @@ public partial class MainWindow : Window
             ResourceKind.Video => new VideoNavSectionProvider(),
             ResourceKind.Novel => new NovelNavSectionProvider(),
             ResourceKind.Photobook => new PhotobookNavSectionProvider(_sourceManager.Current),
+            ResourceKind.ShortDrama => new ShortDramaNavSectionProvider(),
             _ => new MangaNavSectionProvider(_sourceManager.Current.Info),
         };
         NavRailControl.Sections = provider.GetSections();
@@ -449,13 +483,15 @@ public partial class MainWindow : Window
                 _syncingKindPill = false;
             }
         }
-        if (route.RouteId.StartsWith("photobook."))
-        {
-            // NavRail 的分组是异步重建的（RadioButton 容器在布局期生成），
-            // 需等渲染之后再同步选中态，否则会被 Rebuild 的"默认选第一项"覆盖
-            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
-                new Action(() => NavRailControl.SelectItem(route.RouteId)));
-        }
+        // NavRail 的分组是异步重建的（RadioButton 容器在布局期生成），
+        // 需等渲染之后再同步选中态，否则会被 Rebuild 的“默认选第一项”覆盖。
+        // 不能只给写真做：短剧的频道/上新/榜单/本地、视频子页等同样需要按当前路由回选。
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(() =>
+            {
+                if (_currentRoute is { } currentRoute)
+                    NavRailControl.SelectItem(currentRoute.RouteId);
+            }));
         UpdateTopBarForKind();
     }
 
@@ -598,10 +634,40 @@ public partial class MainWindow : Window
             return _videoView!;
         });
 
+        // 短剧：单源多入口，视图单实例 + ShowMode 切来源（与 VideoView.SwitchNav 同构）
+        _navigator.Register(ShortDramaNavSectionProvider.RecommendRouteId, () =>
+        {
+            ShowDramaBrowse(DramaBrowseMode.Recommend);
+            return _dramaBrowseView!;
+        });
+        _navigator.Register(ShortDramaNavSectionProvider.NewestRouteId, () =>
+        {
+            ShowDramaBrowse(DramaBrowseMode.Newest);
+            return _dramaBrowseView!;
+        });
+        _navigator.Register(ShortDramaNavSectionProvider.RankRouteId, () =>
+        {
+            ShowDramaBrowse(DramaBrowseMode.Rank);
+            return _dramaBrowseView!;
+        });
+        foreach (var (slug, name) in ShortDramaNavSectionProvider.Channels)
+        {
+            var channelSlug = slug;
+            var channelName = name;
+            _navigator.Register(ShortDramaNavSectionProvider.ChannelRouteId(channelSlug), () =>
+            {
+                ShowDramaBrowse(DramaBrowseMode.Channel, channelSlug, channelName);
+                return _dramaBrowseView!;
+            });
+        }
+        _navigator.Register(ShortDramaNavSectionProvider.LocalRouteId, () =>
+        {
+            ShowDramaLocal();
+            return _dramaLocalView!;
+        });
+
         // 下载页：跨媒体共用一个视图，独立 MediaKind（返回栈与各媒体的「最近路由」互不干扰）
         _navigator.Register("download.page", () => DownloadPageView, new SidebarPolicy(SidebarMode.Hidden));
-
-        // 小说
         _navigator.Register("novel.index", () => { OpenNovelLocal(); return _novelView!; },
             new SidebarPolicy(SidebarMode.Filter, "filter.novel"));
         _navigator.Register("novel.reader", () => { NovelReaderViewInstance.LoadFile(""); return NovelReaderViewInstance; });
@@ -618,6 +684,7 @@ public partial class MainWindow : Window
     {
         if (PageHost.Content is UserControl current && !ReferenceEquals(current, page))
         {
+            if (current is ShortDramaDetailView oldDrama) oldDrama.ExitPageFocus();
             _lastPage = current;
         }
         // 离开视频页时清掉内置详情栏状态，避免右栏插槽一直被隐藏
@@ -923,6 +990,7 @@ public partial class MainWindow : Window
             if (IsNovelMode) _lastNovelContent = leaving;
             else if (IsVideoMode) _lastVideoContent = leaving;
             else if (IsPhotobookMode) _lastPhotobookContent = leaving;
+            else if (IsDramaMode) _lastDramaContent = leaving;
             else _lastMangaContent = leaving;
             _downloadReturnKind = _currentKind;
         }
@@ -937,6 +1005,7 @@ public partial class MainWindow : Window
         ResourceKind.Video => _lastVideoContent,
         ResourceKind.Novel => _lastNovelContent,
         ResourceKind.Photobook => _lastPhotobookContent,
+        ResourceKind.ShortDrama => _lastDramaContent,
         _ => _lastMangaContent,
     };
 
@@ -1186,6 +1255,116 @@ private void OpenNovelLocal()
     {
         KindMangaPill.IsChecked = true;
         RestoreMangaContent();
+    }
+
+    // ====================== 短剧 ======================
+
+    private ShortDramaBrowseView DramaBrowseView
+    {
+        get
+        {
+            if (_dramaBrowseView is null)
+            {
+                _dramaBrowseView = new ShortDramaBrowseView();
+                // 卡片点击 → 详情页；悬停播放键同样进详情（详情页会自动取流播放）
+                _dramaBrowseView.OpenRequested += (_, summary) => OpenDramaDetail(summary);
+                _dramaBrowseView.PlayRequested += (_, summary) => OpenDramaDetail(summary);
+            }
+            return _dramaBrowseView;
+        }
+    }
+
+    private ShortDramaDetailView DramaDetailView
+    {
+        get
+        {
+            if (_dramaDetailView is null)
+            {
+                _dramaDetailView = new ShortDramaDetailView();
+                _dramaDetailView.BackRequested += (_, _) => BackFromDramaDetail();
+                _dramaDetailView.PageFocusChanged += (_, on) =>
+                {
+                    // 页面全屏：收起左侧导航，让播放区吃掉整行；退出时恢复
+                    LeftNavHost.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+                    if (!on) UpdateTopBarForKind();
+                };
+                _dramaDetailView.RelatedOpenRequested += (_, summary) => OpenDramaDetail(summary);
+            }
+            return _dramaDetailView;
+        }
+    }
+
+    private ShortDramaLocalView DramaLocalView
+    {
+        get
+        {
+            if (_dramaLocalView is null)
+            {
+                _dramaLocalView = new ShortDramaLocalView();
+                _dramaLocalView.OpenRequested += (_, local) => OpenDramaLocal(local);
+            }
+            return _dramaLocalView;
+        }
+    }
+
+    /// <summary>切换短剧列表来源（推荐/上新/榜单/频道）。</summary>
+    private void ShowDramaBrowse(DramaBrowseMode mode, string? scope = null, string? title = null)
+    {
+        _lastDramaContent = null;
+        LeftNavHost.Visibility = Visibility.Visible;
+        DramaBrowseView.ShowMode(mode, scope, title);
+        UpdateTopBarForKind();
+    }
+
+    private void ShowDramaLocal()
+    {
+        _lastDramaContent = null;
+        LeftNavHost.Visibility = Visibility.Visible;
+        DramaLocalView.OnShown();
+        UpdateTopBarForKind();
+    }
+
+    /// <summary>打开在线详情（不注册为独立路由：返回目标是列表页，用 _lastDramaContent 记录）。</summary>
+    private void OpenDramaDetail(ShortDramaSummary summary)
+    {
+        if (PageHost.Content is UserControl current && !ReferenceEquals(current, DramaDetailView))
+        {
+            _lastDramaContent = current;
+            _dramaBackTarget = current;
+        }
+        var view = DramaDetailView;
+        SetPage(view);
+        view.LoadAsync(summary);
+        UpdateTopBarForKind();
+    }
+
+    /// <summary>打开本地详情（离线播放）。</summary>
+    private void OpenDramaLocal(LocalDrama local)
+    {
+        if (PageHost.Content is UserControl current && !ReferenceEquals(current, DramaDetailView))
+        {
+            _lastDramaContent = current;
+            _dramaBackTarget = current;
+        }
+        var view = DramaDetailView;
+        SetPage(view);
+        view.LoadLocal(local);
+        UpdateTopBarForKind();
+    }
+
+    private void BackFromDramaDetail()
+    {
+        DramaDetailView.ExitPageFocus();
+        var target = _dramaBackTarget;
+        _dramaBackTarget = null;
+        if (target is not null && !ReferenceEquals(target, DramaDetailView))
+        {
+            SetPage(target);
+            _lastDramaContent = target;
+            return;
+        }
+        _lastDramaContent = null;
+        _navigator.GoTo(ShortDramaNavSectionProvider.RecommendRouteId);
     }
 
     /// <summary>恢复上次离开时的漫画页面（搜索/本地列表/阅读器等），保持状态不丢失。</summary>

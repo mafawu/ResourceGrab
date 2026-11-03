@@ -8,7 +8,10 @@ public enum MediaVisualKind
 {
     PortraitCover,
     WideThumb,
-    TextCover
+    TextCover,
+
+    /// <summary>短剧：4:5 竖版封面，评分/集数/角标压在封面上，标题与副信息在封面下方（无卡片底与描边外框）。</summary>
+    DramaCover
 }
 
 /// <summary>卡片上的徽标。</summary>
@@ -52,5 +55,6 @@ public abstract class MediaCardViewModel : ObservableObject
     public virtual ICommand? OpenCommand { get; set; }
     public virtual ICommand? PrimaryCommand { get; set; }
     public virtual ICommand? SecondaryCommand { get; set; }
+    public virtual ICommand? DownloadCommand { get; set; }
     public virtual ICommand? FavoriteCommand { get; set; }
 }

@@ -732,7 +732,8 @@ public sealed class MissAvSource : IVideoSource
     }
 
     /// <summary>
-    /// 解析磁力表格：每行 &lt;tr&gt; 含一条 magnet 链接（名称锚点）+ 体积 + 日期。
+    /// 解析磁力表格：每行 &lt;tr&gt; 含一条 magnet 链接（名称锚点）+ 体积 + 日期，
+    /// 名称单元格里还会跟「高清」「字幕」等角标 &lt;span&gt;（站点服务端渲染），一并取出发给界面。
     /// 整页范围内扫描含 magnet 的行并按 btih 去重；无表格时返回空。
     /// </summary>
     internal static List<OnlineMagnetLink> ParseMagnets(string html)
@@ -750,7 +751,15 @@ public sealed class MissAvSource : IVideoSource
                 Regex.Match(body, @"href=""magnet:[^""]*""[^>]*>([^<]*)</a>").Groups[1].Value.Trim());
             var size = Regex.Match(body, @"(\d+(?:\.\d+)?\s*(?:TB|GB|MB|KB))", RegexOptions.IgnoreCase).Groups[1].Value;
             var date = Regex.Match(body, @"(\d{4}-\d{2}-\d{2})").Groups[1].Value;
-            links.Add(new OnlineMagnetLink { Name = name, Size = size, Date = date, Url = url });
+
+            // 角标只在名称单元格里找，避免把后面操作列的文字当标记
+            var cellEnd = body.IndexOf("</td>", StringComparison.Ordinal);
+            var nameCell = cellEnd > 0 ? body[..cellEnd] : body;
+            var badges = Regex.Matches(nameCell, @"<span[^>]*>\s*([^<>]{1,12}?)\s*</span>")
+                .Select(m => WebUtility.HtmlDecode(m.Groups[1].Value));
+            var tags = MagnetTagHelper.MergeFromName(MagnetTagHelper.FromBadges(badges), name);
+
+            links.Add(new OnlineMagnetLink { Name = name, Size = size, Date = date, Url = url, Tags = tags });
         }
         return links;
     }

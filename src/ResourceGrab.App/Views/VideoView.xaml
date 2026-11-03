@@ -152,9 +152,14 @@
                                                 Margin="0,0,6,0" Click="OnlineDetailFavorite_Click" ToolTip="收藏（入库自动关联为本地收藏）">
                                             <TextBlock x:Name="OnlineDetailFavoriteHeart" Text="♡" FontSize="15" />
                                         </Button>
-                                        <Button x:Name="OnlineDetailPopoutButton" Style="{StaticResource IconButtonStyle}"
-                                                Content="⛶" Click="OnlineDetailPopout_Click"
-                                                ToolTip="放大播放（独立窗口）" Margin="0,0,6,0" Visibility="Collapsed" />
+                                        <Button x:Name="OnlineDetailMiniButton" Style="{StaticResource IconButtonStyle}"
+                                                Click="OnlineDetailMini_Click"
+                                                ToolTip="小窗播放（置顶、可拖动缩放）" Margin="0,0,6,0" Visibility="Collapsed">
+                                            <Path Data="{StaticResource IconMiniWindow}"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                  StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" />
+                                        </Button>
                                         <Button x:Name="OnlineDetailCloseButton" Style="{StaticResource IconButtonStyle}"
                                                 Content="✕" Click="OnlineDetailClose_Click"
                                                 ToolTip="关闭详情" />
@@ -255,6 +260,10 @@
 
                                 <!-- Tab 2：磁力列表（每条可复制，JAVDB 表格式：名称 | 体积 | 复制） -->
                                 <StackPanel x:Name="OnlineDetailTabMagnets" Margin="0,12,0,0" Visibility="Collapsed">
+                                    <CheckBox x:Name="MagnetSubtitleOnlyBox" Content="只看字幕"
+                                              Style="{StaticResource ModernCheckBoxStyle}" FontSize="12"
+                                              Margin="0,0,0,8" Visibility="Collapsed"
+                                              Checked="MagnetSubtitleOnly_Changed" Unchecked="MagnetSubtitleOnly_Changed" />
                                     <TextBlock x:Name="OnlineMagnetHint" Text="该影片暂无磁力链接" FontSize="12"
                                                Foreground="{DynamicResource TextSecondaryBrush}" />
                                     <StackPanel x:Name="OnlineMagnetListHost" />
@@ -311,9 +320,14 @@
                                         Margin="8,0,0,0" Click="OnlineFullFavorite_Click" ToolTip="收藏（入库自动关联为本地收藏）">
                                     <TextBlock x:Name="OnlineFullFavoriteHeart" Text="♡" FontSize="15" />
                                 </Button>
-                                <Button x:Name="OnlineFullPopoutButton" Style="{StaticResource IconButtonStyle}"
-                                        Content="⛶" Click="OnlineFullPopout_Click"
-                                        ToolTip="放大播放（独立窗口）" Margin="8,0,0,0" Visibility="Collapsed" />
+                                <Button x:Name="OnlineFullMiniButton" Style="{StaticResource IconButtonStyle}"
+                                        Click="OnlineFullMini_Click"
+                                        ToolTip="小窗播放（置顶、可拖动缩放）" Margin="8,0,0,0" Visibility="Collapsed">
+                                    <Path Data="{StaticResource IconMiniWindow}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                          StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round" Stretch="Uniform" Width="14" Height="14" />
+                                </Button>
                             </StackPanel>
                         </Grid>
 

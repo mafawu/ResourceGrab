@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>YingkuHome</AssemblyName>
+    <RootNamespace>YingkuHome</RootNamespace>
+    <StartupObject>YingkuHome.App</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\*.png" />
+  </ItemGroup>
+
+</Project>

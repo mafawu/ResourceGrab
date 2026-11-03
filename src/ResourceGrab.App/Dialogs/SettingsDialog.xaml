@@ -126,6 +126,8 @@
                                          Content="小说" Tag="{StaticResource IconNovel}" Checked="Nav_Checked" />
                             <RadioButton x:Name="VideoNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
                                          Content="视频" Tag="{StaticResource IconVideo}" Checked="Nav_Checked" />
+                            <RadioButton x:Name="DramaNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
+                                         Content="短剧" Tag="{StaticResource IconPlay}" Checked="Nav_Checked" />
                             <RadioButton x:Name="GeneralNavItem" Style="{StaticResource SettingsNavItemStyle}" GroupName="SettingsNav"
                                          Content="通用" Tag="{StaticResource IconLocal}" Checked="Nav_Checked" />
 
@@ -475,6 +477,71 @@
                                             </StackPanel>
                                         </Grid>
                                     </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- 短剧 -->
+                            <StackPanel x:Name="DramaPage" Visibility="Collapsed">
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="下载与本地库" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="短剧下载目录" />
+                                            <Grid Grid.Column="1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="DramaDownloadDirBox" Padding="8,6" VerticalAlignment="Center"
+                                                         ToolTip="短剧 mp4 / drama.json / 封面 的存放根目录；留空则用程序数据目录下的“短剧下载”。每部剧一个子文件夹。" />
+                                                <Button Grid.Column="1" Style="{StaticResource GhostButtonStyle}" Content="浏览…"
+                                                        Margin="8,0,0,0" Click="BrowseDramaDownloadDir_Click" />
+                                            </Grid>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="默认位置" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <TextBlock x:Name="DramaDefaultDirText" FontSize="12"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <Button Style="{StaticResource GhostButtonStyle}" Content="恢复默认"
+                                                        Margin="10,0,0,0" Padding="10,4" Click="ResetDramaDownloadDir_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="同时下载集数" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <TextBox x:Name="DramaConcurrencyBox" Padding="8,6" Width="70" HorizontalAlignment="Left" />
+                                                <TextBlock Text="1–4；短剧单集约 30–70 MB，并发越高越吃带宽（默认 2）"
+                                                           FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="150,*">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="追更自动下载" />
+                                            <CheckBox x:Name="DramaAutoDownloadBox" Grid.Column="1"
+                                                      Content="追剧中的剧集有新集时自动加入下载队列" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="线路" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,10">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="线路地址" />
+                                            <TextBox x:Name="DramaBaseUrlBox" Grid.Column="1" Padding="8,6"
+                                                     ToolTip="留空使用内置主站（https://xiguaai.net）。站点会轮换域名，失效时点短剧页左栏线路卡的刷新按钮，程序会读取官方发布页自动换线。" />
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource SettingHintStyle}"
+                                                   Text="站点域名会轮换。留空即可：程序先试上次成功的线路，再试官方发布页（/go-home/）里发现的线路。" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="账户" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <TextBlock Style="{StaticResource SettingHintStyle}" Margin="0"
+                                               Text="短剧的浏览与播放不需要登录；“追剧/收藏”按本地记录实现，不会向站点提交账号。" />
                                 </Border>
                             </StackPanel>
 

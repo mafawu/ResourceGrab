@@ -19,6 +19,9 @@ public class Config
     [JsonPropertyName("mangaSettings")] public MangaSettings Manga { get; set; } = new();
     [JsonPropertyName("videoPlayback")] public VideoPlaybackSettings VideoPlayback { get; set; } = new();
     [JsonPropertyName("generalSettings")] public GeneralSettings General { get; set; } = new();
+
+    /// <summary>短剧页设置（下载目录 / 线路 / 并发）。null 表示用户从未打开过短剧设置。</summary>
+    [JsonPropertyName("shortDrama")] public ShortDramaSettings? ShortDrama { get; set; }
 }
 
 public class TitleTranslateOptions
@@ -78,4 +81,43 @@ public sealed class GeneralSettings
     [JsonPropertyName("startupScan")] public bool StartupScan { get; set; } = true;
     [JsonPropertyName("cacheLimitMb")] public int CacheLimitMb { get; set; } = 1024;
     [JsonPropertyName("closeToTray")] public bool CloseToTray { get; set; }
+}
+
+/// <summary>
+/// 短剧页设置。
+/// <para>
+/// <see cref="DownloadDir"/> 留空表示用默认目录（<see cref="AppPaths.ShortDramaDownloadDir"/>，即 config\短剧下载）——
+/// 保持"便携"的默认体验，但又允许用户把它挪到容量更大的盘。
+/// </para>
+/// </summary>
+public sealed class ShortDramaSettings
+{
+    /// <summary>下载根目录；留空 = config\短剧下载。</summary>
+    [JsonPropertyName("downloadDir")] public string DownloadDir { get; set; } = "";
+
+    /// <summary>线路基址（如 https://xiguaai.net）；留空 = 内置默认主站。</summary>
+    [JsonPropertyName("baseUrl")] public string BaseUrl { get; set; } = "";
+
+    /// <summary>同时下载的集数上限（1–4）。短剧单集 30–70 MB，默认 2 以免把带宽吃满。</summary>
+    [JsonPropertyName("downloadConcurrency")] public int DownloadConcurrency { get; set; } = 2;
+
+    /// <summary>自动下载新集（追更）开关；默认关，P4 功能预留。</summary>
+    [JsonPropertyName("autoDownloadNewEpisodes")] public bool AutoDownloadNewEpisodes { get; set; }
+
+    /// <summary>解析生效的下载根目录（空/非法回退默认目录）。</summary>
+    public string ResolveDownloadDir() => ResolveDownloadDir(DownloadDir);
+
+    public static string ResolveDownloadDir(string? configured)
+    {
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            try
+            {
+                var full = Path.GetFullPath(configured.Trim());
+                if (!string.IsNullOrEmpty(full)) return full;
+            }
+            catch { /* 非法路径回退默认 */ }
+        }
+        return AppPaths.ShortDramaDownloadDir;
+    }
 }

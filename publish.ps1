@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Publish a framework-dependent single-file executable (win-x64).
 Target machine must have .NET 10 Desktop Runtime installed.
@@ -97,7 +97,8 @@ dotnet publish (Join-Path $root "src\ResourceGrab.App\ResourceGrab.App.csproj") 
 # 再拷贝发布产物（单文件 exe）。不删 config\。
 Remove-Item (Join-Path $output "*.dll"), (Join-Path $output "*.pdb"),
             (Join-Path $output "*.deps.json"), (Join-Path $output "*.runtimeconfig.json"),
-            (Join-Path $output "ResourceGrab.App.exe") -Force -ErrorAction SilentlyContinue
+            (Join-Path $output "ResourceGrab.App.exe"),
+            (Join-Path $output "createdump.exe") -Force -ErrorAction SilentlyContinue
 Get-ChildItem $staging -File -ErrorAction SilentlyContinue |
     Where-Object { $_.Extension -ne ".pdb" } |
     ForEach-Object { Copy-Item $_.FullName (Join-Path $output $_.Name) -Force }

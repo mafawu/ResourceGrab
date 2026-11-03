@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using ResourceGrab.App.Common;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Downloading;
+using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Services;
 using ResourceGrab.Core.Services.VideoScrape;
 
@@ -391,7 +392,7 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
                         var item = GetOrAddVideo(task);
                         item.SetStatus(TransferStatus.Failed, string.IsNullOrWhiteSpace(task.Error) ? "下载失败" : task.Error);
                         item.PercentText = "失败";
-                        item.Title = task.DownloadTitle ?? task.Number;
+                        item.Title = DisplayTitle(task);
                         item.Meta = BuildVideoMeta(task);
                         item.Sub = "";
                         break;
@@ -410,7 +411,7 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
                     {
                         var item = GetOrAddVideo(task);
                         item.SetStatus(TransferStatus.Running);
-                        item.Title = task.DownloadTitle ?? task.Number;
+                        item.Title = DisplayTitle(task);
                         item.Meta = BuildVideoMeta(task);
                         var percent = Math.Clamp(task.Completed, 0, 100);
                         item.SetProgress(percent, $"{percent}%");
@@ -423,7 +424,7 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
                     {
                         var item = GetOrAddVideo(task);
                         item.SetStatus(TransferStatus.Queued);
-                        item.Title = task.DownloadTitle ?? task.Number;
+                        item.Title = DisplayTitle(task);
                         item.Meta = BuildVideoMeta(task);
                         item.PercentText = "等待中";
                         item.Sub = "";
@@ -456,19 +457,29 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
                 task.DownloadMasterUrl ?? "",
                 task.DownloadVariantLabel ?? ""),
         };
-        item.Title = task.DownloadTitle ?? task.Number;
+        item.Title = DisplayTitle(task);
         _videoItems[task.Id] = item;
         CurrentItems.Insert(0, item);
         return item;
     }
 
+    /// <summary>短剧任务在下载页的显示名：剧名 + 集号（普通视频没有剧名，直接用标题）。</summary>
+    private static string DisplayTitle(VideoScrapeTask task)
+        => IsDramaTask(task)
+            ? $"{task.Number} · {task.DownloadTitle}".Trim(' ', '·')
+            : task.DownloadTitle ?? task.Number;
+
+    private static bool IsDramaTask(VideoScrapeTask task)
+        => string.Equals(task.DownloadCategory, "shortdrama", StringComparison.OrdinalIgnoreCase);
+
     private static string BuildVideoMeta(VideoScrapeTask task)
     {
         var done = VideoDownloadService.FormatSize(task.DownloadedBytes);
         var total = task.TotalBytes > 0 ? VideoDownloadService.FormatSize(task.TotalBytes) : "";
+        var kind = IsDramaTask(task) ? "短剧" : "视频";
         return string.IsNullOrEmpty(total) || done == total
-            ? $"视频 · {done}"
-            : $"视频 · {done} / {total}";
+            ? $"{kind} · {done}"
+            : $"{kind} · {done} / {total}";
     }
 
     private static string BuildVideoSub(VideoScrapeTask task)
@@ -642,6 +653,9 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
         string.IsNullOrWhiteSpace(_config.Current.VideoScraping?.VideoDownloadDir)
             ? Path.Combine(AppPaths.AppDataDir, "视频下载")
             : _config.Current.VideoScraping!.VideoDownloadDir;
+    /// <summary>短剧下载目录（与设置里「短剧下载目录」同源；留空即 config\短剧下载）。</summary>
+    public string ShortDramaDownloadDir
+        => ShortDramaSettings.ResolveDownloadDir(_config.Current.ShortDrama?.DownloadDir);
 
     // ====================== 基础设施 ======================
 

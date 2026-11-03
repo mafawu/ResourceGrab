@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FlyleafLib;
+using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaPlayer;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Common;
@@ -19,7 +20,7 @@ namespace ResourceGrab.App.Controls;
 /// 在线视频预览/全片播放器（源无关）：吃 OnlineVideoDetail 的 StreamUrl + Referer 契约。
 /// 基于 Flyleaf（FFmpeg/DirectComposition）：无空域问题，鼠标事件/滚动/裁剪全部走 WPF；
 /// Referer/UA 经 Demuxer.FormatOpt 直接透传给每个分片请求，不再需要 HLS 本地中继。
-/// 对外接口与旧 VLC 版一致，VideoView/Popout 零改动。
+/// 对外接口与旧 VLC 版一致，VideoView / 短剧页共用；小窗模式也在这里统一实现。
 /// </summary>
 public partial class OnlineVideoPreviewPlayer : UserControl
 {
@@ -34,6 +35,21 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         nameof(PosterUrl), typeof(string), typeof(OnlineVideoPreviewPlayer),
         new PropertyMetadata("", static (d, _) => ((OnlineVideoPreviewPlayer)d).UpdatePoster()));
 
+    /// <summary>海报缺失/解码失败时的兜底底色（null = 不显示兜底，保持原有纯黑行为）。</summary>
+    public static readonly DependencyProperty PosterFallbackBrushProperty = DependencyProperty.Register(
+        nameof(PosterFallbackBrush), typeof(Brush), typeof(OnlineVideoPreviewPlayer),
+        new PropertyMetadata(null, static (d, _) => ((OnlineVideoPreviewPlayer)d).UpdatePosterFallback()));
+
+    /// <summary>兜底层中间的字（一般是剧名首字）。</summary>
+    public static readonly DependencyProperty PosterFallbackTextProperty = DependencyProperty.Register(
+        nameof(PosterFallbackTextValue), typeof(string), typeof(OnlineVideoPreviewPlayer),
+        new PropertyMetadata("", static (d, _) => ((OnlineVideoPreviewPlayer)d).UpdatePosterFallback()));
+
+    /// <summary>当前视频宽高比（宽/高）；0 表示尚未得知，竖屏片 &lt; 1。</summary>
+    public static readonly DependencyProperty VideoAspectRatioProperty = DependencyProperty.Register(
+        nameof(VideoAspectRatio), typeof(double), typeof(OnlineVideoPreviewPlayer),
+        new PropertyMetadata(0d));
+
     public static readonly DependencyProperty ShowPlayButtonProperty = DependencyProperty.Register(
         nameof(ShowPlayButton), typeof(bool), typeof(OnlineVideoPreviewPlayer),
         new PropertyMetadata(false, static (d, _) => ((OnlineVideoPreviewPlayer)d).UpdatePlayButton()));
@@ -44,6 +60,36 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         get => (string)GetValue(StreamUrlProperty);
         set => SetValue(StreamUrlProperty, value);
     }
+
+    /// <summary>海报兜底底色；null 时保持原行为（纯黑）。</summary>
+    public Brush? PosterFallbackBrush
+    {
+        get => (Brush?)GetValue(PosterFallbackBrushProperty);
+        set => SetValue(PosterFallbackBrushProperty, value);
+    }
+
+    /// <summary>海报兜底层中间显示的字。</summary>
+    public string PosterFallbackTextValue
+    {
+        get => (string)GetValue(PosterFallbackTextProperty);
+        set => SetValue(PosterFallbackTextProperty, value);
+    }
+
+    /// <summary>当前视频宽高比（宽/高）；0 表示未知，&lt; 1 为竖屏。</summary>
+    public double VideoAspectRatio
+    {
+        get => (double)GetValue(VideoAspectRatioProperty);
+        private set => SetValue(VideoAspectRatioProperty, value);
+    }
+
+    /// <summary>视频尺寸确定后触发（宿主据此调整播放器框比例）。</summary>
+    public event EventHandler<double>? VideoAspectChanged;
+
+    /// <summary>点击「竖屏/横屏」按钮：宿主切换手动比例覆盖。</summary>
+    public event EventHandler? AspectToggleRequested;
+
+    /// <summary>设置菜单选择「自动识别画面比例」：宿主清除手动覆盖。</summary>
+    public event EventHandler? AspectAutoRequested;
 
     /// <summary>播放该流需要的 Referer 头（经 Demuxer headers 透传给 playlist 与每个分片）。</summary>
     public string Referer
@@ -88,6 +134,29 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     /// <summary>是否处于缓冲中（Flyleaf 事件驱动，只影响提示层，不改播放状态）。</summary>
     private bool _buffering;
+    /// <summary>Loading 期间收到 Pause（切 Tab 离场）：首帧就绪后立刻暂停，避免后台出声。</summary>
+    private bool _pauseOnFirstFrame;
+
+    /// <summary>是否处于小窗模式（FlyleafHost 已 detach 到独立置顶窗口）。</summary>
+    private bool _isMini;
+    /// <summary>小窗是否置顶；默认置顶，用户可在小窗顶栏切换。</summary>
+    private bool _miniTopMost = true;
+    /// <summary>上一次小窗尺寸（用户拖动缩放过就沿用，避免每次回到默认大小）。</summary>
+    private Size? _miniLastSize;
+    /// <summary>短剧模式：显示上下集/选集/倍速/页面全屏/设置，隐藏音量滑条与停止。</summary>
+    private bool _dramaMode;
+    /// <summary>是否显示音量滑条（短剧模式隐藏；退出小窗时据此恢复）。</summary>
+    private bool _showVolumeSlider = true;
+    /// <summary>画面比例按钮当前状态：true=竖屏；由宿主 SetAspectState 同步。</summary>
+    private bool _aspectPortrait = true;
+    /// <summary>画面比例是否为自动识别；设置菜单的勾选项据此显示。</summary>
+    private bool _aspectAuto = true;
+    /// <summary>窄播放器（竖屏 9:16 或小窗）使用紧凑控制条，避免按钮被裁掉。</summary>
+    private bool _compactBar;
+    /// <summary>极窄（&lt;360px）再隐藏时长/选集/上下集，只保留播放、进度、静音、比例、设置、全屏。</summary>
+    private bool _narrowBar;
+    /// <summary>当前播放速度（1.0 = 原速）。</summary>
+    private double _playbackSpeed = 1.0;
 
     private int _volume = 100;
     private bool _muted;
@@ -100,6 +169,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         Interval = TimeSpan.FromSeconds(5),
     };
 
+    /// <summary>音量悬浮条的延迟关闭：给鼠标从图标移到浮层留出时间。</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _volumePopupTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(320),
+    };
+
     /// <summary>播放状态同步计时器：500ms 读一次 CurTime/Duration/IsPlaying，驱动进度条与状态机。</summary>
     private readonly System.Windows.Threading.DispatcherTimer _uiSyncTimer = new()
     {
@@ -110,16 +185,50 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         InitializeComponent();
         InitVolumeFromConfig();
-        Unloaded += (_, _) => DisposePlayer();
+        Unloaded += (_, _) =>
+        {
+            _controlBarHideTimer.Stop();
+            _volumePopupTimer.Stop();
+            VolumePopup.IsOpen = false;
+            // 短剧详情页切 Tab 时只 Pause、不销毁 Player：保留流/解码器/播放位置，
+            // 回到页面还是同一集同一进度。其它页面（视频页等）仍按原逻辑释放。
+            if (KeepAliveOnUnload) return;
+            DisposePlayer();
+        };
+        // 页面把播放器隐藏/移出可视树时，小窗必须跟着收回去，否则会留下一个漂浮的黑窗口
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible && _isMini) ExitMiniWindow();
+            // 切顶栏 Tab 时先于 Unloaded 触发：此时 Player/HwndHost 还活着，先 Pause 才能保住位置。
+            if (!IsVisible && KeepAliveOnUnload) Pause();
+        };
         // 播放画面在 FlyleafHost 的独立窗口里，滚轮不会冒泡到页面；挂转发让滚轮能滚动页面
         AttachWheelForwarding();
-        Loaded += (_, _) => AttachWheelForwarding();
+        Loaded += (_, _) =>
+        {
+            AttachWheelForwarding();
+            if (_player is not null && _state is PlayerState.Playing or PlayerState.Paused or PlayerState.Loading)
+                _uiSyncTimer.Start();
+        };
         _controlBarHideTimer.Tick += (_, _) =>
         {
             _controlBarHideTimer.Stop();
-            if (_inPlayback) ControlBar.Visibility = Visibility.Collapsed;
+            if (!_inPlayback) return;
+            ControlBar.Visibility = Visibility.Collapsed;
+            VolumePopup.IsOpen = false;
+            if (_isMini) MiniBar.Visibility = Visibility.Collapsed;
         };
         _uiSyncTimer.Tick += (_, _) => SyncPlaybackUi();
+
+        // 音量浮层锚在音量图标上；Popup 属于独立顶层窗口，不能依赖模板内部的 ElementName 绑定。
+        VolumePopup.PlacementTarget = MuteToggleButton;
+        _volumePopupTimer.Tick += (_, _) =>
+        {
+            _volumePopupTimer.Stop();
+            if (VolumePopup.Child is UIElement child && child.IsMouseOver) return;
+            VolumePopup.IsOpen = false;
+            if (_inPlayback) RestartControlBarTimer();
+        };
     }
 
     /// <summary>
@@ -165,8 +274,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     // ── 状态切换 ─────────────────────────────────────────────────────
 
+    private const string DefaultErrorText = "播放失败，视频可能已下架或网络受限";
+
+    private void SetErrorText(string? text)
+    {
+        ErrorText.Text = string.IsNullOrWhiteSpace(text) ? DefaultErrorText : text;
+    }
+
     private void SetState(PlayerState state)
     {
+        // 自然播完/出错时先把画面收回页面，避免页面回到海报态后小窗还挂着一个黑窗口
+        if (_isMini && state is (PlayerState.Idle or PlayerState.Error)) ExitMiniWindow();
         _state = state;
         VideoHost.Visibility = state == PlayerState.Idle ? Visibility.Collapsed : Visibility.Visible;
         PosterLayer.Visibility = state == PlayerState.Idle ? Visibility.Visible : Visibility.Collapsed;
@@ -177,14 +295,18 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         {
             // 进入播放/暂停先显示控制条，5 秒无操作自动隐藏（鼠标进入视频区域重新显示）
             ControlBar.Visibility = Visibility.Visible;
+            if (_isMini) MiniBar.Visibility = Visibility.Visible;
             RestartControlBarTimer();
         }
         else
         {
             _controlBarHideTimer.Stop();
             ControlBar.Visibility = Visibility.Collapsed;
+            VolumePopup.IsOpen = false;
+            MiniBar.Visibility = Visibility.Collapsed;
         }
         PauseToggleButton.Content = state == PlayerState.Paused ? "►" : "❚❚";
+        UpdateMiniButton();
         UpdateBufferingLayer();
         if (state == PlayerState.Loading) ResetSeekBar();
     }
@@ -195,6 +317,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         if (!_inPlayback) return;
         ControlBar.Visibility = Visibility.Visible;
+        if (_isMini) MiniBar.Visibility = Visibility.Visible;
         RestartControlBarTimer();
     }
 
@@ -217,6 +340,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     /// <summary>鼠标在控制条上操作时保持显示并重置计时。</summary>
     private void ControlBar_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
 
+    // 控制条/小窗顶栏实际活在 FlyleafHost 的 Overlay 独立窗口里，页面根的鼠标事件收不到，
+    // 所以视频内容层也挂一份：页面内和小窗里移动鼠标都能唤出控制条。
+    private void VideoContent_MouseEnter(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
+
+    private void VideoContent_MouseMove(object sender, MouseEventArgs e) => ShowControlBarTemporarily();
+
+    private void VideoContent_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_inPlayback) RestartControlBarTimer();
+    }
+
     private void UpdatePoster()
     {
         var poster = PosterUrl;
@@ -224,9 +358,29 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         if (string.IsNullOrEmpty(poster) || (!isUrl && !File.Exists(poster)))
         {
             PosterImage.Source = null;
+            UpdatePosterFallback();
             return;
         }
         ImageLoader.SetSource(PosterImage, poster);
+        // 图片是异步解码的，失败时 Source 保持 null，稍后还要重算兜底
+        UpdatePosterFallback();
+        Dispatcher.BeginInvoke(new Action(UpdatePosterFallback),
+            System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// 海报兜底层：站点封面 CDN 目前返回加密字节（解不出图），没有兜底就是一块纯黑。
+    /// 只有调用方显式给了 <see cref="PosterFallbackBrush"/> 才显示，不影响既有视频页。
+    /// </summary>
+    private void UpdatePosterFallback()
+    {
+        if (PosterFallback is null) return;
+        var brush = PosterFallbackBrush;
+        PosterFallback.Background = brush;
+        PosterFallback.Visibility = brush is not null && PosterImage.Source is null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        PosterFallbackLabel.Text = PosterFallbackTextValue;
     }
 
     private void UpdatePlayButton()
@@ -241,9 +395,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     /// <summary>停止播放并回到海报态（切换详情、关闭侧栏、切页时调用）。</summary>
     public void Stop()
     {
+        // 小窗挂在独立顶层窗口上：先收回页面再停，避免留下无主的黑窗口
+        if (_isMini) ExitMiniWindow();
         _openGeneration++; // 作废在途打开
         _pendingSeekMs = 0;
         _pendingPause = false;
+        _pauseOnFirstFrame = false;
         _buffering = false;
         try { _player?.Stop(); } catch { /* 已停止/未初始化 */ }
         _uiSyncTimer.Stop();
@@ -273,7 +430,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
     }
 
-    /// <summary>是否处于暂停态（读 Flyleaf 运行时状态；接力续播据此判断是否恢复暂停）。</summary>
+    /// <summary>是否处于暂停态（读 Flyleaf 运行时状态）。</summary>
     public bool IsPaused
     {
         get
@@ -283,9 +440,682 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         }
     }
 
+    // ── 小窗模式（360 浏览器式置顶小窗：同一个 Player，不重连） ─────────
+
+    /// <summary>是否正处在小窗模式。</summary>
+    public bool IsMiniWindow => _isMini;
+
+    /// <summary>小窗顶栏显示的标题（页面在详情渲染时设置）。</summary>
+    public string PlayerTitle { get; set; } = "";
+
+    /// <summary>小窗模式开关后触发（宿主可据此调整外层布局）。</summary>
+    public event EventHandler? MiniWindowChanged;
+
+    /// <summary>短剧模式：上一集请求。</summary>
+    public event EventHandler? PreviousEpisodeRequested;
+    /// <summary>短剧模式：下一集请求。</summary>
+    public event EventHandler? NextEpisodeRequested;
+    /// <summary>短剧模式：选集请求（宿主把右侧选集滚进可视区）。</summary>
+    public event EventHandler? EpisodeListRequested;
+    /// <summary>短剧模式：页面全屏请求（宿主隐藏标题/侧栏/简介让播放区铺满）。</summary>
+    public event EventHandler? PageFullScreenRequested;
+
+    /// <summary>右上角来源水印（在线显示频道名，本地显示「本地」）。</summary>
+    public string SourceName
+    {
+        get => _sourceName;
+        set { _sourceName = value ?? ""; UpdateSourceWatermark(); }
+    }
+    private string _sourceName = "";
+
+    /// <summary>小窗顶栏的集数（如「第 3 集」）；空则不显示。</summary>
+    public string MiniSubtitle
+    {
+        get => _miniSubtitle;
+        set { _miniSubtitle = value ?? ""; UpdateMiniEpisodeText(); }
+    }
+    private string _miniSubtitle = "";
+
+    /// <summary>当前视频总时长（毫秒）；未知返回 0。</summary>
+    public long DurationMs => _durationMs;
+
+    /// <summary>当前播放速度（1.0 = 原速）。</summary>
+    public double PlaybackSpeed => _playbackSpeed;
+
+    /// <summary>是否处于电脑全屏（Flyleaf 把画面铺满显示器，控制条仍在）。</summary>
+    public bool IsFullScreen
+    {
+        get
+        {
+            try { return VideoHost.IsFullScreen; }
+            catch { return false; }
+        }
+    }
+
     /// <summary>
-    /// 接力续播（小窗放大 / 回迁）：从指定位置起播，paused=true 时起播后立即暂停。
-    /// 主界面与小窗是两个播放器实例，交接时用此方法把位置与播放状态传给对方，
+    /// true：控件从可视树卸载时保留 Player（短剧详情页切顶栏 Tab 用）。
+    /// 页面 Unloaded 会先 Pause，回来复用同一 Player/流/解码器，不重新打开。
+    /// </summary>
+    public bool KeepAliveOnUnload { get; set; }
+
+    /// <summary>
+    /// 短剧页配置：打开上下集/选集/倍速/页面全屏/设置，隐藏音量滑条与停止按钮。
+    /// 只改控制条显隐，不影响播放器行为。
+    /// </summary>
+    public void ConfigureForDrama()
+    {
+        _dramaMode = true;
+        ControlBar.Padding = new Thickness(10, 6, 10, 6);
+        CurrentTimeText.Margin = new Thickness(8, 0, 2, 0);
+        DurationText.Margin = new Thickness(0, 0, 8, 0);
+        SpeedButton.Content = $"{_playbackSpeed:0.0#}x";
+        UpdateCompactBar();
+        UpdateControlBarModeVisibility();
+    }
+
+    /// <summary>
+    /// 同步画面比例按钮的文案。auto=true 表示跟随首帧自动识别；
+    /// auto=false 表示用户手动锁定，按钮显示当前锁定方向。
+    /// </summary>
+    public void SetAspectState(bool portrait, bool auto)
+    {
+        _aspectPortrait = portrait;
+        _aspectAuto = auto;
+        if (RatioButton is null) return;
+        RatioButton.Content = portrait
+            ? (_compactBar ? "竖" : "竖屏")
+            : (_compactBar ? "横" : "横屏");
+        var other = portrait ? "横屏" : "竖屏";
+        RatioButton.ToolTip = auto
+            ? $"自动识别为{(portrait ? "竖屏" : "横屏")}，点击切换为{other}"
+            : $"已手动锁定{(portrait ? "竖屏" : "横屏")}，点击切换为{other}；设置菜单可恢复自动识别";
+    }
+
+    /// <summary>换剧/重新载入时清掉上一部片子的画面比例，回到「未知 → 短剧默认竖屏」。</summary>
+    public void ResetVideoAspect()
+    {
+        if (VideoAspectRatio <= 0) return;
+        VideoAspectRatio = 0;
+        VideoAspectChanged?.Invoke(this, 0);
+    }
+
+    private void RatioButton_Click(object sender, RoutedEventArgs e)
+        => AspectToggleRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>上下集可用状态（短剧页在切集时调用）。</summary>
+    public void SetEpisodeNavigation(bool canPrevious, bool canNext)
+    {
+        PrevEpisodeButton.IsEnabled = canPrevious;
+        NextEpisodeButton.IsEnabled = canNext;
+    }
+
+    /// <summary>暂停（不销毁流）。切 Tab 离开详情页时调用，回来后从原位置继续。</summary>
+    public void Pause()
+    {
+        if (IsPlaying)
+        {
+            PauseInternal();
+            return;
+        }
+        if (_state == PlayerState.Loading) _pauseOnFirstFrame = true;
+    }
+
+    /// <summary>播放/暂停切换（短剧页主按钮复用）。</summary>
+    public void TogglePause()
+    {
+        if (_state is not (PlayerState.Playing or PlayerState.Paused)) return;
+        if (IsPlaying)
+        {
+            PauseInternal();
+        }
+        else
+        {
+            try { _player?.Play(); } catch { }
+            PauseToggleButton.Content = "❚❚";
+            SetState(PlayerState.Playing);
+        }
+    }
+
+    /// <summary>电脑全屏切换（Flyleaf 把 Surface 铺满当前显示器）。</summary>
+    public void ToggleFullScreen()
+    {
+        try { VideoHost.IsFullScreen = !VideoHost.IsFullScreen; }
+        catch (Exception ex) { _logger?.Warn($"[FlyPlayer] 全屏切换失败: {ex.Message}"); }
+    }
+
+
+    /// <summary>
+    /// 进入小窗：把 FlyleafHost 的 Surface（视频画面）与 Overlay（控制条）detach 成独立置顶窗口。
+    /// 复用同一个 Player（不 Stop、不重新 Open），网络连接、解码器、播放位置全部原样保留，
+    /// 所以进入小窗不会黑一下、不会重新拉流。
+    /// </summary>
+    public void EnterMiniWindow()
+    {
+        if (_isMini) return;
+        if (!IsVisible) return;
+        VolumePopup.IsOpen = false;
+        // 详情页标题栏直接点「小窗」时还没起播：先起播（TryPlay 同步进入 Loading），再搬窗口
+        if (_state == PlayerState.Idle && !string.IsNullOrEmpty(StreamUrl)) TryPlay();
+        if (_state is PlayerState.Idle or PlayerState.Error) return;
+        if (!VideoHost.IsLoaded) return;
+
+        try
+        {
+            var host = VideoHost;
+            host.DetachedTopMost = _miniTopMost;
+            host.DetachedShowInTaskbar = true;
+            host.DetachedNoOwner = true;              // 主窗口最小化时小窗不跟着消失
+            host.DetachedMinWidth = 260;
+            host.DetachedMinHeight = 150;
+            // 小窗定位在“小”：最大只占工作区 60%，再大请用完整详情页
+            host.DetachedMaxWidth = Math.Max(480, SystemParameters.WorkArea.Width * 0.6);
+            host.DetachedMaxHeight = Math.Max(320, SystemParameters.WorkArea.Height * 0.6);
+            host.DetachedRememberPosition = false;
+            host.DetachedRememberSize = false;
+            // 首次小窗居中于主程序窗口，而不是屏幕右下角；之后仍可拖动。
+            // Flyleaf 会按 MinWidth/MinHeight 再放大固定尺寸，所以先做同样的等比修正，
+            // 否则 236x420 的竖屏尺寸会被撑成 260x462，居中会偏。
+            var miniSize = NormalizeMiniWindowSize(_miniLastSize ?? ComputeMiniWindowSize());
+            host.DetachedFixedSize = miniSize;
+            host.DetachedPosition = DetachedPositionOptions.Custom;
+            host.DetachedFixedPosition = ComputeMiniWindowOrigin(miniSize);
+            host.DetachedPositionMargin = new Thickness(0);
+            host.DetachedDragMove = AvailableWindows.Both;   // 拖动画面/顶栏空白处移动
+            host.DetachedResize = AvailableWindows.Both;     // 四边/四角拖动缩放
+            host.ResizeSensitivity = 8;
+
+            host.IsAttached = false;                  // ← 关键：只换宿主窗口，不碰 Player
+            host.KeepRatioOnResize = true;            // detach 之后再开，避免改页面里的控件尺寸
+            HookMiniSurface();
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 进入小窗失败: {ex.Message}");
+            // 可能已经 detach 了一半：恢复回页面，别留下无主窗口
+            try
+            {
+                VideoHost.KeepRatioOnResize = false;
+                VideoHost.IsAttached = true;
+            }
+            catch { }
+            return;
+        }
+
+        _isMini = true;
+        MiniTitleText.Text = string.IsNullOrWhiteSpace(PlayerTitle) ? "小窗播放" : PlayerTitle;
+        UpdateMiniPinVisual();
+        MiniBar.Visibility = Visibility.Visible;
+        MiniPlaceholder.Visibility = Visibility.Visible;
+        // 小窗宽度有限：收起短剧专属按钮/音量滑条，收紧控制条内边距，给进度条留出空间
+        ControlBar.Padding = new Thickness(8, 4, 8, 4);
+        UpdateControlBarModeVisibility();
+        UpdateMiniEpisodeText();
+        UpdateSourceWatermark();
+        ShowControlBarTemporarily();
+        try
+        {
+            if (VideoHost.Surface is { } surface) surface.Title = $"小窗 · {MiniTitleText.Text}";
+        }
+        catch { /* 标题只是锦上添花 */ }
+        MiniWindowChanged?.Invoke(this, EventArgs.Empty);
+        _logger?.Info($"[FlyPlayer] 已进入小窗（同一 Player，位置 {CurrentPositionMs}ms）");
+    }
+
+    /// <summary>
+    /// 退出小窗：把 Surface/Overlay 重新挂回页面里的 FlyleafHost。
+    /// 同样不碰 Player，关闭小窗后从当前毫秒位置继续播，进度不丢也不重连。
+    /// </summary>
+    public void ExitMiniWindow()
+    {
+        if (!_isMini) return;
+        _isMini = false;
+        MiniBar.Visibility = Visibility.Collapsed;
+        MiniPlaceholder.Visibility = Visibility.Collapsed;
+        MiniEpisodeText.Visibility = Visibility.Collapsed;
+        ControlBar.Padding = _compactBar
+            ? new Thickness(6, 5, 6, 5)
+            : _dramaMode ? new Thickness(10, 6, 10, 6) : new Thickness(12, 8, 12, 8);
+        UpdateControlBarModeVisibility();
+        UpdateSourceWatermark();
+        try
+        {
+            // 先关等比缩放再挂回页面：Attach 内部会调 ResizeRatio，
+            // 若此时还是 true 会按视频比例改页面里播放器控件的宽高。
+            VideoHost.KeepRatioOnResize = false;
+            VideoHost.IsAttached = true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 退出小窗失败: {ex.Message}");
+        }
+        ShowControlBarTemporarily();
+        MiniWindowChanged?.Invoke(this, EventArgs.Empty);
+        _logger?.Info($"[FlyPlayer] 已退出小窗（位置 {CurrentPositionMs}ms）");
+    }
+
+    /// <summary>默认小窗尺寸：横屏约 420 宽，竖屏约 420 高，且不超过工作区 85%。</summary>
+    private Size ComputeMiniWindowSize()
+    {
+        var ratio = VideoAspectRatio > 0 ? VideoAspectRatio : 16.0 / 9.0;
+        double width, height;
+        if (ratio >= 1)
+        {
+            width = 420;
+            height = width / ratio;
+        }
+        else
+        {
+            height = 420;
+            width = height * ratio;
+        }
+        var maxWidth = Math.Max(320, SystemParameters.WorkArea.Width * 0.6);
+        var maxHeight = Math.Max(240, SystemParameters.WorkArea.Height * 0.6);
+        if (width > maxWidth) { width = maxWidth; height = width / ratio; }
+        if (height > maxHeight) { height = maxHeight; width = height * ratio; }
+        return new Size(Math.Round(Math.Max(180, width)), Math.Round(Math.Max(100, height)));
+    }
+
+    /// <summary>
+    /// 按 FlyleafHost 的 Min/Max 约束预修正小窗尺寸（保持视频比例），
+    /// 让“居中”使用的是最终窗口尺寸，而不是修正前的尺寸。
+    /// </summary>
+    private Size NormalizeMiniWindowSize(Size size)
+    {
+        var ratio = VideoAspectRatio > 0 ? VideoAspectRatio : 16.0 / 9.0;
+        var minWidth = 260.0;
+        var minHeight = 150.0;
+        var maxWidth = Math.Max(480.0, SystemParameters.WorkArea.Width * 0.6);
+        var maxHeight = Math.Max(320.0, SystemParameters.WorkArea.Height * 0.6);
+
+        var width = Math.Max(size.Width, minWidth);
+        var height = width / ratio;
+        if (height < minHeight)
+        {
+            height = minHeight;
+            width = height * ratio;
+        }
+        if (width > maxWidth)
+        {
+            width = maxWidth;
+            height = width / ratio;
+        }
+        if (height > maxHeight)
+        {
+            height = maxHeight;
+            width = height * ratio;
+        }
+        return new Size(Math.Round(width), Math.Round(height));
+    }
+
+    /// <summary>
+    /// 小窗首次出现的位置：主程序窗口中心。Window 的 Left/Top 是 DIP，
+    /// Flyleaf 的 DetachedFixedPosition 用物理像素，所以这里乘 DPI。
+    /// 主程序不可用时退回工作区中心。
+    /// </summary>
+    private Point ComputeMiniWindowOrigin(Size miniSize)
+    {
+        var owner = Window.GetWindow(this) ?? Application.Current?.MainWindow;
+        var dpi = owner is null ? VisualTreeHelper.GetDpi(this) : VisualTreeHelper.GetDpi(owner);
+        double left, top;
+
+        if (owner is null || double.IsNaN(owner.Left) || double.IsNaN(owner.Top))
+        {
+            var work = SystemParameters.WorkArea;
+            left = (work.Left + (work.Width - miniSize.Width) / 2) * dpi.DpiScaleX;
+            top = (work.Top + (work.Height - miniSize.Height) / 2) * dpi.DpiScaleY;
+        }
+        else
+        {
+            var ownerWidth = owner.ActualWidth > 0 ? owner.ActualWidth : owner.Width;
+            var ownerHeight = owner.ActualHeight > 0 ? owner.ActualHeight : owner.Height;
+            // Window.Left/Top/ActualWidth 都是 DIP；Flyleaf 的 FixedPosition 是物理像素。
+            left = (owner.Left + (ownerWidth - miniSize.Width) / 2) * dpi.DpiScaleX;
+            top = (owner.Top + (ownerHeight - miniSize.Height) / 2) * dpi.DpiScaleY;
+        }
+
+        // 物理像素下再限制在虚拟屏幕内，避免主窗口跨屏/贴边时小窗跑出可见区域。
+        var virtualLeft = SystemParameters.VirtualScreenLeft * dpi.DpiScaleX;
+        var virtualTop = SystemParameters.VirtualScreenTop * dpi.DpiScaleY;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth * dpi.DpiScaleX;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight * dpi.DpiScaleY;
+        left = Math.Clamp(left, virtualLeft, Math.Max(virtualLeft, virtualRight - miniSize.Width * dpi.DpiScaleX));
+        top = Math.Clamp(top, virtualTop, Math.Max(virtualTop, virtualBottom - miniSize.Height * dpi.DpiScaleY));
+        return new Point(left, top);
+    }
+
+    /// <summary>记住用户拖动缩放过的小窗尺寸（仅本实例生命周期内）。</summary>
+    private void HookMiniSurface()
+    {
+        if (VideoHost.Surface is not { } surface) return;
+        surface.SizeChanged -= MiniSurface_SizeChanged;
+        surface.SizeChanged += MiniSurface_SizeChanged;
+    }
+
+    private void MiniSurface_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isMini) return;
+        if (e.NewSize.Width >= 180 && e.NewSize.Height >= 100)
+            _miniLastSize = e.NewSize;
+    }
+
+    private void UpdateMiniPinVisual()
+    {
+        MiniPinButton.Content = _miniTopMost ? "已置顶" : "置顶";
+        try
+        {
+            MiniPinButton.Foreground = _miniTopMost
+                ? (Brush)FindResource("PrimaryLightBrush")
+                : Brushes.White;
+        }
+        catch { MiniPinButton.Foreground = Brushes.White; }
+    }
+
+    /// <summary>
+    /// 按「短剧模式 / 小窗」重排控制条：短剧显示上下集/选集/倍速/页面全屏/设置，
+    /// 小窗只留最基础的播放/进度/静音，避免 420px 宽塞满。
+    /// </summary>
+    private void UpdateControlBarModeVisibility()
+    {
+        var drama = _dramaMode && !_isMini;
+        var moreMode = drama && _compactBar;
+        PrevEpisodeButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        NextEpisodeButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        EpisodeListButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        // 竖屏把倍速、比例、全屏、选集、上下集全部收进「更多」，只留播放/时间/进度/音量/小窗。
+        SpeedButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        RatioButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        PageFullScreenButton.Visibility = drama && !_compactBar ? Visibility.Visible : Visibility.Collapsed;
+        SettingsButton.Visibility = drama ? Visibility.Visible : Visibility.Collapsed;
+        SettingsButton.Content = moreMode ? "更多" : "⚙";
+        SettingsButton.FontFamily = moreMode
+            ? new System.Windows.Media.FontFamily("Microsoft YaHei UI")
+            : new System.Windows.Media.FontFamily("Segoe UI Symbol");
+        SettingsButton.FontSize = moreMode ? 10.5 : 13;
+        SettingsButton.ToolTip = moreMode ? "更多：选集 / 上下集 / 画面比例 / 倍速 / 全屏" : "播放设置";
+        StopButton.Visibility = _dramaMode ? Visibility.Collapsed : Visibility.Visible;
+        _showVolumeSlider = !_dramaMode;
+        VolumeSlider.Visibility = !_isMini && _showVolumeSlider ? Visibility.Visible : Visibility.Collapsed;
+        // 当前时间与总时长都保留，竖屏也显示完整时间对。
+        DurationText.Visibility = Visibility.Visible;
+        if (!_compactBar) VolumePopup.IsOpen = false;
+        UpdateMiniButton();
+    }
+
+    /// <summary>
+    /// 竖屏视频只有 ~390px 宽，完整控制条会溢出。窄于 560px 时切换紧凑排布：
+    /// 上/下一集只留箭头、倍速收进设置菜单、缩短边距；保留时间/进度/选集/静音/比例/设置/全屏。
+    /// </summary>
+    private void UpdateCompactBar()
+    {
+        var width = ActualWidth;
+        var compact = width > 0 && width < 560;
+        var narrow = width > 0 && width < 360;
+        if (compact == _compactBar && narrow == _narrowBar) return;
+        _compactBar = compact;
+        _narrowBar = narrow;
+
+        ControlBar.Padding = compact
+            ? new Thickness(4, 5, 4, 5)
+            : _dramaMode ? new Thickness(10, 6, 10, 6) : new Thickness(12, 8, 12, 8);
+        CurrentTimeText.FontSize = compact ? 9.5 : 10.5;
+        DurationText.FontSize = compact ? 9.5 : 10.5;
+        CurrentTimeText.Margin = compact
+            ? new Thickness(2, 0, 2, 0)
+            : new Thickness(_dramaMode ? 8 : 10, 0, 2, 0);
+        DurationText.Margin = compact
+            ? new Thickness(0, 0, 3, 0)
+            : new Thickness(0, 0, _dramaMode ? 8 : 10, 0);
+
+        PrevEpisodeButton.Content = compact ? "‹" : "‹ 上一集";
+        NextEpisodeButton.Content = compact ? "›" : "下一集 ›";
+        var pad = compact ? new Thickness(4, 3, 4, 3) : new Thickness(7, 3, 7, 3);
+        PrevEpisodeButton.Padding = pad;
+        NextEpisodeButton.Padding = pad;
+        EpisodeListButton.Padding = pad;
+        RatioButton.Padding = pad;
+        PageFullScreenButton.Padding = pad;
+        SettingsButton.Padding = pad;
+        SettingsButton.FontSize = compact ? 12 : 13;
+
+        SetAspectState(_aspectPortrait, _aspectAuto);
+        UpdateControlBarModeVisibility();
+        UpdateQualityButton();
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        UpdateCompactBar();
+    }
+
+    private void UpdateSourceWatermark()
+    {
+        SourceWatermark.Text = _sourceName;
+        SourceWatermark.Visibility = !_isMini && _sourceName.Length > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void UpdateMiniEpisodeText()
+    {
+        MiniEpisodeText.Text = _miniSubtitle;
+        MiniEpisodeText.Visibility = _isMini && _miniSubtitle.Length > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void PrevEpisode_Click(object sender, RoutedEventArgs e)
+        => PreviousEpisodeRequested?.Invoke(this, EventArgs.Empty);
+
+    private void NextEpisode_Click(object sender, RoutedEventArgs e)
+        => NextEpisodeRequested?.Invoke(this, EventArgs.Empty);
+
+    private void EpisodeList_Click(object sender, RoutedEventArgs e)
+        => EpisodeListRequested?.Invoke(this, EventArgs.Empty);
+
+    private void PageFullScreenButton_Click(object sender, RoutedEventArgs e)
+        => PageFullScreenRequested?.Invoke(this, EventArgs.Empty);
+
+    private void SpeedButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu();
+        foreach (var rate in new[] { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 })
+        {
+            var item = new MenuItem
+            {
+                Header = $"{rate:0.0#}x",
+                IsCheckable = true,
+                IsChecked = Math.Abs(rate - _playbackSpeed) < 0.01,
+            };
+            var value = rate;
+            item.Click += (_, _) => SetPlaybackSpeed(value);
+            menu.Items.Add(item);
+        }
+        menu.PlacementTarget = SpeedButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.IsOpen = true;
+    }
+
+    private void SetPlaybackSpeed(double rate)
+    {
+        _playbackSpeed = Math.Clamp(rate, 0.25, 4.0);
+        SpeedButton.Content = $"{_playbackSpeed:0.0#}x";
+        try
+        {
+            if (_player is not null) _player.Speed = _playbackSpeed;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] 设置倍速失败: {ex.Message}");
+        }
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_dramaMode && _compactBar)
+        {
+            ShowDramaMoreMenu();
+            return;
+        }
+
+        var menu = new ContextMenu();
+
+        var speedMenu = new MenuItem { Header = "播放速度" };
+        foreach (var rate in new[] { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 })
+        {
+            var item = new MenuItem
+            {
+                Header = $"{rate:0.0#}x",
+                IsCheckable = true,
+                IsChecked = Math.Abs(_playbackSpeed - rate) < 0.01,
+            };
+            item.Click += (_, _) => SetPlaybackSpeed(rate);
+            speedMenu.Items.Add(item);
+        }
+        menu.Items.Add(speedMenu);
+
+        var toggleAspect = new MenuItem
+        {
+            Header = _aspectPortrait ? "切换为横屏" : "切换为竖屏",
+        };
+        toggleAspect.Click += (_, _) => AspectToggleRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(toggleAspect);
+
+        var autoAspect = new MenuItem
+        {
+            Header = "自动识别画面比例",
+            IsCheckable = true,
+            IsChecked = _aspectAuto,
+        };
+        autoAspect.Click += (_, _) => AspectAutoRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(autoAspect);
+        menu.Items.Add(new Separator());
+
+        var pageFull = new MenuItem { Header = "页面全屏" };
+        pageFull.Click += (_, _) => PageFullScreenRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(pageFull);
+
+        var osFull = new MenuItem { Header = "电脑全屏" };
+        osFull.Click += (_, _) => ToggleFullScreen();
+        menu.Items.Add(osFull);
+
+        var mini = new MenuItem { Header = "小窗播放" };
+        mini.Click += (_, _) => EnterMiniWindow();
+        menu.Items.Add(mini);
+
+        menu.PlacementTarget = SettingsButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 竖屏紧凑条的「更多」：只保留播放/时间/进度/音量/小窗，其余操作全部收在这里。
+    /// </summary>
+    private void ShowDramaMoreMenu()
+    {
+        var menu = new ContextMenu();
+
+        var prev = new MenuItem { Header = "上一集", IsEnabled = PrevEpisodeButton.IsEnabled };
+        prev.Click += (_, _) => PreviousEpisodeRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(prev);
+
+        var next = new MenuItem { Header = "下一集", IsEnabled = NextEpisodeButton.IsEnabled };
+        next.Click += (_, _) => NextEpisodeRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(next);
+
+        var episodes = new MenuItem { Header = "选集" };
+        episodes.Click += (_, _) => EpisodeListRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(episodes);
+        menu.Items.Add(new Separator());
+
+        var ratio = new MenuItem { Header = "画面比例" };
+        var toggleAspect = new MenuItem { Header = _aspectPortrait ? "切换为横屏" : "切换为竖屏" };
+        toggleAspect.Click += (_, _) => AspectToggleRequested?.Invoke(this, EventArgs.Empty);
+        ratio.Items.Add(toggleAspect);
+        var autoAspect = new MenuItem
+        {
+            Header = "自动识别",
+            IsCheckable = true,
+            IsChecked = _aspectAuto,
+        };
+        autoAspect.Click += (_, _) => AspectAutoRequested?.Invoke(this, EventArgs.Empty);
+        ratio.Items.Add(autoAspect);
+        menu.Items.Add(ratio);
+
+        var speed = new MenuItem { Header = "播放速度" };
+        foreach (var rate in new[] { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 })
+        {
+            var item = new MenuItem
+            {
+                Header = $"{rate:0.0#}x",
+                IsCheckable = true,
+                IsChecked = Math.Abs(_playbackSpeed - rate) < 0.01,
+            };
+            item.Click += (_, _) => SetPlaybackSpeed(rate);
+            speed.Items.Add(item);
+        }
+        menu.Items.Add(speed);
+        menu.Items.Add(new Separator());
+
+        var pageFull = new MenuItem { Header = "页面全屏" };
+        pageFull.Click += (_, _) => PageFullScreenRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(pageFull);
+
+        var osFull = new MenuItem { Header = "电脑全屏" };
+        osFull.Click += (_, _) => ToggleFullScreen();
+        menu.Items.Add(osFull);
+
+        if (_variants.Count >= 2)
+        {
+            menu.Items.Add(new Separator());
+            var quality = new MenuItem { Header = "画质" };
+            for (var i = 0; i < _variants.Count; i++)
+            {
+                var variant = _variants[i];
+                var item = new MenuItem
+                {
+                    Header = variant.BandwidthBps > 0
+                        ? $"{variant.Label} · {variant.BandwidthBps / 1000}kbps"
+                        : variant.Label,
+                    IsCheckable = true,
+                    IsChecked = i == _variantIndex,
+                };
+                var index = i;
+                item.Click += (_, _) => SwitchVariant(index);
+                quality.Items.Add(item);
+            }
+            menu.Items.Add(quality);
+        }
+
+        menu.PlacementTarget = SettingsButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.IsOpen = true;
+    }
+
+    private void UpdateMiniButton()
+    {
+        // 竖屏紧凑条把「小窗」作为一级操作直接露出；横屏仍从齿轮菜单进入。
+        var ready = _state is PlayerState.Loading or PlayerState.Playing or PlayerState.Paused;
+        var allowed = !_isMini && ready && (!_dramaMode || _compactBar);
+        MiniButton.Visibility = allowed ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void MiniButton_Click(object sender, RoutedEventArgs e) => EnterMiniWindow();
+
+    private void MiniReturn_Click(object sender, RoutedEventArgs e) => ExitMiniWindow();
+
+    private void MiniClose_Click(object sender, RoutedEventArgs e) => ExitMiniWindow();
+
+    private void MiniPin_Click(object sender, RoutedEventArgs e)
+    {
+        _miniTopMost = !_miniTopMost;
+        try { VideoHost.DetachedTopMost = _miniTopMost; } catch { }
+        UpdateMiniPinVisual();
+    }
+
+    /// <summary>
+    /// 接力续播（侧栏 ↔ 完整页）：从指定位置起播，paused=true 时起播后立即暂停。
+    /// 两个页面各自持有播放器实例，交接时用此方法把位置与播放状态传给对方，
     /// 起播时长就绪后经 ApplyHandoffSeek 用 CurTime（毫秒）精确 seek。
     /// </summary>
     public void PlayFrom(long positionMs, bool paused)
@@ -310,7 +1140,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _logger?.Info($"[FlyPlayer] 接力续播定位：{target}ms");
             try
             {
-                _player.CurTime = target * 10000;
+                // Flyleaf 3.x 的 CurTime setter 在当前播放状态下会把位置重置到开头；
+                // 显式调用 SeekAccurate（单位毫秒）才是可靠跳转。
+                _player.SeekAccurate((int)Math.Clamp(target, 0, Math.Max(0, _durationMs - 1)));
                 _sliderUpdating = true;
                 if (_durationMs > 0) SeekSlider.Value = Math.Min(target, _durationMs);
                 _sliderUpdating = false;
@@ -342,11 +1174,14 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         if (!Uri.TryCreate(StreamUrl, UriKind.Absolute, out var streamUri))
         {
             _logger?.Error($"[FlyPlayer] 无效的流地址（无法构造 Uri）: {StreamUrl}");
+            SetErrorText("播放地址无效，请点「刷新地址」重试");
             SetState(PlayerState.Error);
             return;
         }
         if (!FlyleafEngine.EnsureStarted(_logger))
         {
+            SetErrorText(FlyleafEngine.StartupError
+                         ?? "播放组件未就绪：缺少 FFmpeg 共享库");
             SetState(PlayerState.Error);
             return;
         }
@@ -354,12 +1189,14 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         if (_player is null)
         {
             _logger?.Error("[FlyPlayer] 播放器实例创建失败");
+            SetErrorText("播放器初始化失败，请重启程序");
             SetState(PlayerState.Error);
             return;
         }
         ApplyRequestHeaders();
         VideoHost.Player = _player;
         AttachWheelForwarding();
+        SetErrorText(null);
         SetState(PlayerState.Loading);
         _openStopwatch = System.Diagnostics.Stopwatch.StartNew();
         _uiSyncTimer.Start();
@@ -404,7 +1241,11 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         {
             if (generation != _openGeneration) return;
             _logger?.Error("[FlyPlayer] 起播失败", ex);
-            await Dispatcher.InvokeAsync(() => SetState(PlayerState.Error));
+            await Dispatcher.InvokeAsync(() =>
+            {
+                SetErrorText($"播放失败：{ex.Message}");
+                SetState(PlayerState.Error);
+            });
         }
     }
 
@@ -460,6 +1301,28 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private static bool IsHlsUrl(Uri uri) =>
         uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 把当前视频的宽高比读出来（首帧后才有值）。
+    /// 短剧大量是竖屏 720×1280，宿主需要据此把播放器框收窄，否则竖屏片会被塞进一个超宽的框里、两侧全是黑边。
+    /// </summary>
+    private void UpdateVideoAspect()
+    {
+        try
+        {
+            var width = _player?.Video.Width ?? 0;
+            var height = _player?.Video.Height ?? 0;
+            if (width <= 0 || height <= 0) return;
+
+            var ratio = (double)width / height;
+            if (Math.Abs(ratio - VideoAspectRatio) < 0.01) return;
+
+            VideoAspectRatio = ratio;
+            _logger?.Info($"[FlyPlayer] 视频尺寸 {width}x{height}（比例 {ratio:F3}）");
+            VideoAspectChanged?.Invoke(this, ratio);
+        }
+        catch { /* 取不到就保持未知，宿主按默认布局 */ }
+    }
+
     private void EnsurePlayer()
     {
         if (_player is not null) return;
@@ -490,6 +1353,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             // Stop() 已同步切到 Idle，这里只处理自然播完
             Dispatcher.InvokeAsync(() =>
             {
+                // 切 Tab 离场时宿主销毁 Surface 也可能触发本事件；此时已主动 Pause，
+                // 不能把状态改成 Idle，否则回来会显示海报并从 0 重开。
+                if (KeepAliveOnUnload && !IsVisible) return;
                 if (_state is PlayerState.Playing or PlayerState.Paused)
                     SetState(PlayerState.Idle);
             });
@@ -499,6 +1365,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         player.BufferingCompleted += (_, _) => Dispatcher.InvokeAsync(() => SetBuffering(false));
         _player = player;
         ApplyVolume();
+        try { player.Speed = _playbackSpeed; } catch { /* 未打开时设置可能失败，首帧后会再同步 */ }
     }
 
     /// <summary>500ms 同步：时长/位置/播放态 → 滑条与时间文本；首个 Playing 触发接力 seek。</summary>
@@ -511,13 +1378,19 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             {
                 _durationMs = _player.Duration / 10000;
                 SeekSlider.Maximum = _durationMs;
-                DurationText.Text = FormatTime(_durationMs);
+                DurationText.Text = "/ " + FormatTime(_durationMs);
                 SeekSlider.Visibility = Visibility.Visible;
                 DurationText.Visibility = Visibility.Visible;
             }
             if (_player.IsPlaying && _state == PlayerState.Loading)
             {
                 SetState(PlayerState.Playing);
+                UpdateVideoAspect();
+                if (_pauseOnFirstFrame)
+                {
+                    _pauseOnFirstFrame = false;
+                    PauseInternal();
+                }
                 if (_openStopwatch is not null)
                 {
                     _logger?.Info($"[FlyPlayer] 首帧耗时: {_openStopwatch.ElapsedMilliseconds}ms {StreamUrl}");
@@ -526,6 +1399,10 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             }
             if (_state is PlayerState.Playing or PlayerState.Paused)
             {
+                if (Math.Abs(_player.Speed - _playbackSpeed) > 0.01)
+                {
+                    try { _player.Speed = _playbackSpeed; } catch { }
+                }
                 var posMs = _player.CurTime / 10000;
                 if (!_seekDragging)
                 {
@@ -591,7 +1468,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         _sliderUpdating = false;
         _durationMs = 0;
         CurrentTimeText.Text = "0:00";
-        DurationText.Text = "--:--";
+        DurationText.Text = "/ --:--";
     }
 
     private static string FormatTime(long ms)
@@ -602,11 +1479,49 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             : $"{t.Minutes}:{t.Seconds:D2}";
     }
 
+    /// <summary>
+    /// 点击进度条定位。WPF 的 IsMoveToPointEnabled 在 Flyleaf 的 Overlay 里偶尔只改 Value 不触发可靠
+    /// 的 hit-test，这里直接按点击位置算目标毫秒并 SeekAccurate；点在 Thumb 上则放行给拖动逻辑。
+    /// </summary>
+    private void SeekSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_player is null || _durationMs <= 0 || SeekSlider.ActualWidth <= 0) return;
+        for (var d = e.OriginalSource as DependencyObject; d is not null; d = VisualTreeHelper.GetParent(d))
+        {
+            if (d is System.Windows.Controls.Primitives.Thumb) return;
+        }
+
+        var ratio = Math.Clamp(e.GetPosition(SeekSlider).X / SeekSlider.ActualWidth, 0, 1);
+        var target = ratio * _durationMs;
+        _sliderUpdating = true;
+        SeekSlider.Value = target;
+        _sliderUpdating = false;
+        SeekTo(target);
+        e.Handled = true;
+    }
+
     private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_sliderUpdating || _player is null) return;
         if (_seekDragging) return; // 拖动中不实时 seek，松手时一次定位
-        try { _player.CurTime = (long)e.NewValue * 10000; } catch { }
+        SeekTo(e.NewValue);
+    }
+
+    /// <summary>按毫秒跳转。用 SeekAccurate；CurTime setter 在 3.x 会重置到开头。</summary>
+    private void SeekTo(double milliseconds)
+    {
+        if (_player is null) return;
+        try
+        {
+            var max = _durationMs > 0 ? _durationMs - 1 : int.MaxValue;
+            var target = (int)Math.Clamp(milliseconds, 0, Math.Max(0, max));
+            _player.SeekAccurate(target);
+            _handoffSeekApplied = true; // 用户手动定位优先于接力定位
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[FlyPlayer] seek 失败: {ex.Message}");
+        }
     }
 
     private void SeekSlider_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
@@ -615,13 +1530,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void SeekSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
         _seekDragging = false;
-        if (_player is null) return;
-        try
-        {
-            _player.CurTime = (long)SeekSlider.Value * 10000;
-            _handoffSeekApplied = true; // 用户手动定位优先于接力定位
-        }
-        catch { }
+        SeekTo(SeekSlider.Value);
     }
 
     // ── 画质切换 ─────────────────────────────────────────────────────
@@ -639,7 +1548,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     /// <summary>只有多档可切时才显示画质按钮；按钮文字为当前档位。</summary>
     private void UpdateQualityButton()
     {
-        var show = _variants.Count >= 2;
+        var show = _variants.Count >= 2 && (!_compactBar || !_dramaMode);
         QualityButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show && _variantIndex >= 0 && _variantIndex < _variants.Count)
             QualityLabel.Text = _variants[_variantIndex].Label;
@@ -720,6 +1629,11 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             }
         }
         UpdateMuteGlyph();
+        _settingVolumeFromCode = true;
+        VolumeSlider.Value = _volume;
+        VolumeFlyoutSlider.Value = _volume;
+        VolumePopupText.Text = $"{_volume}%";
+        _settingVolumeFromCode = false;
     }
 
     private void UpdateMuteGlyph()
@@ -746,6 +1660,50 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     }
 
     private void VolumeSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        => PersistPlaybackSettings();
+
+    // ── 竖屏音量悬浮条 ──────────────────────────────
+
+    private void VolumeHover_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (!_compactBar || _isMini) return;
+        _volumePopupTimer.Stop();
+        _settingVolumeFromCode = true;
+        VolumeFlyoutSlider.Value = _volume;
+        VolumePopupText.Text = $"{_volume}%";
+        _settingVolumeFromCode = false;
+        VolumePopup.IsOpen = true;
+        _controlBarHideTimer.Stop();
+    }
+
+    private void VolumeHover_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (!VolumePopup.IsOpen) return;
+        _volumePopupTimer.Stop();
+        _volumePopupTimer.Start();
+    }
+
+    private void VolumePopup_MouseEnter(object sender, MouseEventArgs e)
+    {
+        _volumePopupTimer.Stop();
+        _controlBarHideTimer.Stop();
+    }
+
+    private void VolumePopup_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _volumePopupTimer.Stop();
+        _volumePopupTimer.Start();
+    }
+
+    private void VolumeFlyoutSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_settingVolumeFromCode) return;
+        _volume = (int)Math.Round(e.NewValue);
+        if (_volume > 0 && _muted) _muted = false;
+        ApplyVolume();
+    }
+
+    private void VolumeFlyoutSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         => PersistPlaybackSettings();
 
     /// <summary>音量/静音写回 config.json：拖动结束与点静音各一次，不在拖动过程中频繁落盘。</summary>
@@ -786,6 +1744,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         _uiSyncTimer.Stop();
         _controlBarHideTimer.Stop();
         _buffering = false;
+        // Unloaded 可能来自切页/关窗；小窗先挂回去，避免顶层 Surface 窗口泄漏
+        var wasMini = _isMini;
+        if (wasMini)
+        {
+            try { ExitMiniWindow(); } catch { /* 窗口已在销毁中，忽略 */ }
+            // 挂回失败（Owner 已销毁等）时至少把独立窗口藏起来，不留黑窗
+            if (!VideoHost.IsAttached && VideoHost.Surface is { } miniSurface)
+            {
+                try { miniSurface.Hide(); } catch { }
+            }
+        }
         try { _player?.Stop(); } catch { }
         try { _player?.Dispose(); } catch { }
         _player = null;

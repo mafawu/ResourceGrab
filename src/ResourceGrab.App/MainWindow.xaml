@@ -76,6 +76,7 @@
                             <RadioButton x:Name="KindVideoPill" Content="视频" Style="{StaticResource KindPillRadioStyle}" Tag="Video" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindNovelPill" Content="本地小说" Style="{StaticResource KindPillRadioStyle}" Tag="Novel" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindPhotobookPill" Content="写真" Style="{StaticResource KindPillRadioStyle}" Tag="Photobook" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
+                            <RadioButton x:Name="KindDramaPill" Content="短剧" Style="{StaticResource KindPillRadioStyle}" Tag="ShortDrama" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <!-- 下载与 漫画/视频 同组：跨媒体页面，进入后占满左中右 -->
                             <RadioButton x:Name="KindDownloadPill" Style="{StaticResource KindPillRadioStyle}" Tag="Download" GroupName="KindGroup" Margin="2,0,0,0" Checked="KindDownloadPill_Checked" Click="KindPill_Click">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -117,6 +118,12 @@
                                 <TextBlock Text="写真" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PhotobookAccentBrush}"/>
                             </Border>
                             <TextBlock Text="在线图集浏览与下载" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </StackPanel>
+                        <StackPanel x:Name="DramaTopActions" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                            <Border CornerRadius="6" Background="{DynamicResource PrimarySubtleBrush}" Padding="8,4" VerticalAlignment="Center">
+                                <TextBlock Text="短剧" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryLightBrush}"/>
+                            </Border>
+                            <TextBlock Text="在线观看 · 可下载离线" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                         </StackPanel>
                         <StackPanel x:Name="DownloadTopActions" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
                             <Border CornerRadius="6" Background="{DynamicResource PrimarySubtleBrush}" Padding="8,4" VerticalAlignment="Center">

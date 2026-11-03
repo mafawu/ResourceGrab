@@ -1,0 +1,51 @@
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.ShortDramaLocalView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views">
+    <Grid Margin="24,16,24,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 页头 -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="本地短剧" FontSize="{DynamicResource FontPageTitle}" FontWeight="Bold"
+                           VerticalAlignment="Center" />
+                <TextBlock x:Name="StatsText" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="ImportButton" Style="{StaticResource GhostButtonStyle}" Padding="12,5"
+                        Click="Import_Click" ToolTip="选择文件夹，把已经下载好的短剧接进本地库（自动匹配在线信息）">
+                    <TextBlock Text="导入本地短剧" />
+                </Button>
+                <Button Style="{StaticResource GhostButtonStyle}" Margin="8,0,0,0" Padding="12,5"
+                        Click="OpenRootDir_Click" ToolTip="打开短剧下载根目录">
+                    <TextBlock Text="打开目录" />
+                </Button>
+                <Button Style="{StaticResource GhostButtonStyle}" Margin="8,0,0,0" Padding="12,5"
+                        Click="Refresh_Click">
+                    <TextBlock Text="刷新" />
+                </Button>
+                <Button Style="{StaticResource GhostButtonStyle}" Margin="8,0,0,0" Padding="12,5"
+                        Click="Settings_Click">
+                    <TextBlock Text="下载设置" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- 已下载（进行中的任务统一在「下载」页看，这里只登记完成品） -->
+        <controls:StateHostControl x:Name="StateHost" Grid.Row="1"
+                                   ResultTemplate="{StaticResource DramaCardResultTemplate}"
+                                   SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                   EmptyTitle="还没有本地短剧"
+                                   EmptyDescription="在剧集详情点「下载」，进度和队列看「下载」页；下好的剧集会出现在这里，可离线播放"
+                                   HintTitle="本地短剧"
+                                   HintDescription="加载中…" />
+    </Grid>
+</controls:CardGridViewBase>

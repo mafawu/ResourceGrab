@@ -164,7 +164,7 @@
       └ 无流：显示海报 + 「▶ 预览」按钮（hover 才点）
   → 双击卡片 / 抽屉内「完整详情 →」：DetailPageShell 整页覆盖
       └ 整页大播放器 + 双列信息 + 磁力 + 同系列推荐
-  → 「⛶ 放大」：PopoutPlayerWindow 独立窗口（三处播放器接力保持不变）
+  → 「▣ 小窗」：`OnlineVideoPreviewPlayer.EnterMiniWindow()` 把同一个播放器挂到独立置顶窗口（不重连，进度连续）
   → 返回：回到结果列表，抽屉态恢复
 ```
 
@@ -227,6 +227,6 @@
 
 1. **`MediaCard` 适配器要覆盖四种卡片全部能力**（角标、hover 按钮、双击判定、收藏心、刮削状态徽章），是最容易遗漏的点。建议每完成一个适配器就做一次截图对比，确保视觉和行为与原卡片一致。
 2. **视频在线搜索的 `VideoPosterCard` 双击判定窗口**（280ms 单击延迟）是刻意设计，避免侧栏遮罩吞双击——`MediaCard` 要保留这套逻辑，不能退化成「单击立即开侧栏」。
-3. **阶段 C 拆 VideoView 时**，三播放器接力（侧栏/整页/小窗，`VideoView.xaml.cs` 的 `TransferPlayback`）要原样搬到 `VideoSearchView`，不能丢。
+3. **阶段 C 拆 VideoView 时**，侧栏 ↔ 整页的 `TransferPlayback` 接力要原样搬到 `VideoSearchView`；小窗走 `OnlineVideoPreviewPlayer.EnterMiniWindow()`（同一个 Player，不重开流），不能退回到双实例交接。
 4. **不要一次性大重构**。阶段 A 抽控件时不改调用方行为，阶段 B/C/D 每步保持可编译可运行，每拆一个子页就验证一次搜索→详情→播放全链路。
 5. **`DetailShell`/`ReaderShell` 已是好设计**，沉浸式阅读/播放保持独立，不并入这套浏览层——本方案只统一「列表 + 详情」型页面。

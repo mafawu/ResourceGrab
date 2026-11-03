@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ResourceGrab.Core.Sources;
 
 /// <summary>在线视频源元信息（预留）。</summary>
@@ -117,6 +119,59 @@ public class OnlineMagnetLink
     public string Size { get; init; } = "";
     public string Date { get; init; } = "";
     public string Url { get; init; } = "";
+
+    /// <summary>
+    /// 站点给这条磁力打的角标（如 "高清" / "字幕" / "英文字幕" / "無碼影片"）。
+    /// MissAV 的磁力表格里角标就是紧跟磁力链接的 &lt;span&gt;，直接照抄文本。
+    /// </summary>
+    public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+
+    /// <summary>是否高清（站点标了「高清」或「4K」）。</summary>
+    public bool HasHd => Tags.Any(t => t is "高清" or "4K");
+
+    /// <summary>是否中文字幕（站点标了「字幕」/「中文字幕」，或番号后缀命中 -C/-UC 等）。</summary>
+    public bool HasChineseSubtitle => Tags.Any(t => t is "字幕" or "中文字幕");
+}
+
+/// <summary>磁力角标的识别与兜底规则：站点角标优先，缺失时按上传者命名习惯推断。</summary>
+public static class MagnetTagHelper
+{
+    private static readonly string[] KnownBadges = ["高清", "4K", "字幕", "中文字幕", "英文字幕", "無碼影片"];
+
+    /// <summary>从角标文本里挑出已知标记（站点可能带空白/额外文案，做包含匹配）。</summary>
+    public static IEnumerable<string> FromBadges(IEnumerable<string> texts)
+    {
+        foreach (var raw in texts)
+        {
+            var text = raw.Trim();
+            if (text.Length == 0) continue;
+            foreach (var known in KnownBadges)
+            {
+                if (text.Equals(known, StringComparison.Ordinal)) yield return known;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 站点没给任何角标时，按磁力名兜底补「字幕」：
+    /// 中文字幕常见写法 —— 结尾 -C / -CH / -CHS / -CHT，或名里含「中文字幕」「中字」。
+    /// 只要站点给了角标就以站点为准（MissAV 的 -UC 行就只标「高清」不标「字幕」）。
+    /// </summary>
+    public static List<string> MergeFromName(IEnumerable<string> tags, string name)
+    {
+        var result = tags.Distinct(StringComparer.Ordinal).ToList();
+        if (result.Count > 0) return result;
+
+        var n = name.Trim();
+        if (n.Length == 0) return result;
+
+        // 允许「-C」「-CHS」，也允许直接贴在番号后（ipzz-961ch）
+        var suffixMatch = Regex.IsMatch(n, @"(?:[0-9]|[-_. ])(?:C|CHS?|CHT)$", RegexOptions.IgnoreCase);
+        var keywordMatch = n.Contains("中文字幕", StringComparison.Ordinal)
+                           || n.Contains("中字", StringComparison.Ordinal);
+        if (suffixMatch || keywordMatch) result.Add("字幕");
+        return result;
+    }
 }
 
 /// <summary>

@@ -5,6 +5,7 @@
          与浅色同一套语义键：画布压暗、表面抬升、靛蓝强调提亮以维持 4.5:1。
          ================================================================ -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0B0E14" />
+    <SolidColorBrush x:Key="PlayerStageBrush" Color="#141820" />
     <SolidColorBrush x:Key="AppBackgroundTopBrush" Color="#12161F" />
     <SolidColorBrush x:Key="AppBackgroundBottomBrush" Color="#0B0E14" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#12161F" />

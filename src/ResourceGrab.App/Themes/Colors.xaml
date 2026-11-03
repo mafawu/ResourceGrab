@@ -6,6 +6,7 @@
          颜色只承担层级，不承担装饰；阴影极轻，靠留白和描边分层。
          ================================================================ -->
     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F5F7FB" />
+    <SolidColorBrush x:Key="PlayerStageBrush" Color="#EEF1F5" />
     <SolidColorBrush x:Key="AppBackgroundTopBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="AppBackgroundBottomBrush" Color="#F5F7FB" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
