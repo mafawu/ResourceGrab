@@ -191,16 +191,20 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _volumePopupTimer.Stop();
             VolumePopup.IsOpen = false;
             // 短剧详情页切 Tab 时只 Pause、不销毁 Player：保留流/解码器/播放位置，
-            // 回到页面还是同一集同一进度。其它页面（视频页等）仍按原逻辑释放。
+            // 回到页面还是同一集同一进度。小窗模式下则完全不动，继续在独立窗口播放。
+            if (_isMini) return;
             if (KeepAliveOnUnload) return;
             DisposePlayer();
         };
-        // 页面把播放器隐藏/移出可视树时，小窗必须跟着收回去，否则会留下一个漂浮的黑窗口
+        // 页面把播放器隐藏/移出可视树时，小窗必须继续独立播放：
+        // 切到漫画等其它 Tab 时页面会 Unloaded/IsVisible=false，但小窗是独立置顶窗口，
+        // 不能在这里收回或暂停，否则用户一切 Tab 小窗就消失。
         IsVisibleChanged += (_, _) =>
         {
-            if (!IsVisible && _isMini) ExitMiniWindow();
+            if (IsVisible) return;
+            if (_isMini) return;
             // 切顶栏 Tab 时先于 Unloaded 触发：此时 Player/HwndHost 还活着，先 Pause 才能保住位置。
-            if (!IsVisible && KeepAliveOnUnload) Pause();
+            if (KeepAliveOnUnload) Pause();
         };
         // 播放画面在 FlyleafHost 的独立窗口里，滚轮不会冒泡到页面；挂转发让滚轮能滚动页面
         AttachWheelForwarding();
@@ -1345,6 +1349,17 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             {
                 // 切 Tab 离场时宿主销毁 Surface 也可能触发本事件；此时已主动 Pause，
                 // 不能把状态改成 Idle，否则回来会显示海报并从 0 重开。
+                // 小窗挂在独立窗口上：页面 Unloaded 也会触发一次 PlaybackStopped，
+                // 不能因此收回小窗；只有真正播到结尾才结束小窗。
+                if (_isMini)
+                {
+                    if (_player?.Status == Status.Ended)
+                    {
+                        ExitMiniWindow();
+                        SetState(PlayerState.Idle);
+                    }
+                    return;
+                }
                 if (KeepAliveOnUnload && !IsVisible) return;
                 if (_state == PlayerState.Paused) return;
                 if (_player?.Status == Status.Paused) return;

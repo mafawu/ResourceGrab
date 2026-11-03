@@ -108,6 +108,13 @@ public partial class ShortDramaDetailView : UserControl
         Unloaded += (_, _) =>
         {
             SaveProgress();
+            // 小窗是独立置顶窗口：切到漫画等 Tab 时页面会 Unloaded，
+            // 但不能暂停播放，也不能停掉进度计时器，否则小窗会停在原地。
+            if (Player.IsMiniWindow)
+            {
+                SetPageFocus(false);
+                return;
+            }
             _watchTimer.Stop();
             // 只暂停不 Stop：切换顶栏 Tab 时保留 Player、流地址、解码器与播放位置，
             // 回来还是同一集、同一进度；Stop 会丢流并回到海报。
