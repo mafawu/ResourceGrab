@@ -115,7 +115,53 @@ public sealed class DramaLocalImportService
         }
 
         var title = GuessTitleFromFile(fullPath);
-        progress?.Report($"正在整理：{fileName}");
+        progress?.Report($"正在识别：{fileName}");
+
+        // 先确认站点能匹配到详情，再动文件。识别不到就原样留在原处，
+        // 不建空文件夹、不移动，避免把用户的下载目录搞乱。
+        ShortDramaSummary? match;
+        ShortDramaDetail? detail;
+        try
+        {
+            match = await MatchAsync(title, ct).ConfigureAwait(false);
+            if (match is null)
+            {
+                _logger?.Info($"[DramaImport] 单文件未匹配到在线剧集，保持原样：{fullPath}");
+                report.Items.Add(new DramaImportItem
+                {
+                    FolderPath = Path.GetDirectoryName(fullPath) ?? "",
+                    GuessedTitle = title,
+                    LocalEpisodeCount = localCount,
+                });
+                return report;
+            }
+
+            detail = await _source.GetDetailAsync(match.Id, ct).ConfigureAwait(false);
+            if (detail is null)
+            {
+                report.Items.Add(new DramaImportItem
+                {
+                    FolderPath = Path.GetDirectoryName(fullPath) ?? "",
+                    GuessedTitle = title,
+                    LocalEpisodeCount = localCount,
+                    Error = "详情解析失败，未移动文件",
+                });
+                return report;
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[DramaImport] 单文件识别失败，保持原样 {fullPath}：{ex.Message}");
+            report.Items.Add(new DramaImportItem
+            {
+                FolderPath = Path.GetDirectoryName(fullPath) ?? "",
+                GuessedTitle = title,
+                LocalEpisodeCount = localCount,
+                Error = $"识别失败，未移动文件：{ex.Message}",
+            });
+            return report;
+        }
 
         string folder;
         string target;
@@ -134,6 +180,7 @@ public sealed class DramaLocalImportService
                 return report;
             }
 
+            progress?.Report($"正在整理：{fileName}");
             var folderName = ShortDramaLibraryService.SanitizeFolderName(title);
             folder = CreateUniqueFolder(parent, folderName);
             target = Path.Combine(folder, fileName);
@@ -161,7 +208,23 @@ public sealed class DramaLocalImportService
             return report;
         }
 
-        var item = await ImportOneAsync(folder, title, [target], ct).ConfigureAwait(false);
+        var item = await ImportOneAsync(folder, title, [target], ct, detail).ConfigureAwait(false);
+        if (!item.Success)
+        {
+            // 已拿到详情但写元数据失败：把文件移回原处，删掉本次新建的目录，
+            // 不留下半套元数据或孤立的片名文件夹。
+            try
+            {
+                if (File.Exists(target) && !File.Exists(fullPath)) File.Move(target, fullPath);
+                try { _library.UnregisterExternal(folder); } catch { }
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warn($"[DramaImport] 单文件回滚失败 {folder}：{ex.Message}");
+            }
+        }
+
         report.Items.Add(item);
         return report;
     }
@@ -181,31 +244,36 @@ public sealed class DramaLocalImportService
     }
 
     private async Task<DramaImportItem> ImportOneAsync(
-        string folder, string title, IReadOnlyList<string> videos, CancellationToken ct)
+        string folder, string title, IReadOnlyList<string> videos, CancellationToken ct,
+        ShortDramaDetail? knownDetail = null)
     {
         var localCount = videos.Count;
         try
         {
-            var match = await MatchAsync(title, ct).ConfigureAwait(false);
-            if (match is null)
-            {
-                _logger?.Info($"[DramaImport] 未匹配到在线剧集：{title}（{folder}）");
-                return new DramaImportItem
-                {
-                    FolderPath = folder,
-                    GuessedTitle = title,
-                    LocalEpisodeCount = localCount,
-                };
-            }
-
-            var detail = await _source.GetDetailAsync(match.Id, ct).ConfigureAwait(false);
+            var detail = knownDetail;
             if (detail is null)
             {
-                return new DramaImportItem
+                var match = await MatchAsync(title, ct).ConfigureAwait(false);
+                if (match is null)
                 {
-                    FolderPath = folder, GuessedTitle = title, LocalEpisodeCount = localCount,
-                    Error = "详情解析失败",
-                };
+                    _logger?.Info($"[DramaImport] 未匹配到在线剧集：{title}（{folder}）");
+                    return new DramaImportItem
+                    {
+                        FolderPath = folder,
+                        GuessedTitle = title,
+                        LocalEpisodeCount = localCount,
+                    };
+                }
+
+                detail = await _source.GetDetailAsync(match.Id, ct).ConfigureAwait(false);
+                if (detail is null)
+                {
+                    return new DramaImportItem
+                    {
+                        FolderPath = folder, GuessedTitle = title, LocalEpisodeCount = localCount,
+                        Error = "详情解析失败",
+                    };
+                }
             }
 
             var meta = _library.MergeDetail(detail, folder);
