@@ -188,7 +188,7 @@ public partial class ShortDramaDetailView : UserControl
         Player.PosterFallbackTextValue = DramaCoverPlaceholder.FirstChar(summary.Title);
         Player.PlayerTitle = summary.Title;
         Player.SourceName = summary.ChannelName;
-        Player.MiniSubtitle = $"第 {_currentEpisode} 集";
+        Player.MiniSubtitle = MiniEpisodeLabel();
         DownloadButton.IsEnabled = false;
         RelatedSection.Visibility = Visibility.Collapsed;
         _relatedHasItems = false;
@@ -513,6 +513,9 @@ public partial class ShortDramaDetailView : UserControl
         UpdateWatchedUi();
     }
 
+    private string MiniEpisodeLabel()
+        => $"第{Math.Max(1, _currentEpisode)}/{Math.Max(1, TotalEpisodes)}集";
+
     private void SelectEpisode(int number)
     {
         var total = TotalEpisodes;
@@ -571,7 +574,7 @@ public partial class ShortDramaDetailView : UserControl
         _switchingEpisode = true;
         _nearEnd = false;
         _wasPlaying = false;
-        Player.MiniSubtitle = $"第 {number} 集";
+        Player.MiniSubtitle = MiniEpisodeLabel();
         UpdateEpisodeUi();
         SaveProgress();
         SetPlayerHint($"正在获取第 {number} 集播放地址…");
@@ -630,7 +633,7 @@ public partial class ShortDramaDetailView : UserControl
         _switchingEpisode = true;
         _nearEnd = false;
         _wasPlaying = false;
-        Player.MiniSubtitle = $"第 {number} 集";
+        Player.MiniSubtitle = MiniEpisodeLabel();
         SaveProgress();
         if (startPlayback)
         {
@@ -648,6 +651,7 @@ public partial class ShortDramaDetailView : UserControl
 
     private void UpdateEpisodeUi()
     {
+        Player.MiniSubtitle = MiniEpisodeLabel();
         RefreshEpisodeMarks();
         UpdatePlayButtonText();
         Player.SetEpisodeNavigation(_currentEpisode > 1, _currentEpisode < TotalEpisodes);

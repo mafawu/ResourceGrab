@@ -187,6 +187,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     public OnlineVideoPreviewPlayer()
     {
         InitializeComponent();
+        VideoHost.Background = Brushes.Black;
         InitVolumeFromConfig();
         Unloaded += (_, _) =>
         {
@@ -654,7 +655,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             host.ResizeSensitivity = 8;
 
             host.IsAttached = false;                  // ← 关键：只换宿主窗口，不碰 Player
-            host.KeepRatioOnResize = true;            // detach 之后再开，避免改页面里的控件尺寸
+            host.KeepRatioOnResize = false;           // 小窗自由缩放，不锁视频比例
             HookMiniSurface();
             ShowMiniHeader();                         // 顶栏放到视频上方，不覆盖画面
         }
@@ -809,6 +810,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private void ShowMiniHeader()
     {
         if (VideoHost.Surface is not { } surface) return;
+        if (surface is Window surfaceWindow) surfaceWindow.Background = Brushes.Black;
         CloseMiniHeader();
 
         var header = new Window
@@ -864,9 +866,13 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         _miniHeader.Top = surface.Top - MiniHeaderHeight;
         _miniHeader.Width = width;
         _miniHeader.Height = MiniHeaderHeight;
-        var showEpisode = _isMini && _miniSubtitle.Length > 0 && width >= 420;
+        var showEpisode = _isMini && _miniSubtitle.Length > 0;
         MiniEpisodeText.Visibility = showEpisode ? Visibility.Visible : Visibility.Collapsed;
-        MiniTitleText.MaxWidth = Math.Max(50, width - (showEpisode ? 270 : 190));
+        MiniTitleText.MaxWidth = Math.Max(24, width - (showEpisode ? 245 : 190));
+        var narrow = width < 330;
+        MiniPinButton.Content = _miniTopMost
+            ? (narrow ? "已顶" : "已置顶")
+            : (narrow ? "顶" : "置顶");
     }
 
     private void UpdateMiniHeaderNavigation()
@@ -892,7 +898,10 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     private void UpdateMiniPinVisual()
     {
-        MiniPinButton.Content = _miniTopMost ? "已置顶" : "置顶";
+        var narrow = (_miniHeader?.Width ?? 420) < 330;
+        MiniPinButton.Content = _miniTopMost
+            ? (narrow ? "已顶" : "已置顶")
+            : (narrow ? "顶" : "置顶");
         try
         {
             MiniPinButton.Foreground = _miniTopMost
@@ -1427,6 +1436,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         if (_player is not null) return;
         var player = new Player(new FlyleafLib.Config());
+        player.Config.Video.BackColor = Colors.Black;
         player.OpenCompleted += (_, e) =>
         {
             // 非当前代际（切走/重播后旧打开的回执）：直接丢弃，不刷状态
