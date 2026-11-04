@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Common;
@@ -49,7 +48,7 @@ public partial class ShortDramaDetailView : UserControl
 
     private readonly HashSet<int> _watched = [];
     private HashSet<int> _downloaded = [];
-    private readonly List<(int Number, Button Button, Ellipse Dot)> _episodeButtons = [];
+    private readonly List<(int Number, Button Button)> _episodeButtons = [];
     private readonly DispatcherTimer _watchTimer;
 
     private int _relatedVersion;
@@ -465,18 +464,8 @@ public partial class ShortDramaDetailView : UserControl
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            var dot = new Ellipse
-            {
-                Width = 5,
-                Height = 5,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 4, 4, 0),
-                Visibility = Visibility.Collapsed,
-            };
             var content = new Grid();
             content.Children.Add(text);
-            content.Children.Add(dot);
 
             var button = new Button
             {
@@ -489,7 +478,7 @@ public partial class ShortDramaDetailView : UserControl
             button.SetResourceReference(StyleProperty, "EpisodeButtonStyle");
             button.Click += (_, _) => SelectEpisode(number);
             EpisodePanel.Children.Add(button);
-            _episodeButtons.Add((number, button, dot));
+            _episodeButtons.Add((number, button));
         }
 
         RefreshEpisodeMarks();
@@ -502,10 +491,8 @@ public partial class ShortDramaDetailView : UserControl
         var transparent = Brushes.Transparent;
         var accent = (Brush)FindResource("PrimaryBrush");
         var secondary = (Brush)FindResource("TextSecondaryBrush");
-        var success = (Brush)FindResource("SuccessBrush");
-        var warning = (Brush)FindResource("WarningBrush");
 
-        foreach (var (number, button, dot) in _episodeButtons)
+        foreach (var (number, button) in _episodeButtons)
         {
             var active = number == _currentEpisode;
             var watched = _watched.Contains(number);
@@ -515,16 +502,6 @@ public partial class ShortDramaDetailView : UserControl
             button.BorderBrush = active ? activeBorder : transparent;
             button.Foreground = active ? accent : secondary;
             button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
-
-            if (watched || downloaded || active)
-            {
-                dot.Visibility = Visibility.Visible;
-                dot.Fill = watched || downloaded ? success : warning;
-            }
-            else
-            {
-                dot.Visibility = Visibility.Collapsed;
-            }
 
             var notes = new List<string> { $"第 {number} 集" };
             if (watched) notes.Add("已看");
