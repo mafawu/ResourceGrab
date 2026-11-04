@@ -1289,6 +1289,7 @@ private void OpenNovelLocal()
                     if (!on) UpdateTopBarForKind();
                 };
                 _dramaDetailView.RelatedOpenRequested += (_, summary) => OpenDramaDetail(summary);
+                _dramaDetailView.SearchTagRequested += (_, tag) => OpenDramaTagSearch(tag);
             }
             return _dramaDetailView;
         }
@@ -1335,6 +1336,20 @@ private void OpenNovelLocal()
         var view = DramaDetailView;
         SetPage(view);
         view.LoadAsync(summary);
+        UpdateTopBarForKind();
+    }
+
+    /// <summary>详情页点击标签：切到短剧列表的搜索态，按标签关键词搜索。</summary>
+    private void OpenDramaTagSearch(string keyword)
+    {
+        if (PageHost.Content is UserControl current && !ReferenceEquals(current, DramaBrowseView))
+        {
+            _lastDramaContent = current;
+            _dramaBackTarget = current;
+        }
+        var view = DramaBrowseView;
+        SetPage(view);
+        view.ShowSearch(keyword);
         UpdateTopBarForKind();
     }
 

@@ -74,15 +74,35 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
 
-        <Style x:Key="TagPillStyle" TargetType="Border">
+        <Style x:Key="TagPillButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource HoverBgBrush}" />
-            <Setter Property="CornerRadius" Value="{DynamicResource RadiusXs}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="11.5" />
             <Setter Property="Padding" Value="9,3" />
             <Setter Property="Margin" Value="0,0,6,6" />
-        </Style>
-        <Style x:Key="TagPillTextStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11.5" />
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource RadiusXs}"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontSize="{TemplateBinding FontSize}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource CardHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.78" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
@@ -247,9 +267,11 @@
                             <TextBlock x:Name="DescText" Margin="0,6,0,0" FontSize="12.5" LineHeight="22"
                                        TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}"
                                        TextTrimming="CharacterEllipsis" MaxHeight="46" />
-                            <Button x:Name="DescToggleButton" Content="展开全部" Style="{StaticResource GhostButtonStyle}"
-                                    HorizontalAlignment="Left" Padding="0" Margin="0,2,0,0" FontSize="11.5"
-                                    Foreground="{DynamicResource TextLinkBrush}" Click="DescToggle_Click" />
+                            <Button x:Name="DescToggleButton" Style="{StaticResource GhostButtonStyle}"
+                                    HorizontalAlignment="Left" Padding="12,5" Margin="0,6,0,0" FontSize="11.5"
+                                    Click="DescToggle_Click">
+                                <TextBlock x:Name="DescToggleText" Text="展开全部" />
+                            </Button>
                             <ItemsControl x:Name="TagList" Margin="0,8,0,0">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -258,9 +280,9 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource TagPillStyle}">
-                                            <TextBlock Text="{Binding}" Style="{StaticResource TagPillTextStyle}" />
-                                        </Border>
+                                        <Button Style="{StaticResource TagPillButtonStyle}"
+                                                Content="{Binding}" Tag="{Binding}"
+                                                Click="Tag_Click" ToolTip="搜索该标签" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

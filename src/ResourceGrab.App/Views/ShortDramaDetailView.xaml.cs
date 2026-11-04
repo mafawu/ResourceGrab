@@ -69,6 +69,9 @@ public partial class ShortDramaDetailView : UserControl
     /// <summary>点击「猜你喜欢」卡片，请求打开另一部短剧（MainWindow 负责换页）。</summary>
     public event EventHandler<ShortDramaSummary>? RelatedOpenRequested;
 
+    /// <summary>点击标签，请求按该标签搜索短剧。</summary>
+    public event EventHandler<string>? SearchTagRequested;
+
     public ShortDramaDetailView()
     {
         InitializeComponent();
@@ -1081,7 +1084,15 @@ public partial class ShortDramaDetailView : UserControl
     {
         _descExpanded = !_descExpanded;
         DescText.MaxHeight = _descExpanded ? double.PositiveInfinity : 46;
-        DescToggleButton.Content = _descExpanded ? "收起" : "展开全部";
+        DescToggleText.Text = _descExpanded ? "收起" : "展开全部";
+    }
+
+    private void Tag_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag }) return;
+        tag = tag.Trim();
+        if (tag.Length == 0) return;
+        SearchTagRequested?.Invoke(this, tag);
     }
 
     private void AutoPlayToggle_Click(object sender, RoutedEventArgs e)
