@@ -410,6 +410,30 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         SetState(PlayerState.Idle);
     }
 
+    /// <summary>
+    /// 小窗内切换上/下一集：只停当前流，不收回小窗、不销毁 Surface。
+    /// 调用方随后设置新的 StreamUrl 并 Play()，画面在同一个独立窗口里续上。
+    /// </summary>
+    public void StopForEpisodeSwitch()
+    {
+        if (!_isMini)
+        {
+            Stop();
+            return;
+        }
+
+        _openGeneration++;
+        _pendingSeekMs = 0;
+        _pendingPause = false;
+        _pauseOnFirstFrame = false;
+        _buffering = false;
+        try { _player?.Stop(); } catch { /* 已停止/未初始化 */ }
+        _uiSyncTimer.Stop();
+        // 保持 _isMini 与 VideoHost/Surface 不动；Play() 会重新 SetState(Loading)。
+        ControlBar.Visibility = Visibility.Visible;
+        RestartControlBarTimer();
+    }
+
     /// <summary>公开播入口：外部（详情自动起播、独立播放窗口）设好 StreamUrl 后调用。</summary>
     public void Play() => TryPlay();
 

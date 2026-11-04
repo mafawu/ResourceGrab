@@ -586,7 +586,11 @@ public partial class ShortDramaDetailView : UserControl
                 return;
             }
 
-            if (startPlayback) Player.Stop();
+            if (startPlayback)
+            {
+                if (Player.IsMiniWindow) Player.StopForEpisodeSwitch();
+                else Player.Stop();
+            }
             Player.StreamUrl = frame.StreamUrl;
             Player.ShowPlayButton = true;
             _playingEpisode = number;
@@ -628,7 +632,11 @@ public partial class ShortDramaDetailView : UserControl
         _wasPlaying = false;
         Player.MiniSubtitle = $"第 {number} 集";
         SaveProgress();
-        if (startPlayback) Player.Stop();
+        if (startPlayback)
+        {
+            if (Player.IsMiniWindow) Player.StopForEpisodeSwitch();
+            else Player.Stop();
+        }
         Player.StreamUrl = path;
         Player.PosterUrl = drama.CoverPath ?? "";
         Player.ShowPlayButton = true;
