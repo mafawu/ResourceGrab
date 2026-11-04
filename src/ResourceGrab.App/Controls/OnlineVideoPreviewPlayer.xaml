@@ -419,8 +419,7 @@
                     </Grid>
                 </Border>
 
-                <!-- 小窗顶栏：标题 + 置顶 + 返回页面 + 关闭；随控制条一起 5 秒自动隐藏，
-                     拖动条上空白处即可移动小窗（FlyleafHost.DetachedDragMove） -->
+                <!-- 小窗顶栏：独立窗口，放在视频上方而不是覆盖视频；标题 + 上一集/下一集 + 置顶 + 返回 + 关闭 -->
                 <Border x:Name="MiniBar" Panel.ZIndex="20" VerticalAlignment="Top" Height="34"
                         Background="#CC0B0E14" Visibility="Collapsed" MouseMove="ControlBar_MouseMove">
                     <Grid>
@@ -438,10 +437,16 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center" Margin="0,0,6,0">
+                            <Button x:Name="MiniPrevButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                    Content="‹" FontSize="14" Padding="7,1" Click="MiniPrev_Click"
+                                    ToolTip="上一集" />
+                            <Button x:Name="MiniNextButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
+                                    Content="›" FontSize="14" Padding="7,1" Click="MiniNext_Click"
+                                    ToolTip="下一集" />
                             <Button x:Name="MiniPinButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
                                     Content="置顶" Click="MiniPin_Click" ToolTip="置顶 / 取消置顶" />
                             <Button x:Name="MiniReturnButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
-                                    Content="返回页面" Click="MiniReturn_Click"
+                                    Content="返回" Click="MiniReturn_Click"
                                     ToolTip="回到页面继续播放（进度不丢）" />
                             <Button x:Name="MiniCloseButton" Style="{StaticResource PlayerOverlayTextButtonStyle}"
                                     Content="✕" Click="MiniClose_Click"

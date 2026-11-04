@@ -143,6 +143,9 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     private bool _miniTopMost = true;
     /// <summary>上一次小窗尺寸（用户拖动缩放过就沿用，避免每次回到默认大小）。</summary>
     private Size? _miniLastSize;
+    /// <summary>小窗顶部独立控制条窗口：放在视频上方，不覆盖画面。</summary>
+    private Window? _miniHeader;
+    private const double MiniHeaderHeight = 34;
     /// <summary>短剧模式：显示上下集/选集/倍速/页面全屏/设置，隐藏音量滑条与停止。</summary>
     private bool _dramaMode;
     /// <summary>是否显示音量滑条（短剧模式隐藏；退出小窗时据此恢复）。</summary>
@@ -220,7 +223,6 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             if (!_inPlayback) return;
             ControlBar.Visibility = Visibility.Collapsed;
             VolumePopup.IsOpen = false;
-            if (_isMini) MiniBar.Visibility = Visibility.Collapsed;
         };
         _uiSyncTimer.Tick += (_, _) => SyncPlaybackUi();
 
@@ -299,7 +301,6 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         {
             // 进入播放/暂停先显示控制条，5 秒无操作自动隐藏（鼠标进入视频区域重新显示）
             ControlBar.Visibility = Visibility.Visible;
-            if (_isMini) MiniBar.Visibility = Visibility.Visible;
             RestartControlBarTimer();
         }
         else
@@ -307,7 +308,6 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             _controlBarHideTimer.Stop();
             ControlBar.Visibility = Visibility.Collapsed;
             VolumePopup.IsOpen = false;
-            MiniBar.Visibility = Visibility.Collapsed;
         }
         PauseToggleButton.Content = state == PlayerState.Paused ? "►" : "❚❚";
         UpdateMiniButton();
@@ -321,7 +321,6 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         if (!_inPlayback) return;
         ControlBar.Visibility = Visibility.Visible;
-        if (_isMini) MiniBar.Visibility = Visibility.Visible;
         RestartControlBarTimer();
     }
 
@@ -551,6 +550,8 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         PrevEpisodeButton.IsEnabled = canPrevious;
         NextEpisodeButton.IsEnabled = canNext;
+        MiniPrevButton.IsEnabled = canPrevious;
+        MiniNextButton.IsEnabled = canNext;
     }
 
     /// <summary>暂停（不销毁流）。切 Tab 离开详情页时调用，回来后从原位置继续。</summary>
@@ -631,10 +632,13 @@ public partial class OnlineVideoPreviewPlayer : UserControl
             host.IsAttached = false;                  // ← 关键：只换宿主窗口，不碰 Player
             host.KeepRatioOnResize = true;            // detach 之后再开，避免改页面里的控件尺寸
             HookMiniSurface();
+            ShowMiniHeader();                         // 顶栏放到视频上方，不覆盖画面
         }
         catch (Exception ex)
         {
             _logger?.Warn($"[FlyPlayer] 进入小窗失败: {ex.Message}");
+            CloseMiniHeader();
+            _isMini = false;
             // 可能已经 detach 了一半：恢复回页面，别留下无主窗口
             try
             {
@@ -673,7 +677,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         if (!_isMini) return;
         _isMini = false;
-        MiniBar.Visibility = Visibility.Collapsed;
+        CloseMiniHeader();
         MiniPlaceholder.Visibility = Visibility.Collapsed;
         MiniEpisodeText.Visibility = Visibility.Collapsed;
         ControlBar.Padding = _compactBar
@@ -775,6 +779,78 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         return new Point(left, top);
     }
 
+    /// <summary>
+    /// 小窗顶栏改为独立窗口，贴在视频窗口上方；不再作为覆盖层压在画面上。
+    /// </summary>
+    private void ShowMiniHeader()
+    {
+        if (VideoHost.Surface is not { } surface) return;
+        CloseMiniHeader();
+
+        var header = new Window
+        {
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            ShowInTaskbar = false,
+            ShowActivated = false,
+            Height = MiniHeaderHeight,
+            Width = Math.Max(180, surface.Width),
+            Topmost = _miniTopMost,
+            Title = "小窗控制",
+        };
+        try { header.Owner = surface; } catch { /* Owner 只是置顶辅助 */ }
+
+        if (MiniBar.Parent is Panel parent) parent.Children.Remove(MiniBar);
+        MiniBar.Visibility = Visibility.Visible;
+        header.Content = MiniBar;
+        _miniHeader = header;
+        header.Show();
+
+        surface.LocationChanged += MiniSurface_LocationChanged;
+        surface.SizeChanged += MiniHeader_SurfaceSizeChanged;
+        SyncMiniHeader();
+        UpdateMiniHeaderNavigation();
+    }
+
+    private void CloseMiniHeader()
+    {
+        if (_miniHeader is null) return;
+        if (VideoHost.Surface is { } surface)
+        {
+            surface.LocationChanged -= MiniSurface_LocationChanged;
+            surface.SizeChanged -= MiniHeader_SurfaceSizeChanged;
+        }
+        _miniHeader.Content = null;
+        try { _miniHeader.Close(); } catch { }
+        _miniHeader = null;
+        MiniBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void MiniSurface_LocationChanged(object? sender, EventArgs e) => SyncMiniHeader();
+
+    private void MiniHeader_SurfaceSizeChanged(object? sender, SizeChangedEventArgs e) => SyncMiniHeader();
+
+    private void SyncMiniHeader()
+    {
+        if (_miniHeader is null || VideoHost.Surface is not { } surface) return;
+        var width = Math.Max(180, surface.Width);
+        _miniHeader.Left = surface.Left;
+        _miniHeader.Top = surface.Top - MiniHeaderHeight;
+        _miniHeader.Width = width;
+        _miniHeader.Height = MiniHeaderHeight;
+        var showEpisode = _isMini && _miniSubtitle.Length > 0 && width >= 420;
+        MiniEpisodeText.Visibility = showEpisode ? Visibility.Visible : Visibility.Collapsed;
+        MiniTitleText.MaxWidth = Math.Max(50, width - (showEpisode ? 270 : 190));
+    }
+
+    private void UpdateMiniHeaderNavigation()
+    {
+        MiniPrevButton.Visibility = _dramaMode ? Visibility.Visible : Visibility.Collapsed;
+        MiniNextButton.Visibility = _dramaMode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     /// <summary>记住用户拖动缩放过的小窗尺寸（仅本实例生命周期内）。</summary>
     private void HookMiniSurface()
     {
@@ -831,6 +907,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
         DurationText.Visibility = Visibility.Visible;
         if (!_compactBar) VolumePopup.IsOpen = false;
         UpdateMiniButton();
+        UpdateMiniHeaderNavigation();
     }
 
     /// <summary>
@@ -1094,6 +1171,12 @@ public partial class OnlineVideoPreviewPlayer : UserControl
 
     private void MiniButton_Click(object sender, RoutedEventArgs e) => EnterMiniWindow();
 
+    private void MiniPrev_Click(object sender, RoutedEventArgs e)
+        => PreviousEpisodeRequested?.Invoke(this, EventArgs.Empty);
+
+    private void MiniNext_Click(object sender, RoutedEventArgs e)
+        => NextEpisodeRequested?.Invoke(this, EventArgs.Empty);
+
     private void MiniReturn_Click(object sender, RoutedEventArgs e) => ExitMiniWindow();
 
     private void MiniClose_Click(object sender, RoutedEventArgs e) => ExitMiniWindow();
@@ -1102,6 +1185,7 @@ public partial class OnlineVideoPreviewPlayer : UserControl
     {
         _miniTopMost = !_miniTopMost;
         try { VideoHost.DetachedTopMost = _miniTopMost; } catch { }
+        if (_miniHeader is not null) _miniHeader.Topmost = _miniTopMost;
         UpdateMiniPinVisual();
     }
 
