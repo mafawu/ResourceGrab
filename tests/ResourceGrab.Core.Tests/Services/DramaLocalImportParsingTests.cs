@@ -31,6 +31,14 @@ public class DramaLocalImportParsingTests
     public void CleanTitle_StripsTagsAndEpisodeHints(string raw, string expected)
         => Assert.Equal(expected, DramaLocalImportService.CleanTitle(raw));
 
+    [Theory]
+    [InlineData("废柴杂役11-15.mp4", "废柴杂役")]
+    [InlineData("废柴杂役 第12集.mp4", "废柴杂役")]
+    [InlineData("【4K】金牌御医-08.mkv", "金牌御医")]
+    [InlineData("苗疆少女 S01E02.mp4", "苗疆少女")]
+    public void GuessTitleFromFile_StripsEpisodeSuffix(string fileName, string expected)
+        => Assert.Equal(expected, DramaLocalImportService.GuessTitleFromFile(fileName));
+
     [Fact]
     public void Normalize_KeepsOnlyLettersAndDigits()
         => Assert.Equal("苗疆少女2", DramaLocalImportService.Normalize("苗疆·少女 2！"));

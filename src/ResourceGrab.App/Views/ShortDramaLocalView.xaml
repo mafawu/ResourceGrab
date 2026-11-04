@@ -22,6 +22,10 @@
                         Click="Import_Click" ToolTip="选择文件夹，把已经下载好的短剧接进本地库（自动匹配在线信息）">
                     <TextBlock Text="导入本地短剧" />
                 </Button>
+                <Button x:Name="ImportFileButton" Style="{StaticResource GhostButtonStyle}" Margin="8,0,0,0" Padding="12,5"
+                        Click="ImportFile_Click" ToolTip="选择单个视频：自动在同目录新建片名文件夹并移入，再刮削入库">
+                    <TextBlock Text="导入单个视频" />
+                </Button>
                 <Button Style="{StaticResource GhostButtonStyle}" Margin="8,0,0,0" Padding="12,5"
                         Click="OpenRootDir_Click" ToolTip="打开短剧下载根目录">
                     <TextBlock Text="打开目录" />

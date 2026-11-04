@@ -58,12 +58,19 @@ public sealed class DramaLocalImportService
     /// <summary>
     /// 扫描并导入。<paramref name="rootFolder"/> 的每个**子目录**视为一部剧；
     /// 若该目录自己就散放着视频文件，则整体视为一部剧。
+    /// <para>
+    /// 若传入的是**单个视频文件**：先在同目录新建以片名命名的文件夹，把文件移进去，
+    /// 再按“一部剧一个目录”的流程刮削、写 drama.json/poster.jpg 并登记。
+    /// </para>
     /// </summary>
     public async Task<DramaImportReport> ImportAsync(
         string rootFolder,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
+        if (File.Exists(rootFolder))
+            return await ImportSingleFileAsync(rootFolder, progress, ct).ConfigureAwait(false);
+
         var report = new DramaImportReport();
         if (!Directory.Exists(rootFolder)) return report;
 
@@ -81,6 +88,96 @@ public sealed class DramaLocalImportService
         }
 
         return report;
+    }
+
+    /// <summary>
+    /// 单个视频：同目录建“片名”文件夹 → 移入 → 刮削入库。
+    /// 文件移动失败时返回错误项，不留下空文件夹。
+    /// </summary>
+    private async Task<DramaImportReport> ImportSingleFileAsync(
+        string videoPath, IProgress<string>? progress, CancellationToken ct)
+    {
+        var report = new DramaImportReport();
+        var fullPath = Path.GetFullPath(videoPath);
+        var fileName = Path.GetFileName(fullPath);
+        var localCount = IsVideoFile(fullPath) ? 1 : 0;
+
+        if (!IsVideoFile(fullPath))
+        {
+            report.Items.Add(new DramaImportItem
+            {
+                FolderPath = Path.GetDirectoryName(fullPath) ?? "",
+                GuessedTitle = Path.GetFileNameWithoutExtension(fullPath),
+                LocalEpisodeCount = 0,
+                Error = "不是支持的视频文件",
+            });
+            return report;
+        }
+
+        var title = GuessTitleFromFile(fullPath);
+        progress?.Report($"正在整理：{fileName}");
+
+        string folder;
+        string target;
+        try
+        {
+            var parent = Path.GetDirectoryName(fullPath);
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                report.Items.Add(new DramaImportItem
+                {
+                    FolderPath = "",
+                    GuessedTitle = title,
+                    LocalEpisodeCount = localCount,
+                    Error = "无法确定视频所在目录",
+                });
+                return report;
+            }
+
+            var folderName = ShortDramaLibraryService.SanitizeFolderName(title);
+            folder = CreateUniqueFolder(parent, folderName);
+            target = Path.Combine(folder, fileName);
+            try
+            {
+                File.Move(fullPath, target);
+            }
+            catch
+            {
+                // 移动失败：清掉刚建的空目录，原文件留在原处
+                try { Directory.Delete(folder, recursive: false); } catch { }
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn($"[DramaImport] 单文件整理失败 {fullPath}：{ex.Message}");
+            report.Items.Add(new DramaImportItem
+            {
+                FolderPath = Path.GetDirectoryName(fullPath) ?? "",
+                GuessedTitle = title,
+                LocalEpisodeCount = localCount,
+                Error = ex.Message,
+            });
+            return report;
+        }
+
+        var item = await ImportOneAsync(folder, title, [target], ct).ConfigureAwait(false);
+        report.Items.Add(item);
+        return report;
+    }
+
+    /// <summary>同目录创建唯一文件夹；重名时追加 (2)、(3)… 避免混入已有剧集。</summary>
+    private static string CreateUniqueFolder(string parent, string baseName)
+    {
+        for (var i = 1; i <= 999; i++)
+        {
+            var name = i == 1 ? baseName : $"{baseName} ({i})";
+            var path = Path.Combine(parent, name);
+            if (Directory.Exists(path) || File.Exists(path)) continue;
+            Directory.CreateDirectory(path);
+            return path;
+        }
+        throw new IOException($"无法创建文件夹：{baseName}");
     }
 
     private async Task<DramaImportItem> ImportOneAsync(
@@ -234,6 +331,26 @@ public sealed class DramaLocalImportService
             .Where(f => VideoExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
             .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    private static bool IsVideoFile(string path)
+        => VideoExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 从单个视频文件名猜片名：去掉扩展名、画质/字幕标记、结尾的集号或区间，
+    /// 例如 “废柴杂役11-15.mp4” → “废柴杂役”、“某剧 第12集.mkv” → “某剧”。
+    /// 猜空时回退到原文件名，避免生成空目录名。
+    /// </summary>
+    internal static string GuessTitleFromFile(string path)
+    {
+        var raw = Path.GetFileNameWithoutExtension(path);
+        var name = CleanTitle(raw);
+        name = Regex.Replace(name,
+            @"(?i)(?:[\s._-]*第\s*\d{1,4}\s*[集话話]|[\s._-]*EP?\s*\d{1,4}|[\s._-]*S\d{1,2}E\d{1,2})\s*$",
+            " ");
+        name = Regex.Replace(name, @"[\s._-]*\d{1,4}(?:\s*[-~至]\s*\d{1,4})?\s*$", " ");
+        name = Regex.Replace(name, @"\s+", " ").Trim(' ', '-', '_', '.');
+        return name.Length > 0 ? name : raw.Trim();
+    }
 
     /// <summary>剧名：目录名优先（去掉【】[]() 里的标记和"全12集/更新至8集"这类尾巴）。</summary>
     private static string GuessTitle(string folder, string root)

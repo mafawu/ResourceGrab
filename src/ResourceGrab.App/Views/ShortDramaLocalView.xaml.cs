@@ -124,11 +124,41 @@ public partial class ShortDramaLocalView : CardGridViewBase
         };
         if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
 
+        await RunImportAsync(service, dialog.FolderName);
+    }
+
+    /// <summary>
+    /// 单个视频：同目录新建片名文件夹并移入，再走与文件夹导入相同的刮削流程。
+    /// </summary>
+    private async void ImportFile_Click(object sender, RoutedEventArgs e)
+    {
+        var service = App.Services?.GetService<DramaLocalImportService>();
+        if (service is null)
+        {
+            ToastService.Show("导入服务未注册");
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择单个视频文件（会自动建片名文件夹并移入）",
+            Multiselect = false,
+            CheckFileExists = true,
+            Filter = "视频文件|*.mp4;*.mkv;*.ts;*.mov;*.m4v;*.webm;*.avi;*.flv;*.wmv|所有文件|*.*",
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+
+        await RunImportAsync(service, dialog.FileName);
+    }
+
+    private async Task RunImportAsync(DramaLocalImportService service, string path)
+    {
         ImportButton.IsEnabled = false;
+        ImportFileButton.IsEnabled = false;
         try
         {
             ToastService.Show("正在扫描并匹配在线信息，首次会比较慢…");
-            var report = await service.ImportAsync(dialog.FolderName);
+            var report = await service.ImportAsync(path);
             Refresh();
 
             ToastService.Show($"导入完成：成功 {report.Succeeded} 部，未匹配 {report.Unmatched} 部，失败 {report.Failed} 部");
@@ -144,6 +174,7 @@ public partial class ShortDramaLocalView : CardGridViewBase
         finally
         {
             ImportButton.IsEnabled = true;
+            ImportFileButton.IsEnabled = true;
         }
     }
 
