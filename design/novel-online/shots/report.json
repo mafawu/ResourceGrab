@@ -1,0 +1,134 @@
+[
+  {
+    "file": "search.png",
+    "target": "F:\\ProcessProject\\C#\\ResourceGrab\\design\\novel-online\\search.html",
+    "name": "search",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 3:1，大字低于 2.5:1）",
+        "count": 12,
+        "examples": [
+          "span.tag「在线」（2.28:1）",
+          "div.nav-label「发现」（2.37:1）",
+          "div.nav-label「书架」（2.37:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "detail.png",
+    "target": "F:\\ProcessProject\\C#\\ResourceGrab\\design\\novel-online\\detail.html",
+    "name": "detail",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 3:1，大字低于 2.5:1）",
+        "count": 35,
+        "examples": [
+          "span.tag「在线」（2.28:1）",
+          "div.nav-label「发现」（2.37:1）",
+          "div.nav-label「书架」（2.37:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "reader.png",
+    "target": "F:\\ProcessProject\\C#\\ResourceGrab\\design\\novel-online\\reader.html",
+    "name": "reader",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 3:1，大字低于 2.5:1）",
+        "count": 13,
+        "examples": [
+          "span.c「共 128 章」（2.54:1）",
+          "div.sub「已缓存 9 章 · 离线可读」（2.54:1）",
+          "span.i「10」（2.54:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "sheet.png",
+    "width": 2000,
+    "height": 480,
+    "columns": 3,
+    "items": [
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "scale": 1,
+        "renderScale": 0.4444444444444444,
+        "sourceCrop": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900
+        },
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 24,
+        "y": 24,
+        "label": "search",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "scale": 1,
+        "renderScale": 0.4444444444444444,
+        "sourceCrop": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900
+        },
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 680,
+        "y": 24,
+        "label": "detail",
+        "labelY": 432
+      },
+      {
+        "naturalWidth": 1440,
+        "naturalHeight": 900,
+        "scale": 1,
+        "renderScale": 0.4444444444444444,
+        "sourceCrop": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900
+        },
+        "width": 640,
+        "height": 400,
+        "labelHeight": 32,
+        "x": 1336,
+        "y": 24,
+        "label": "reader",
+        "labelY": 432
+      }
+    ],
+    "issues": []
+  }
+]

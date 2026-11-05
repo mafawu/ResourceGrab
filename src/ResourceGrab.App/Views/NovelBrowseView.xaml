@@ -1,0 +1,132 @@
+<UserControl x:Class="ResourceGrab.App.Views.NovelBrowseView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <DataTemplate x:Key="NovelRowTemplate">
+            <Grid Height="40">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="44" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="128" />
+                    <ColumnDefinition Width="86" />
+                    <ColumnDefinition Width="104" />
+                    <ColumnDefinition Width="76" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding RankText}" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Grid.Column="2" Text="{Binding Author}" FontSize="11.5" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="3" Text="{Binding WordText}" FontSize="11.5" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                <TextBlock Grid.Column="4" Text="{Binding UpdatedText}" FontSize="11.5" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="5" Text="{Binding HitsText}" FontSize="11.5" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" Foreground="{DynamicResource TextDisabledBrush}" />
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="NovelRowItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBgBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="TitleText" Text="分类" FontSize="17" FontWeight="Bold" VerticalAlignment="Center" />
+            <TextBlock x:Name="SubText" Grid.Column="1" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextDisabledBrush}" />
+            <StackPanel x:Name="ModeTabs" Grid.Column="3" Orientation="Horizontal" />
+        </Grid>
+
+        <Border x:Name="ChipCard" Grid.Row="1" Style="{StaticResource CardPanelStyle}" Padding="12,10" Margin="0,0,0,12">
+            <WrapPanel x:Name="ChipHost" />
+        </Border>
+
+        <Grid Grid.Row="2" MaxWidth="1200" Width="1200" HorizontalAlignment="Center">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Height="30" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="44" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="104" />
+                    <ColumnDefinition Width="80" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="#" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="1" Text="书名" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="2" Text="作者" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="3" Text="字数" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="4" Text="更新时间" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextDisabledBrush}" />
+                <TextBlock Grid.Column="5" Text="人气" FontSize="11" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" Foreground="{DynamicResource TextDisabledBrush}" />
+            </Grid>
+
+            <ListBox Grid.Row="1" x:Name="ItemsList" Background="Transparent" BorderThickness="0"
+                     ItemContainerStyle="{StaticResource NovelRowItemStyle}"
+                     ItemTemplate="{StaticResource NovelRowTemplate}"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     SelectionChanged="ItemsList_SelectionChanged">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+        </Grid>
+
+        <StackPanel x:Name="PagingPanel" Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center"
+                    Width="1200" Margin="0,12,0,0" Visibility="Collapsed">
+            <Button x:Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页"
+                    Click="Prev_Click" Padding="12,5" />
+            <TextBlock x:Name="PageText" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="14,0" MinWidth="96"
+                       TextAlignment="Center" />
+            <Button x:Name="NextButton" Style="{StaticResource GhostButtonStyle}" Content="下一页 ›"
+                    Click="Next_Click" Padding="12,5" />
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,22 @@
+[
+  {
+    "file": "page.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 3:1，大字低于 2.5:1）",
+        "count": 13,
+        "examples": [
+          "span.c「共 128 章」（2.54:1）",
+          "span.i「10」（2.54:1）",
+          "span.i「11」（2.54:1）"
+        ]
+      }
+    ]
+  }
+]

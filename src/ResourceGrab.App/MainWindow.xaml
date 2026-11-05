@@ -74,7 +74,7 @@
                         <StackPanel Orientation="Horizontal">
                             <RadioButton x:Name="KindMangaPill" Content="漫画" IsChecked="True" Style="{StaticResource KindPillRadioStyle}" Tag="Manga" GroupName="KindGroup" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindVideoPill" Content="视频" Style="{StaticResource KindPillRadioStyle}" Tag="Video" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
-                            <RadioButton x:Name="KindNovelPill" Content="本地小说" Style="{StaticResource KindPillRadioStyle}" Tag="Novel" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
+                            <RadioButton x:Name="KindNovelPill" Content="小说" Style="{StaticResource KindPillRadioStyle}" Tag="Novel" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindPhotobookPill" Content="写真" Style="{StaticResource KindPillRadioStyle}" Tag="Photobook" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <RadioButton x:Name="KindDramaPill" Content="短剧" Style="{StaticResource KindPillRadioStyle}" Tag="ShortDrama" GroupName="KindGroup" Margin="2,0,0,0" Click="KindPill_Click"/>
                             <!-- 下载与 漫画/视频 同组：跨媒体页面，进入后占满左中右 -->

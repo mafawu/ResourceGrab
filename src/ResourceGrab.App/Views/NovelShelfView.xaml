@@ -1,0 +1,55 @@
+<UserControl x:Class="ResourceGrab.App.Views.NovelShelfView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="我的书架" FontSize="17" FontWeight="Bold" VerticalAlignment="Center" />
+            <TextBlock x:Name="CountText" Grid.Column="1" FontSize="12" Margin="10,0,0,0"
+                       VerticalAlignment="Center" Foreground="{DynamicResource TextDisabledBrush}" />
+            <Button Grid.Column="3" x:Name="GoOnlineButton" Content="去在线书库"
+                    Style="{StaticResource GhostButtonStyle}" Padding="12,6" Click="GoOnline_Click" />
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <controls:VirtualizedCardGrid x:Name="ShelfGrid" Visibility="Collapsed" DesiredColumns="8">
+                <controls:VirtualizedCardGrid.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <ContentControl Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=controls:VirtualizedCardGrid}}"
+                                            Content="{Binding}"
+                                            ContentTemplate="{StaticResource NovelCardItemTemplate}">
+                                <ContentControl.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="从书架移除" Click="RemoveShelf_Click" Tag="{Binding}" />
+                                    </ContextMenu>
+                                </ContentControl.ContextMenu>
+                            </ContentControl>
+                        </Grid>
+                    </DataTemplate>
+                </controls:VirtualizedCardGrid.ItemTemplate>
+            </controls:VirtualizedCardGrid>
+
+            <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <TextBlock Text="书架是空的" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="在在线书库的书籍详情页点「加入书架」，进度会自动记在这里"
+                           FontSize="12" Margin="0,8,0,0" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                <Button Content="去在线书库" Style="{StaticResource PrimaryButtonStyle}" Padding="16,7"
+                        Margin="0,16,0,0" HorizontalAlignment="Center" Click="GoOnline_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

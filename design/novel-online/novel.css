@@ -1,0 +1,225 @@
+@import url("../short-drama/mock.css");
+
+/* ==========================================================================
+   在线小说源 · 增量样式
+   基线：DSO UI 令牌（与 Tokens.xaml / Colors.xaml 同名同值）
+   新增只包含小说侧独有结构：书源卡、3:4 书卡、详情页、章节行、阅读器、目录抽屉。
+   ========================================================================== */
+
+:root{
+  --novel:#7C5CFF;                    /* NovelAccentBrush */
+  --novel-text:#6B4BEA;
+  --novel-soft:rgba(124,92,255,.12);
+  --success:#12B981;
+}
+html[data-theme="dark"]{
+  --novel:#A08CFF;
+  --novel-text:#B6A4FF;
+  --novel-soft:rgba(160,140,255,.16);
+  --success:#3DD598;
+}
+
+/* 顶栏右侧说明 */
+.tb-note{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-2)}
+.tb-note .kb{height:20px;padding:0 7px;border-radius:6px;display:inline-flex;align-items:center;
+  font-size:11px;font-weight:600;color:var(--novel-text);background:var(--novel-soft)}
+
+/* ---------------- 左栏：书源 ---------------- */
+.src{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;margin-bottom:16px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+  font-size:12.5px;color:var(--text)}
+.src .dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:none;
+  box-shadow:0 0 0 3px rgba(18,185,129,.14)}
+.src .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.src .tag{font-size:10px;color:var(--text-3);border:1px solid var(--border);
+  border-radius:5px;padding:0 4px;line-height:15px}
+.src .chev{color:var(--text-3);display:grid;place-items:center;width:16px}
+
+/* ---------------- 搜索面板 ---------------- */
+.panel{border:1px solid var(--border);border-radius:var(--r-xl);background:var(--surface);
+  padding:12px 14px 13px;margin-bottom:16px;box-shadow:var(--shadow)}
+.panel .row{display:flex;align-items:center;gap:10px}
+.panel .input{flex:1;display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg);color:var(--text-3)}
+.panel .input .q{font-size:13px;color:var(--text)}
+.panel .input .caret{width:1px;height:15px;background:var(--accent);margin-left:-5px}
+.panel .density{width:152px;display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:11.5px}
+.panel .track{flex:1;height:3px;border-radius:2px;background:var(--chip);position:relative}
+.panel .track i{position:absolute;left:0;top:0;bottom:0;width:58%;border-radius:2px;background:var(--border-strong)}
+.panel .track b{position:absolute;left:58%;top:50%;transform:translate(-50%,-50%);
+  width:11px;height:11px;border-radius:50%;background:var(--surface);border:1px solid var(--border-strong)}
+.panel .scope{display:flex;align-items:center;gap:6px;margin-top:12px}
+.panel .scope .spacer{flex:1}
+.panel .sort{display:flex;align-items:center;gap:5px;height:26px;padding:0 10px;
+  border:1px solid var(--border);border-radius:15px;font-size:12px;color:var(--text-2)}
+
+/* ---------------- 结果头 / 分页 ---------------- */
+.res-head{display:flex;align-items:baseline;gap:10px;margin:0 0 14px}
+.res-head b{font-size:13px;font-weight:600}
+.res-head .s{font-size:12px;color:var(--text-3)}
+.res-head .spacer{flex:1}
+.res-head .kv{font-size:11.5px;color:var(--text-3)}
+.pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:22px;
+  font-size:12px;color:var(--text-2)}
+.pager .pg{height:28px;padding:0 12px;display:inline-flex;align-items:center;gap:4px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)}
+.pager .pn{color:var(--text-3);font-variant-numeric:tabular-nums;min-width:64px;text-align:center}
+.pager .pn b{color:var(--text);font-weight:600}
+
+/* ---------------- 书卡（3:4） ---------------- */
+.books{display:grid;grid-template-columns:repeat(6,1fr);gap:20px 16px}
+.books > .book{min-width:0}
+.book .cover{aspect-ratio:3/4}
+.book .cover .glyph{position:absolute;inset:0;display:grid;place-items:center;
+  font-size:52px;font-weight:700;color:rgba(255,255,255,.22);letter-spacing:-.02em}
+/* 占位封面色相轮转（接真实封面后自动失效） */
+.books > .book:nth-child(6n+1) .cover{--h:214}
+.books > .book:nth-child(6n+2) .cover{--h:268}
+.books > .book:nth-child(6n+3) .cover{--h:332}
+.books > .book:nth-child(6n+4) .cover{--h:22}
+.books > .book:nth-child(6n+5) .cover{--h:158}
+.books > .book:nth-child(6n+6) .cover{--h:196}
+.book .st{position:absolute;right:8px;top:8px;height:20px;padding:0 7px;border-radius:6px;
+  display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;
+  color:rgba(255,255,255,.88);background:rgba(11,14,20,.50);border:1px solid rgba(255,255,255,.16)}
+.book .localchip{position:absolute;right:8px;bottom:8px;height:20px;padding:0 7px;border-radius:6px;
+  display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:#fff;
+  background:rgba(11,14,20,.55);border:1px solid rgba(255,255,255,.20)}
+.book .localchip .ic{color:#5BE7B4;display:grid;place-items:center}
+.book .title{margin-top:9px;font-size:13.5px;font-weight:600;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.book .meta{margin-top:4px;font-size:11.5px;color:var(--text-2);display:flex;gap:6px;
+  white-space:nowrap;overflow:hidden}
+.book .meta .dot{color:var(--border-strong)}
+.book .prog{margin-top:7px;height:2px;border-radius:2px;background:var(--chip);overflow:hidden}
+.book .prog i{display:block;height:100%;border-radius:2px;background:var(--novel)}
+
+/* ---------------- 详情页 ---------------- */
+.detail{max-width:920px}
+.detail .crumb{margin-bottom:16px}
+.bookhead{display:grid;grid-template-columns:168px 1fr;gap:22px;align-items:start}
+.cover-lg{width:168px;height:224px;border-radius:var(--r-lg);border:1px solid var(--border);
+  overflow:hidden;position:relative;background:
+    radial-gradient(120% 90% at 16% 4%,  hsla(252,30%,52%,.62), transparent 62%),
+    radial-gradient(95% 75% at 92% 96%,  hsla(206,32%,46%,.55), transparent 66%),
+    linear-gradient(150deg,var(--cover-1),var(--cover-2) 55%,var(--cover-3))}
+.cover-lg .glyph{position:absolute;inset:0;display:grid;place-items:center;font-size:62px;
+  font-weight:700;color:rgba(255,255,255,.22)}
+.cover-lg .veil{position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.42))}
+
+.bookhead h1{font-size:21px;font-weight:700;line-height:1.32;letter-spacing:.01em}
+.facts{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:9px;
+  font-size:12px;color:var(--text-2)}
+.facts .sep{color:var(--border-strong)}
+.facts .num{font-variant-numeric:tabular-nums}
+.tag-row{margin-top:11px}
+.desc3{margin-top:12px;font-size:12.5px;line-height:1.72;color:var(--text-2);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-width:640px}
+.desc3 .more{color:var(--accent-text);font-size:12px;margin-left:4px}
+
+/* 本地优先条 */
+.localbar{display:flex;align-items:center;gap:9px;margin-top:16px;padding:9px 12px;
+  border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+  font-size:12px;color:var(--text-2)}
+.localbar .ok{width:16px;height:16px;color:var(--success);display:grid;place-items:center;flex:none}
+.localbar .t{color:var(--text);font-weight:600}
+.localbar .path{color:var(--text-3);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.localbar .spacer{flex:1}
+.localbar .act{color:var(--accent-text);font-weight:600;white-space:nowrap}
+
+.actions{display:flex;align-items:center;gap:8px;margin-top:14px}
+.actions .hint{font-size:11.5px;color:var(--text-3);margin-left:2px}
+
+/* 目录 */
+.chap-head{display:flex;align-items:center;gap:10px;margin-top:26px;padding-bottom:10px;
+  border-bottom:1px solid var(--border-soft)}
+.chap-head h2{font-size:15px;font-weight:600}
+.chap-head .c{font-size:12px;color:var(--text-3)}
+.chap-head .spacer{flex:1}
+.chap-head .tool{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
+.chap-head .tool span{height:26px;padding:0 10px;display:inline-flex;align-items:center;gap:4px;
+  border:1px solid var(--border);border-radius:15px;background:var(--surface)}
+.chap-list{display:flex;flex-direction:column;padding-top:4px}
+.chap{display:flex;align-items:center;gap:12px;height:38px;padding:0 8px;border-radius:6px;
+  border-bottom:1px solid var(--border-soft);font-size:13px;color:var(--text)}
+.chap:hover{background:var(--hover)}
+.chap .n{width:58px;flex:none;color:var(--text-3);font-size:11.5px;font-variant-numeric:tabular-nums}
+.chap .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chap .time{width:92px;text-align:right;font-size:11px;color:var(--text-3);
+  font-variant-numeric:tabular-nums}
+.chap .ok{width:14px;display:grid;place-items:center;color:var(--success)}
+.chap .ok.empty{color:transparent}
+.chap.cur{background:var(--accent-soft)}
+.chap.cur .t{color:var(--accent-text);font-weight:600}
+.chap.cur .n{color:var(--accent-text)}
+
+/* ---------------- 阅读器 ---------------- */
+body.reader{grid-template-columns:1fr;grid-template-rows:52px 1fr;background:var(--bg)}
+.rd-head{display:flex;align-items:center;gap:14px;padding:0 16px;
+  border-bottom:1px solid var(--border-soft);background:var(--surface)}
+.rd-head .back{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)}
+.rd-rule{width:1px;height:16px;background:var(--border-soft)}
+.rd-title{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
+.rd-title .ch{font-size:12px;font-weight:400;color:var(--text-2);font-variant-numeric:tabular-nums}
+.rd-title .live{height:19px;padding:0 6px;border-radius:5px;display:inline-flex;align-items:center;
+  font-size:10.5px;font-weight:600;color:#0E9A6B;background:rgba(18,185,129,.13)}
+html[data-theme="dark"] .rd-title .live{color:#5BE7B4;background:rgba(61,213,152,.16)}
+.rd-actions{margin-left:auto;display:flex;align-items:center;gap:2px}
+.rd-btn{height:30px;padding:0 10px;border-radius:var(--r-sm);display:inline-flex;align-items:center;
+  gap:6px;font-size:12px;color:var(--text-2)}
+.rd-btn:hover{background:var(--hover);color:var(--text)}
+.rd-btn.on{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.swatches{display:flex;align-items:center;gap:5px;padding:0 8px}
+.sw{width:14px;height:14px;border-radius:50%;border:1px solid var(--border-strong)}
+.sw.on{box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--accent)}
+
+.rd-stage{position:relative;overflow:hidden;background:#D3D8E3}
+html[data-theme="dark"] .rd-stage{background:#0A0C11}
+.paper{position:absolute;left:50%;top:0;bottom:56px;transform:translateX(-50%);
+  width:720px;max-width:calc(100% - 72px);background:#FCFAF4;padding:46px 62px 0;
+  box-shadow:0 2px 20px rgba(16,24,40,.12);overflow:hidden}
+html[data-theme="dark"] .paper{background:#15181F;box-shadow:0 2px 20px rgba(0,0,0,.5)}
+.paper h1{font-size:17px;font-weight:600;text-align:center;letter-spacing:.06em;color:#1F232C;
+  margin-bottom:26px}
+html[data-theme="dark"] .paper h1{color:#E9EDF5}
+.paper p{font-size:15.5px;line-height:2.05;text-indent:2em;color:#22262F;margin-bottom:2px}
+html[data-theme="dark"] .paper p{color:#C9CFDB}
+
+.rd-foot{position:absolute;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;
+  gap:18px;padding:0 22px;background:var(--bg);border-top:1px solid var(--border-soft);z-index:5}
+/* 页脚顶端发丝线兼作本章进度：不额外占一行 */
+.rd-foot .chapterbar{position:absolute;left:0;right:0;top:0;height:2px;background:var(--chip)}
+.rd-foot .chapterbar i{display:block;height:100%;width:38%;background:var(--novel)}
+.rd-foot .nav{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)}
+.rd-foot .nav.dis{color:var(--text-3);opacity:.55}
+.rd-foot .pos{flex:1;text-align:center;font-size:11.5px;color:var(--text-3);
+  font-variant-numeric:tabular-nums}
+.rd-foot .pos b{color:var(--text);font-weight:600}
+
+/* ---------------- 目录抽屉 ---------------- */
+.scrim{position:absolute;inset:0;background:rgba(16,20,31,.04);z-index:10}
+.drawer{position:absolute;right:0;top:0;bottom:56px;width:320px;background:var(--surface);
+  border-left:1px solid var(--border);box-shadow:-14px 0 32px rgba(16,24,40,.10);
+  display:flex;flex-direction:column;z-index:20}
+.drawer .dh{display:flex;align-items:flex-start;gap:8px;padding:14px 14px 10px;
+  border-bottom:1px solid var(--border-soft)}
+.drawer .dh h2{font-size:14px;font-weight:600;display:flex;align-items:baseline;gap:8px}
+.drawer .dh h2 .c{font-size:11.5px;font-weight:400;color:var(--text-3)}
+.drawer .dh .sub{margin-top:4px;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.drawer .dh .sub .ok{color:var(--success);display:grid;place-items:center}
+.drawer .dh .spacer{flex:1}
+.drawer .dh .x{width:24px;height:24px;border-radius:var(--r-xs);display:grid;place-items:center;
+  color:var(--text-3)}
+.drawer .list{flex:1;overflow:hidden;padding:0 8px}
+.drawer .row{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;border-radius:6px;
+  font-size:12.5px;color:var(--text-2)}
+.drawer .row .i{width:26px;flex:none;color:var(--text-3);font-size:11px;
+  font-variant-numeric:tabular-nums}
+.drawer .row .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drawer .row:hover{background:var(--hover);color:var(--text)}
+.drawer .row.on{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.drawer .row.on .i{color:var(--accent-text)}
+.drawer .row .rd{width:12px;display:grid;place-items:center;color:var(--success)}
+.drawer .df{padding:10px 14px;border-top:1px solid var(--border-soft);font-size:11px;
+  color:var(--text-3);display:flex;align-items:center;gap:6px}
+.drawer .df .ok{color:var(--success);display:grid;place-items:center}

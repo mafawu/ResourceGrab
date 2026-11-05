@@ -8,6 +8,7 @@ using ResourceGrab.App.Services;
 using ResourceGrab.Core.Logging;
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Services;
+using ResourceGrab.Core.Sources.Novel;
 
 namespace ResourceGrab.App.ViewModels;
 
@@ -249,5 +250,108 @@ public sealed class NovelCardAdapter : MediaCardViewModel
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
+}
+
+/// <summary>
+/// 在线小说卡片：竖版 3:4 封面 + 状态角标；
+/// 命中本地库时挂「✓ 本地」——本书本地已有，进详情页会直接用本地数据。
+/// </summary>
+public sealed class NovelOnlineCardAdapter : MediaCardViewModel
+{
+    private readonly NovelSummary _summary;
+    private readonly INovelSource _source;
+    private readonly NovelLocalMatch? _local;
+
+    public NovelOnlineCardAdapter(INovelSource source, NovelSummary summary, NovelLocalMatch? local)
+    {
+        _source = source;
+        _summary = summary;
+        _local = local;
+        OpenCommand = new RelayCommand(_ => Navigation.OpenNovelBook(_source, _summary));
+    }
+
+    public NovelSummary Summary => _summary;
+
+    public override string CardId => _summary.Id;
+    public override string Title => _summary.Title;
+    public override MediaVisualKind VisualKind => MediaVisualKind.PortraitCover;
+
+    public override string? Subtitle => string.IsNullOrWhiteSpace(_summary.Author) ? "未知作者" : _summary.Author;
+
+    public override string? SecondaryTitle => _summary.WordCountText;
+
+    public override object? Cover => string.IsNullOrWhiteSpace(_summary.CoverUrl) ? null : _summary.CoverUrl;
+
+    public override string? CoverFallbackText =>
+        string.IsNullOrEmpty(_summary.Title) ? "N" : _summary.Title[..1];
+
+    public override IReadOnlyList<MediaBadge> Badges
+    {
+        get
+        {
+            var badges = new List<MediaBadge>();
+            if (!string.IsNullOrWhiteSpace(_summary.Status)) badges.Add(new(_summary.Status));
+            return badges.AsReadOnly();
+        }
+    }
+
+    /// <summary>封面右上角的状态（连载中 / 已完结）。</summary>
+    public string StatusText => _summary.Status;
+
+    /// <summary>封面右下角的标记；空字符串表示不显示。</summary>
+    public string BadgeText => _local switch
+    {
+        { Kind: LocalMatchKind.Exact } => "✓ 本地",
+        { Kind: LocalMatchKind.Possible } => "可能有本地",
+        _ => "",
+    };
+
+    public string BadgeColor => _local is { Kind: LocalMatchKind.Possible } ? "#F5C451" : "#6FE3B4";
+}
+
+/// <summary>
+/// 书架卡片：与在线搜索结果同一张卡，右下角显示读到第几章。
+/// </summary>
+public sealed class NovelShelfCardAdapter : MediaCardViewModel
+{
+    private readonly NovelShelfItem _item;
+    private readonly INovelSource _source;
+
+    public NovelShelfCardAdapter(NovelShelfItem item, INovelSource source, ICommand? removeCommand)
+    {
+        _item = item;
+        _source = source;
+        RemoveCommand = removeCommand;
+        OpenCommand = new RelayCommand(_ => Navigation.OpenNovelBook(source, ToSummary()));
+    }
+
+    public NovelShelfItem Item => _item;
+
+    public ICommand? RemoveCommand { get; }
+
+    public override string CardId => _item.NovelId;
+    public override string Title => _item.Title;
+    public override MediaVisualKind VisualKind => MediaVisualKind.PortraitCover;
+    public override string? Subtitle => string.IsNullOrWhiteSpace(_item.Author) ? "未知作者" : _item.Author;
+    public override string? SecondaryTitle => _item.WordCountText;
+    public override object? Cover => string.IsNullOrWhiteSpace(_item.CoverUrl) ? null : _item.CoverUrl;
+    public override string? CoverFallbackText => string.IsNullOrEmpty(_item.Title) ? "N" : _item.Title[..1];
+
+    public string StatusText => _item.Status;
+
+    public string BadgeText => _item.LastChapterIndex > 0 ? $"读到 {_item.LastChapterIndex} 章" : "";
+
+    public string BadgeColor => "#CFD6E4";
+
+    public NovelSummary ToSummary() => new()
+    {
+        Id = _item.NovelId,
+        Title = _item.Title,
+        Author = _item.Author,
+        CoverUrl = _item.CoverUrl,
+        WordCountText = _item.WordCountText,
+        Status = _item.Status,
+        ChapterCountText = _item.ChapterCount > 0 ? $"{_item.ChapterCount} 章" : "",
+    };
 }
 

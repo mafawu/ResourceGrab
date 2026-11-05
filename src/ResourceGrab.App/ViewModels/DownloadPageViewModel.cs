@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using ResourceGrab.App.Common;
+using ResourceGrab.App.Services;
 using ResourceGrab.Core;
 using ResourceGrab.Core.Downloading;
 using ResourceGrab.Core.Models;
@@ -39,6 +40,12 @@ public sealed class TransferItem : ObservableObject
     /// <summary>漫画所属漫画名（拼历史目录用）。</summary>
     public string AlbumTitle { get; set; } = "";
 
+    /// <summary>漫画章节名（拼历史目录 / 历史记录用；标题里已经拼上主标题）。</summary>
+    public string ChapterTitle { get; set; } = "";
+
+    /// <summary>漫画章节的事件 id（重试用）；视频为 0。</summary>
+    public long ChapterId { get; set; }
+
     /// <summary>漫画章节预计张数。</summary>
     public long TotalCount { get; set; }
 
@@ -50,6 +57,9 @@ public sealed class TransferItem : ObservableObject
 
     /// <summary>视频番号；漫画为空。</summary>
     public string Number { get; init; } = "";
+
+    /// <summary>番号角标是否显示：短剧的 Number 是剧名（标题里已有），不重复展示。</summary>
+    public bool ShowNumber { get; init; }
 
     private string _title = "";
     public string Title
@@ -149,7 +159,9 @@ public sealed class TransferItem : ObservableObject
     /// <summary>漫画可取消？下载引擎没有章节级取消，先如实置灰。</summary>
     public bool ShowCancel => Kind == TransferKind.Video && Status is TransferStatus.Running or TransferStatus.Queued;
 
-    public bool ShowRetry => Kind == TransferKind.Video && Status == TransferStatus.Failed && Request is not null;
+    /// <summary>失败后可重试：漫画凭章节事件 id 重新入队，视频重新提交下载请求。</summary>
+    public bool ShowRetry => Status == TransferStatus.Failed
+        && (Kind == TransferKind.Video ? Request is not null : ChapterId > 0);
 
     public bool ShowOpenFile => Status == TransferStatus.Done && !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath);
 
@@ -255,11 +267,15 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
 
     public bool HasHistory => HistoryItems.Count > 0;
 
+    /// <summary>当前列表里有可重试的失败任务（页头「重试全部失败」按钮用）。</summary>
+    public bool HasFailed => FailedCount > 0;
+
     // ====================== 漫画（DownloadManager） ======================
 
     private void OnChapterPending(object? sender, ChapterPendingEventArgs e) => OnUi(() =>
     {
         var item = GetOrAddManga(e.ChapterId, e.ChapterTitle, e.AlbumTitle);
+        item.LastImageError = null;
         item.SetStatus(TransferStatus.Queued);
         item.PercentText = "等待中";
         RefreshMangaMeta(item);
@@ -303,11 +319,11 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
             item.SetStatus(TransferStatus.Done);
             item.SetProgress(100, "完成");
             item.CompletedAt = DateTime.Now;
-            item.FolderPath = item.FolderPath ?? Path.Combine(_config.Current.DownloadDir, item.AlbumTitle, item.Title);
+            item.FolderPath = item.FolderPath ?? Path.Combine(_config.Current.DownloadDir, item.AlbumTitle, item.ChapterTitle);
             _mangaHistory.Append(new DownloadHistoryEntry
             {
                 AlbumTitle = item.AlbumTitle,
-                ChapterTitle = item.Title,
+                ChapterTitle = item.ChapterTitle,
                 Status = "成功",
                 CompletedAt = item.CompletedAt,
                 ImageCount = item.TotalCount,
@@ -316,12 +332,12 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
         }
         else
         {
-            item.SetStatus(TransferStatus.Failed, e.ErrMsg);
+            item.SetStatus(TransferStatus.Failed, BuildMangaError(item, e.ErrMsg));
             item.PercentText = "失败";
             _mangaHistory.Append(new DownloadHistoryEntry
             {
                 AlbumTitle = item.AlbumTitle,
-                ChapterTitle = item.Title,
+                ChapterTitle = item.ChapterTitle,
                 Status = "失败",
                 CompletedAt = DateTime.Now,
             });
@@ -343,21 +359,45 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
         {
             Key = $"manga:{chapterId}",
             Kind = TransferKind.Manga,
-            Title = chapterTitle,
             AlbumTitle = albumTitle,
+            ChapterTitle = chapterTitle,
+            ChapterId = chapterId,
+            Title = ComposeTitle(albumTitle, chapterTitle),
         };
         _mangaItems[chapterId] = item;
         CurrentItems.Insert(0, item);
         return item;
     }
 
-    /// <summary>漫画行副标题：漫画名 · 已下/总数 张。</summary>
+    /// <summary>主标题 · 副标题；两者相同（或副标题为空）时只显示一次。</summary>
+    private static string ComposeTitle(string mainTitle, string subTitle)
+    {
+        var main = mainTitle?.Trim() ?? "";
+        var sub = subTitle?.Trim() ?? "";
+        if (main.Length == 0) return sub;
+        if (sub.Length == 0 || string.Equals(main, sub, StringComparison.Ordinal)) return main;
+        return $"{main} · {sub}";
+    }
+
+    /// <summary>漫画行副标题：已下/总数 张（漫画名已经在主标题里，不再重复）。</summary>
     private static void RefreshMangaMeta(TransferItem item)
     {
-        var album = string.IsNullOrWhiteSpace(item.AlbumTitle) ? "" : item.AlbumTitle + " · ";
         item.Meta = item.TotalCount > 0
-            ? $"漫画 · {album}{item.DoneCount} / {item.TotalCount} 张"
-            : $"漫画 · {album}准备中";
+            ? $"漫画 · {item.DoneCount} / {item.TotalCount} 张"
+            : "漫画 · 准备中";
+    }
+
+    /// <summary>
+    /// 章节级失败原因：图片缺失时补上最后一张的真实错误（超时 / 403 / 分块损坏），
+    /// 否则用户只看到"少了几张"，不知道该不该重试。
+    /// </summary>
+    private static string BuildMangaError(TransferItem item, string message)
+    {
+        var detail = item.LastImageError;
+        if (string.IsNullOrWhiteSpace(detail)) return message;
+        if (message.Contains(detail, StringComparison.Ordinal)) return message;
+        if (detail.Length > 120) detail = detail[..117] + "…";
+        return $"{message}；最后错误：{detail}";
     }
 
     // ====================== 视频（视频任务队列） ======================
@@ -446,6 +486,9 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
             Key = $"video:{task.Id}",
             Kind = TransferKind.Video,
             Number = task.Number,
+            // 短剧的 Number 是剧名（标题里已有）；普通视频标题恰好等于番号时也不重复显示角标
+            ShowNumber = !IsDramaTask(task)
+                && !string.Equals(task.Number, task.DownloadTitle, StringComparison.OrdinalIgnoreCase),
             VideoTaskId = task.Id,
             Request = new VideoDownloadRequest(
                 task.Number,
@@ -455,7 +498,9 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
                 task.DownloadProxy,
                 task.DownloadDurationText ?? "",
                 task.DownloadMasterUrl ?? "",
-                task.DownloadVariantLabel ?? ""),
+                task.DownloadVariantLabel ?? "",
+                task.DownloadOutputDir,
+                task.DownloadCategory),
         };
         item.Title = DisplayTitle(task);
         _videoItems[task.Id] = item;
@@ -528,6 +573,7 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
             Key = $"video:{task.Id}:done",
             Kind = TransferKind.Video,
             Number = task.Number,
+            ShowNumber = !IsDramaTask(task),
             Title = string.IsNullOrWhiteSpace(entry.Title) ? task.Number : entry.Title,
             Meta = $"视频 · {VideoDownloadService.FormatSize(size)} · {entry.CompletedAt:HH:mm} 完成",
             PercentText = "完成",
@@ -552,10 +598,12 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
             {
                 Key = $"manga:{entry.AlbumTitle}|{entry.ChapterTitle}|{entry.CompletedAt.Ticks}",
                 Kind = TransferKind.Manga,
-                Title = entry.ChapterTitle,
+                AlbumTitle = entry.AlbumTitle,
+                ChapterTitle = entry.ChapterTitle,
+                Title = ComposeTitle(entry.AlbumTitle, entry.ChapterTitle),
                 Meta = entry.Status == "成功"
-                    ? $"漫画 · {entry.AlbumTitle} · {entry.ImageCount} 张 · {entry.CompletedAt:HH:mm} 完成"
-                    : $"漫画 · {entry.AlbumTitle} · 下载失败 · {entry.CompletedAt:HH:mm}",
+                    ? $"漫画 · {entry.ImageCount} 张 · {entry.CompletedAt:HH:mm} 完成"
+                    : $"漫画 · 下载失败 · {entry.CompletedAt:HH:mm}",
                 PercentText = entry.Status == "成功" ? "完成" : "失败",
                 FolderPath = folder,
                 CompletedAt = entry.CompletedAt,
@@ -630,20 +678,62 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
         SyncVideoQueue();
     }
 
-    public void Retry(TransferItem item)
+    /// <summary>重试单个失败任务：漫画按章节事件 id 重新入队，视频重新提交下载请求。</summary>
+    /// <returns>是否已成功重新入队。</returns>
+    public async Task<bool> RetryAsync(TransferItem item)
     {
-        if (item.Request is null) return;
+        if (item.Kind == TransferKind.Manga)
+        {
+            if (item.ChapterId <= 0) return false;
+            try
+            {
+                if (!await _mangaManager.RetryChapterAsync(item.ChapterId))
+                {
+                    ToastService.Show("暂时无法重试：任务可能正在队列中或已失效", ToastKind.Info);
+                    return false;
+                }
+                // 先本地翻回排队态：章节事件回到 UI 线程前用户还能再点一次
+                item.LastImageError = null;
+                item.SetStatus(TransferStatus.Queued);
+                item.PercentText = "等待中";
+                RefreshMangaMeta(item);
+                SortCurrent();
+                Publish();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError(ex, "重试失败：");
+                return false;
+            }
+        }
+
+        if (item.Request is null) return false;
         try
         {
             _videoQueue.EnqueueDownload(item.Request);
             CurrentItems.Remove(item);
             _videoItems.Remove(item.VideoTaskId);
             Publish();
+            return true;
         }
         catch (Exception ex)
         {
-            ResourceGrab.App.Services.ToastService.ShowError(ex, "重新下载失败：");
+            ToastService.ShowError(ex, "重新下载失败：");
+            return false;
         }
+    }
+
+    /// <summary>批量重试当前列表里所有可重试的失败任务，返回实际提交的数量。</summary>
+    public async Task<int> RetryAllFailedAsync()
+    {
+        var targets = CurrentItems.Where(i => i.ShowRetry).ToList();
+        var submitted = 0;
+        foreach (var item in targets)
+        {
+            if (await RetryAsync(item)) submitted++;
+        }
+        return submitted;
     }
 
     /// <summary>下载根目录：漫画一个、视频一个，页头按钮让用户自己选。</summary>
@@ -692,6 +782,7 @@ public sealed class DownloadPageViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(RunningTotal));
         OnPropertyChanged(nameof(SpeedText));
         OnPropertyChanged(nameof(HasCurrent));
+        OnPropertyChanged(nameof(HasFailed));
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 

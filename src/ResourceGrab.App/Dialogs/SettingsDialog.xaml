@@ -321,6 +321,26 @@
                                                    Text="默认匹配「第 X 章 / 卷 / 回」和 Chapter 1。保存前会检查正则是否有效。" />
                                     </StackPanel>
                                 </Border>
+
+                                <TextBlock Style="{StaticResource SettingsSectionTitleStyle}" Text="在线书库" />
+                                <Border Style="{StaticResource SettingGroupStyle}">
+                                    <StackPanel>
+                                        <CheckBox x:Name="NovelOnlineEnabledBox" Content="启用在线书库（爱丽丝书屋）" />
+                                        <TextBlock Style="{StaticResource SettingHintStyle}" Margin="26,6,0,14"
+                                                   Text="站点内容为成人向，关闭后左栏不再显示「在线书库 / 分类 / 排行」，已缓存的章节仍可读。" />
+                                        <Grid ColumnDefinitions="150,*" Margin="0,0,0,14">
+                                            <TextBlock Style="{StaticResource SettingLabelStyle}" Text="代理" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <TextBox x:Name="NovelProxyBox" Width="260" Height="30" Padding="8,0"
+                                                         VerticalContentAlignment="Center"
+                                                         ToolTip="如 http://127.0.0.1:7890；留空跟随系统代理" />
+                                                <TextBlock Text="留空跟随系统代理" FontSize="11.5" Margin="10,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
 
                             <!-- 视频 -->

@@ -109,27 +109,37 @@ public partial class NavRail : UserControl
         {
             foreach (var item in section.Items)
             {
-                if (item.Id == itemId)
+                if (item.Id != itemId) continue;
+
+                if (FindRadioButtonByContent(itemId) is { } rb)
                 {
-                    var rb = FindRadioButtonByContent(itemId);
-                    if (rb != null)
-                    {
-                        _pendingSelectionId = null;
-                        rb.IsChecked = true;
-                    }
-                    else
-                    {
-                        // 容器还没生成：先记下，Rebuild/Collect 完成后补选。
-                        _pendingSelectionId = itemId;
-                    }
+                    _pendingSelectionId = null;
+                    rb.IsChecked = true;
                     return;
                 }
+
+                // 容器还没生成：先记下，等布局完成再补一次。
+                // 只靠 Rebuild 里那次延迟收集不够——它可能早于容器生成，
+                // 补选会连同 pending 一起被丢掉（切页签回来时左栏就没有选中项）。
+                _pendingSelectionId = itemId;
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(() =>
+                    {
+                        if (_pendingSelectionId != itemId) return;
+                        if (FindRadioButtonByContent(itemId) is not { } late) return;
+                        _pendingSelectionId = null;
+                        late.IsChecked = true;
+                    }));
+                return;
             }
         }
     }
 
     private RadioButton? FindRadioButtonByContent(string itemId)
     {
+        // Rebuild 里的延迟收集可能早于容器生成，导致 _radioButtons 一直是空的。
+        // 查找时补收一次，保证 SelectItem 在"切页签回来"这种时机也能生效。
+        if (_radioButtons.Count == 0) CollectRadioButtons(SectionsHost);
         return _radioButtons.FirstOrDefault(rb => rb.Content is NavItem { Id: string id } && id == itemId);
     }
 }

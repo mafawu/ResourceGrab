@@ -100,6 +100,26 @@ public partial class App : Application
         services.AddSingleton<NovelIndexService>();
         services.AddSingleton<NovelReadingHistoryService>();
         services.AddSingleton<NovelReaderSettingsService>();
+
+        // 在线小说源：爱丽丝书屋（无签名/无登录，普通 HttpClient + AngleSharp 解析）
+        // 代理取 config.novelOnline.proxy，留空跟随系统代理。
+        services.AddSingleton<ResourceGrab.Core.Sources.Alicesw.AliceswHttpClient>(sp =>
+        {
+            var cfg = sp.GetRequiredService<ConfigService>().Current;
+            return new ResourceGrab.Core.Sources.Alicesw.AliceswHttpClient(null, cfg.NovelOnline?.Proxy);
+        });
+        services.AddSingleton<ResourceGrab.Core.Sources.Alicesw.AliceswSource>();
+        services.AddSingleton<ResourceGrab.Core.Sources.Novel.INovelSource>(sp =>
+            sp.GetRequiredService<ResourceGrab.Core.Sources.Alicesw.AliceswSource>());
+        services.AddSingleton<NovelSourceManager>();
+        services.AddSingleton<NovelChapterCache>(_ => new NovelChapterCache());
+        services.AddSingleton<NovelShelfService>(_ => new NovelShelfService());
+        // 本地小说封面：拿书名去在线源刮，图落到 config\novel-covers\
+        services.AddSingleton<NovelCoverService>(sp =>
+            new NovelCoverService(sp.GetRequiredService<ResourceGrab.Core.Sources.Novel.INovelSource>()));
+        services.AddSingleton<NovelCoverQueue>();
+        services.AddSingleton<NovelExportService>(sp =>
+            new NovelExportService(sp.GetRequiredService<NovelChapterCache>()));
         services.AddSingleton<AlbumUpdateService>();
         services.AddSingleton<ComicUserDataService>(sp => new ComicUserDataService(AppPaths.ComicUserDataPath));
         services.AddSingleton<OnlinePageCountCacheService>(sp => new OnlinePageCountCacheService(

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>抓资源 · 小说 · 山海旧事</title>
+<link rel="stylesheet" href="novel.css" />
+<script>
+  (function () {
+    var q = new URLSearchParams(location.search);
+    document.documentElement.dataset.theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+  })();
+</script>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7.2" cy="7.2" r="4.9"/><path d="M10.9 10.9 14 14"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6.2 3.6 10.6 8l-4.4 4.4"/></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 16 16"><path d="M3.6 6.2 8 10.6l4.4-4.4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 16 16"><path d="M8 3.4C6.7 2.5 4.9 2.3 2.9 2.6v9.7c2-.3 3.8-.1 5.1.8 1.3-.9 3.1-1.1 5.1-.8V2.6c-2-.3-3.8-.1-5.1.8z"/><path d="M8 3.4v9.7"/></symbol>
+  <symbol id="i-cat" viewBox="0 0 16 16"><rect x="2.6" y="2.6" width="4.6" height="4.6" rx="1.2"/><rect x="8.8" y="2.6" width="4.6" height="4.6" rx="1.2"/><rect x="2.6" y="8.8" width="4.6" height="4.6" rx="1.2"/><rect x="8.8" y="8.8" width="4.6" height="4.6" rx="1.2"/></symbol>
+  <symbol id="i-rank" viewBox="0 0 16 16"><path d="M3.4 12.6V9.2M8 12.6V3.8M12.6 12.6V6.6"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.9V8l2.2 1.4"/></symbol>
+  <symbol id="i-set" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 2.2v1.6M8 12.2v1.6M2.2 8h1.6M12.2 8h1.6M3.9 3.9l1.1 1.1M11 11l1.1 1.1M12.1 3.9 11 5M5 11l-1.1 1.1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.4 5.4a1 1 0 0 1 1-1h2.9l1.3 1.6h5a1 1 0 0 1 1 1v5.4a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.1 9.7A5.6 5.6 0 0 1 6.3 2.9a5.7 5.7 0 1 0 6.8 6.8z"/></symbol>
+  <symbol id="i-side" viewBox="0 0 16 16"><rect x="2.4" y="3.2" width="11.2" height="9.6" rx="1.4"/><path d="M10.4 3.2v9.6"/></symbol>
+  <symbol id="i-min" viewBox="0 0 16 16"><path d="M4 8h8"/></symbol>
+  <symbol id="i-max" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="M4.4 4.4l7.2 7.2M11.6 4.4l-7.2 7.2"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 16 16"><path d="M1.4 5V1.4H5M11 1.4h3.6V5M14.6 11v3.6H11M5 14.6H1.4V11"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 16 16"><path d="M8 2.6v8.6M5 8.6 8 11.6l3-3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.4 8.4 6.6 11.6 12.6 4.9"/></symbol>
+  <symbol id="i-read" viewBox="0 0 16 16"><path d="M8 3.4C6.7 2.5 4.9 2.3 2.9 2.6v9.7c2-.3 3.8-.1 5.1.8 1.3-.9 3.1-1.1 5.1-.8V2.6c-2-.3-3.8-.1-5.1.8z"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 16 16"><path d="M8 3.2v6.4M5.2 7.2 8 10l2.8-2.8M3.4 12.6h9.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.4v9.2M3.4 8h9.2"/></symbol>
+</defs></svg>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">
+      <svg class="icon" viewBox="0 0 16 16" style="width:15px;height:15px;stroke:#fff;stroke-width:1.5">
+        <use href="#i-mark"/><use href="#i-arrow-down"/>
+      </svg>
+    </div>
+    <span class="name">抓资源</span>
+  </div>
+
+  <div class="kinds">
+    <div class="kind">漫画</div>
+    <div class="kind">视频</div>
+    <div class="kind on">小说</div>
+    <div class="kind">写真</div>
+    <div class="kind">短剧</div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="tb-note">
+    <span class="kb">小说</span>
+    <span>在线阅读 · 本地优先</span>
+  </div>
+
+  <div class="tb-actions">
+    <div class="tb-btn"><svg class="icon"><use href="#i-set"/></svg></div>
+    <div class="tb-btn"><svg class="icon"><use href="#i-folder"/></svg></div>
+    <div class="tb-btn"><svg class="icon"><use href="#i-moon"/></svg></div>
+    <div class="tb-btn"><svg class="icon"><use href="#i-side"/></svg></div>
+  </div>
+  <div class="win">
+    <div class="tb-btn"><svg class="icon sm"><use href="#i-min"/></svg></div>
+    <div class="tb-btn"><svg class="icon sm"><use href="#i-max"/></svg></div>
+    <div class="tb-btn"><svg class="icon sm"><use href="#i-close"/></svg></div>
+  </div>
+</header>
+
+<aside class="rail">
+  <div class="src">
+    <span class="dot"></span>
+    <span class="nm">爱丽丝书屋</span>
+    <span class="tag">在线</span>
+    <span class="chev"><svg class="icon sm"><use href="#i-chev-d"/></svg></span>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-label">发现</div>
+    <div class="nav-item on">
+      <svg class="icon"><use href="#i-search"/></svg><span class="label">搜索</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-cat"/></svg><span class="label">分类</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-rank"/></svg><span class="label">排行</span>
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-label">书架</div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-book"/></svg><span class="label">我的书架</span>
+      <span class="nav-count">128</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-folder"/></svg><span class="label">本地索引</span>
+      <span class="nav-count">2,406</span>
+    </div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-hist"/></svg><span class="label">阅读历史</span>
+      <span class="nav-count">12</span>
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-label">工具</div>
+    <div class="nav-item">
+      <svg class="icon"><use href="#i-set"/></svg><span class="label">阅读设置</span>
+    </div>
+  </div>
+
+  <div class="foot">已缓存 9 章 · 离线可读<br>书源正常 · 校验于 2 分钟前</div>
+</aside>
+
+<main class="main">
+  <div class="scroll">
+    <div class="detail">
+
+      <div class="crumb">
+        <a>在线书库</a>
+        <svg class="icon sm" style="color:var(--text-3)"><use href="#i-chev"/></svg>
+        <a>玄幻</a>
+        <svg class="icon sm" style="color:var(--text-3)"><use href="#i-chev"/></svg>
+        <span class="cur">山海旧事</span>
+      </div>
+
+      <div class="bookhead">
+        <div class="cover-lg">
+          <div class="glyph">山</div>
+          <div class="veil"></div>
+        </div>
+
+        <div>
+          <h1>山海旧事</h1>
+          <div class="facts">
+            <span>陈砚</span><span class="sep">·</span>
+            <span>玄幻</span><span class="sep">·</span>
+            <span>连载中</span><span class="sep">·</span>
+            <span class="num">128 章</span><span class="sep">·</span>
+            <span class="num">42.8 万字</span><span class="sep">·</span>
+            <span>更新于 11-04 10:20</span>
+          </div>
+
+          <div class="tag-row">
+            <span class="tag">#群像</span>
+            <span class="tag">#江湖</span>
+            <span class="tag">#正剧</span>
+            <span class="tag">#长篇</span>
+          </div>
+
+          <div class="desc3">
+            山雨来的那夜，沈砚在旧祠里捡到一枚断碑。碑上刻的不是人名，是一串年份，从百年前一直排到今夜。
+            他本想把碑还回去，却在半路遇见了那个自称看山人、却对山外之事了如指掌的老人。
+            从那天起，他知道了山下的雪为什么比山上厚，也知道了这世上有些债，要用三代人来还。
+            <span class="more">展开</span>
+          </div>
+
+          <div class="localbar">
+            <span class="ok"><svg class="icon sm" style="stroke-width:2.2"><use href="#i-check"/></svg></span>
+            <span class="t">本地已有</span>
+            <span class="path">D:\小说\玄幻\山海旧事.txt</span>
+            <span class="spacer"></span>
+            <span class="act">打开文件夹</span>
+            <span class="act" style="color:var(--text-3);font-weight:400">改用在线数据</span>
+          </div>
+
+          <div class="actions">
+            <div class="btn primary">
+              <svg class="icon sm" style="stroke:#fff"><use href="#i-read"/></svg>
+              <span class="lbl">继续阅读 · 第 9 章</span>
+            </div>
+            <div class="btn ghost">
+              <svg class="icon sm"><use href="#i-dl"/></svg>
+              <span class="lbl">导出 TXT</span>
+            </div>
+            <div class="btn ghost">
+              <svg class="icon sm"><use href="#i-plus"/></svg>
+              <span class="lbl">加入书架</span>
+            </div>
+            <span class="hint">导出将覆盖同名本地文件</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chap-head">
+        <h2>目录</h2>
+        <span class="c">共 128 章 · 已读 9 · 本地 128 章</span>
+        <div class="spacer"></div>
+        <div class="tool">
+          <span>倒序 ⇅</span>
+          <span>跳到最新</span>
+        </div>
+      </div>
+
+      <div class="chap-list">
+        <div class="chap"><span class="n">第 1 章</span><span class="t">山雨欲来</span><span class="time">11-01 21:40</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 2 章</span><span class="t">旧祠</span><span class="time">11-01 21:42</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 3 章</span><span class="t">断碑</span><span class="time">11-01 22:05</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 4 章</span><span class="t">夜行</span><span class="time">11-02 09:12</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 5 章</span><span class="t">客从北来</span><span class="time">11-02 09:30</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 6 章</span><span class="t">试剑</span><span class="time">11-02 12:08</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 7 章</span><span class="t">雪落长街</span><span class="time">11-02 20:15</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 8 章</span><span class="t">故人书</span><span class="time">11-03 08:40</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap cur"><span class="n">第 9 章</span><span class="t">灯下</span><span class="time">11-03 21:50</span><span class="ok"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 10 章</span><span class="t">出山</span><span class="time">11-03 22:10</span><span class="ok empty"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 11 章</span><span class="t">剑冢</span><span class="time">11-03 22:30</span><span class="ok empty"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+        <div class="chap"><span class="n">第 12 章</span><span class="t">空山</span><span class="time">11-04 10:20</span><span class="ok empty"><svg class="icon sm"><use href="#i-check"/></svg></span></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+</body>
+</html>

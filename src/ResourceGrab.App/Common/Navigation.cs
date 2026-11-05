@@ -1,5 +1,6 @@
 using ResourceGrab.Core.Models;
 using ResourceGrab.Core.Sources;
+using ResourceGrab.Core.Sources.Novel;
 
 namespace ResourceGrab.App.Common;
 
@@ -15,7 +16,35 @@ public static class Navigation
     public static Action<string, string?>? OpenSearchHandler { get; set; }
     public static Action<IComicSource, IReadOnlyList<Chapter>, int>? OpenOnlineReaderHandler { get; set; }
     public static Action<string>? OpenNovelReaderHandler { get; set; }
+    public static Action<string, int>? OpenNovelReaderAtHandler { get; set; }
+    public static Action<INovelSource, NovelSummary>? OpenNovelBookHandler { get; set; }
+    public static Action<INovelSource, NovelDetail, int>? OpenNovelOnlineReaderHandler { get; set; }
+    public static Action<string, string, string, string>? OpenNovelBookAtHandler { get; set; }
+    public static Action<string>? OpenNovelTagHandler { get; set; }
+    public static Action? GoNovelOnlineHandler { get; set; }
     public static Action? DownloadedKeysChangedHandler { get; set; }
+
+    /// <summary>打开在线书籍详情页。</summary>
+    public static void OpenNovelBook(INovelSource source, NovelSummary summary)
+        => OpenNovelBookHandler?.Invoke(source, summary);
+
+    /// <summary>按「源 + 书 + 章」打开详情页并直接续读（阅读历史用）。</summary>
+    public static void OpenNovelBookAt(string sourceId, string novelId, string chapterId, string title)
+        => OpenNovelBookAtHandler?.Invoke(sourceId, novelId, chapterId, title);
+
+    /// <summary>跳到「在线书库」页（书架空白态 / 详情页的"去逛逛"）。</summary>
+    public static void GoNovelOnline() => GoNovelOnlineHandler?.Invoke();
+
+    /// <summary>点书名下的标签：命中分类就跳分类页，否则按标签搜索。</summary>
+    public static void OpenNovelTag(string tag) => OpenNovelTagHandler?.Invoke(tag);
+
+    /// <summary>从头（或指定章节）打开在线阅读器。</summary>
+    public static void OpenNovelOnlineReader(INovelSource source, NovelDetail detail, int chapterIndex)
+        => OpenNovelOnlineReaderHandler?.Invoke(source, detail, chapterIndex);
+
+    /// <summary>打开本地小说，并从指定字符偏移开始（本地章节跳转用）。</summary>
+    public static void OpenNovelReaderAt(string path, int charOffset)
+        => OpenNovelReaderAtHandler?.Invoke(path, charOffset);
 
     /// <summary>打开指定源的漫画详情。</summary>
     public static void OpenComic(string sourceId, string comicId) => OpenComicHandler?.Invoke(sourceId, comicId);

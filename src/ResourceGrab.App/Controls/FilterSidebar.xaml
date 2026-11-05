@@ -38,7 +38,7 @@
     <StackPanel>
         <!-- 搜索框 -->
         <TextBox x:Name="KeywordBox" Margin="{DynamicResource SpacingMd}"
-                 Style="{StaticResource SearchBoxStyle}"
+                 Style="{StaticResource ModernTextBoxStyle}"
                  TextChanged="Keyword_Changed"
                  ToolTip="输入关键词搜索" />
 

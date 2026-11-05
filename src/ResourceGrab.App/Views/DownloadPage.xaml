@@ -37,6 +37,8 @@
         <Style x:Key="RowTitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <!-- 显式 Style 不会再继承隐式 TextBlock 样式，暗色下必须自己带前景色 -->
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -173,9 +175,15 @@
                 </StackPanel>
             </StackPanel>
 
-            <Button x:Name="ClearHistoryButton" Content="清除记录" HorizontalAlignment="Right" VerticalAlignment="Center"
-                    Style="{StaticResource GhostButtonStyle}" FontSize="12" Padding="10,3"
-                    Visibility="Collapsed" Click="ClearHistory_Click" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="RetryAllButton" Content="重试全部失败" Margin="0,0,8,0"
+                        Style="{StaticResource GhostButtonStyle}" FontSize="12" Padding="10,3"
+                        ToolTip="把当前列表里所有失败的章节 / 视频重新加入队列"
+                        Visibility="Collapsed" Click="RetryAll_Click" />
+                <Button x:Name="ClearHistoryButton" Content="清除记录"
+                        Style="{StaticResource GhostButtonStyle}" FontSize="12" Padding="10,3"
+                        Visibility="Collapsed" Click="ClearHistory_Click" />
+            </StackPanel>
         </Grid>
 
         <!-- ============ 列表 ============ -->
@@ -207,13 +215,19 @@
                                     </Grid>
 
                                     <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock x:Name="NumberText" Text="{Binding Number}" FontFamily="Consolas"
-                                                       FontSize="13.5" FontWeight="Bold"
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="NumberText" Grid.Column="0" Text="{Binding Number}"
+                                                       FontFamily="Consolas" FontSize="13.5" FontWeight="Bold"
                                                        Foreground="{DynamicResource PrimaryBrush}"
-                                                       Margin="0,0,6,0" Visibility="Collapsed" />
-                                            <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitleStyle}" />
-                                        </StackPanel>
+                                                       Margin="0,0,6,0"
+                                                       Visibility="{Binding ShowNumber, Converter={StaticResource BoolToVis}}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}"
+                                                       Style="{StaticResource RowTitleStyle}" />
+                                        </Grid>
 
                                         <TextBlock x:Name="MetaText" Text="{Binding Meta}"
                                                    Style="{StaticResource RowMetaStyle}" />
@@ -253,7 +267,6 @@
                                     <Setter TargetName="IconVideo" Property="Visibility" Value="Visible" />
                                     <Setter TargetName="Tile" Property="Background" Value="{DynamicResource SuccessBrush}" />
                                     <Setter TargetName="Tile" Property="Opacity" Value="0.14" />
-                                    <Setter TargetName="NumberText" Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding HasError}" Value="True">
                                     <Setter TargetName="MetaText" Property="Visibility" Value="Collapsed" />
@@ -321,12 +334,18 @@
                                         </Grid>
 
                                         <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Number}" FontFamily="Consolas" FontSize="13.5"
-                                                           FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Number}" FontFamily="Consolas"
+                                                           FontSize="13.5" FontWeight="Bold"
+                                                           Foreground="{DynamicResource PrimaryBrush}"
                                                            Margin="0,0,6,0" />
-                                                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitleStyle}" />
-                                            </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Title}"
+                                                           Style="{StaticResource RowTitleStyle}" />
+                                            </Grid>
                                             <TextBlock Text="{Binding Meta}" Style="{StaticResource RowMetaStyle}" />
                                         </StackPanel>
 

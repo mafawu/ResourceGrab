@@ -1,0 +1,22 @@
+[
+  {
+    "file": "page.png",
+    "state": null,
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 3:1，大字低于 2.5:1）",
+        "count": 11,
+        "examples": [
+          "span.tag「在线」（2.28:1）",
+          "div.nav-label「发现」（2.37:1）",
+          "div.nav-label「书架」（2.37:1）"
+        ]
+      }
+    ]
+  }
+]

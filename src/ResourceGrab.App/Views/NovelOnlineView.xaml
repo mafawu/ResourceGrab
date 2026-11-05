@@ -1,0 +1,47 @@
+<controls:CardGridViewBase x:Class="ResourceGrab.App.Views.NovelOnlineView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ResourceGrab.App.Controls"
+             xmlns:views="clr-namespace:ResourceGrab.App.Views"
+             Columns="6">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <controls:BrowserToolbar Grid.Row="0"
+                                 x:Name="Toolbar"
+                                 Watermark="输入书名 / 作者 / 标签"
+                                 SizeSliderColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}, Mode=TwoWay}"
+                                 SearchSubmitted="KeywordSearch_SearchSubmitted"
+                                 SearchButtonClick="SearchButton_Click" />
+
+        <controls:StateHostControl Grid.Row="1"
+                                   x:Name="ResultHost"
+                                   State="{Binding CurrentState, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}"
+                                   Result="{Binding Results, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}"
+                                   ResultTemplate="{StaticResource NovelCardResultTemplate}"
+                                   SlotWidth="{Binding SlotWidth, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}"
+                                   DesiredColumns="{Binding Columns, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}"
+                                   CardWidth="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}"
+                                   HintIcon="{StaticResource IconSearch}"
+                                   HintTitle="输入书名或作者，开始找书"
+                                   HintDescription="支持书名 / 作者 / 标签，回车或点搜索；本地已有的书会标上「✓ 本地」"
+                                   EmptyTitle="没有找到相关小说"
+                                   EmptyDescription="换个书名或作者再试，也可以按标签搜"
+                                   RetryText="重新搜索"
+                                   RetryCommand="{Binding RetryCommand, RelativeSource={RelativeSource AncestorType=views:NovelOnlineView}}" />
+
+        <StackPanel x:Name="PagingPanel" Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Center" Visibility="Collapsed" Margin="0,14,0,0">
+            <Button x:Name="PrevButton" Style="{StaticResource GhostButtonStyle}" Content="‹ 上一页" Click="PrevButton_Click" Padding="12,5" />
+            <TextBlock x:Name="PageText" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Margin="14,0" MinWidth="96" TextAlignment="Center" />
+            <Button x:Name="NextButton" Style="{StaticResource GhostButtonStyle}"
+                    Content="下一页 ›" Click="NextButton_Click" Padding="12,5" />
+        </StackPanel>
+    </Grid>
+</controls:CardGridViewBase>

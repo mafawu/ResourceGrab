@@ -32,6 +32,15 @@ public class DownloadManager : IDisposable
     private readonly ConcurrentDictionary<string, long> _eventChapterIds = new();
     private long _nextEventChapterId;
 
+    /// <summary>最近一次提交的章节载荷：失败后下载页按事件 id 重试时原样重新入队。</summary>
+    private readonly ConcurrentDictionary<long, Chapter> _chaptersById = new();
+
+    /// <summary>已排队等待执行的重试（防止重复点击把同一章节入队两次）。</summary>
+    private readonly ConcurrentDictionary<long, byte> _retryQueued = new();
+
+    /// <summary>正在执行的章节（运行中不允许重试）。</summary>
+    private readonly ConcurrentDictionary<long, byte> _runningChapters = new();
+
     public event EventHandler<ChapterPendingEventArgs>? ChapterPending;
     public event EventHandler<ChapterStartEventArgs>? ChapterStart;
     public event EventHandler<ImageSuccessEventArgs>? ImageSuccess;
@@ -94,6 +103,27 @@ public class DownloadManager : IDisposable
         await SubmitChapterAsync(ToChapter(chapterInfo), ct);
     }
 
+    /// <summary>
+    /// 重试一个**失败**的章节：沿用首次提交时的事件 id，下载页上的那一行不会变成新行。
+    /// 章节仍在执行 / 已排队重试时返回 false（页面据此避免重复入队）。
+    /// </summary>
+    public async Task<bool> RetryChapterAsync(long chapterId, CancellationToken ct = default)
+    {
+        if (!_chaptersById.TryGetValue(chapterId, out var chapter)) return false;
+        if (_runningChapters.ContainsKey(chapterId)) return false;
+        if (!_retryQueued.TryAdd(chapterId, 0)) return false;
+        try
+        {
+            await _channel.Writer.WriteAsync(chapter, ct);
+            return true;
+        }
+        catch
+        {
+            _retryQueued.TryRemove(chapterId, out _);
+            throw;
+        }
+    }
+
     private async Task ReceiverLoopAsync(CancellationToken ct)
     {
         try
@@ -150,8 +180,13 @@ public class DownloadManager : IDisposable
         var chapterId = _eventChapterIds.GetOrAdd(
             $"{chapter.SourceId}|{chapter.Id}",
             _ => Interlocked.Increment(ref _nextEventChapterId));
+        // 记住载荷：整章失败后「重试」要能原样重新入队（不用回章节页重新点下载）
+        _chaptersById[chapterId] = chapter;
+        _retryQueued.TryRemove(chapterId, out _);
+        _runningChapters[chapterId] = 0;
         var tempDownloadDir = GetTempDownloadDir(chapter);
         var downloadedCount = 0;
+        var succeeded = false;
 
         try
         {
@@ -175,6 +210,7 @@ public class DownloadManager : IDisposable
             {
                 ChapterStart?.Invoke(this, new ChapterStartEventArgs(chapterId, total));
                 Interlocked.Add(ref _downloadedImageCount, total);
+                succeeded = true;
                 ChapterEnd?.Invoke(this, new ChapterEndEventArgs(chapterId, null));
                 return;
             }
@@ -228,6 +264,7 @@ public class DownloadManager : IDisposable
                 {
                     Directory.Move(tempDownloadDir, finalDir);
                 }
+                succeeded = true;
                 ChapterEnd?.Invoke(this, new ChapterEndEventArgs(chapterId, null));
             }
             else
@@ -239,6 +276,12 @@ public class DownloadManager : IDisposable
         catch (Exception ex)
         {
             ChapterEnd?.Invoke(this, new ChapterEndEventArgs(chapterId, ex.Message));
+        }
+        finally
+        {
+            _runningChapters.TryRemove(chapterId, out _);
+            // 成功的章节不再需要重试载荷；失败的留着，下载页点「重试」时直接复用
+            if (succeeded) _chaptersById.TryRemove(chapterId, out _);
         }
     }
 
@@ -319,15 +362,30 @@ public class DownloadManager : IDisposable
     private async Task<IReadOnlyList<ImagePage>> GetChapterPagesAsync(
         IComicSource source, SourceThrottle throttle, Chapter chapter, CancellationToken ct)
     {
-        await throttle.Urls.WaitAsync(ct);
-        try
+        Exception? lastError = null;
+        // 章节图片列表是整章的入口：一次 15s 超时不该让整章直接失败，自动再试一次
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            return await source.GetChapterImagesAsync(chapter, ct);
+            await throttle.Urls.WaitAsync(ct);
+            try
+            {
+                return await source.GetChapterImagesAsync(chapter, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+            }
+            finally
+            {
+                throttle.Urls.Release();
+            }
+            if (attempt == 0) await Task.Delay(TimeSpan.FromSeconds(1), ct);
         }
-        finally
-        {
-            throttle.Urls.Release();
-        }
+        throw lastError ?? new JmException($"获取`{chapter.Title}`图片列表失败");
     }
 
     private async Task<byte[]> GetImageBytesAsync(ImagePage page, CancellationToken ct)

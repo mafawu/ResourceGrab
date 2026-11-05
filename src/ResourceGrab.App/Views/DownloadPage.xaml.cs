@@ -107,6 +107,9 @@ public partial class DownloadPage : UserControl
         ClearHistoryButton.Visibility = _showHistory && _viewModel.HasHistory
             ? Visibility.Visible
             : Visibility.Collapsed;
+        RetryAllButton.Visibility = !_showHistory && _viewModel.HasFailed
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
@@ -117,11 +120,33 @@ public partial class DownloadPage : UserControl
         }
     }
 
-    private void Retry_Click(object sender, RoutedEventArgs e)
+    private async void Retry_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: TransferItem item })
         {
-            _viewModel.Retry(item);
+            await _viewModel.RetryAsync(item);
+        }
+    }
+
+    private async void RetryAll_Click(object sender, RoutedEventArgs e)
+    {
+        RetryAllButton.IsEnabled = false;
+        try
+        {
+            var submitted = await _viewModel.RetryAllFailedAsync();
+            if (submitted > 0)
+            {
+                ToastService.Show($"已重新排队 {submitted} 个失败任务", ToastKind.Success);
+            }
+            else
+            {
+                ToastService.Show("没有可重试的失败任务", ToastKind.Info);
+            }
+        }
+        finally
+        {
+            RetryAllButton.IsEnabled = true;
+            UpdateEmptyStates();
         }
     }
 

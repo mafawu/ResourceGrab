@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using ResourceGrab.App.Common;
+using ResourceGrab.App.Services;
 using ResourceGrab.App.Themes;
 using ResourceGrab.App.Views;
 using ResourceGrab.Core;
@@ -22,7 +23,10 @@ public partial class SettingsDialog : Window
     private readonly NovelReaderSettingsService _novelSettings;
     private readonly bool _initialThemeIsDark;
 
-    public SettingsDialog()
+    public SettingsDialog() : this(false) { }
+
+    /// <param name="openNovelPage">true 时直接定位到「小说」页（左栏「阅读设置」进来）。</param>
+    public SettingsDialog(bool openNovelPage)
     {
         InitializeComponent();
         _configService = App.Services.GetRequiredService<ConfigService>();
@@ -31,7 +35,8 @@ public partial class SettingsDialog : Window
 
         LoadFromConfig(_configService.Current);
         RefreshSliderValueTexts();
-        SelectPage(MangaNavItem);
+        SelectPage(openNovelPage ? NovelNavItem : MangaNavItem);
+        if (openNovelPage) NovelNavItem.IsChecked = true;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -75,6 +80,10 @@ public partial class SettingsDialog : Window
         NovelPageModeRadio.IsChecked = !novel.IsScrollMode;
         AutoDetectEncodingBox.IsChecked = novel.AutoDetectEncoding;
         ChapterPatternBox.Text = novel.ChapterPattern;
+
+        var novelOnline = config.NovelOnline ?? new NovelOnlineSettings();
+        NovelOnlineEnabledBox.IsChecked = novelOnline.Enabled;
+        NovelProxyBox.Text = novelOnline.Proxy;
 
         var playback = config.VideoPlayback ?? new VideoPlaybackSettings();
         HardwareDecodeBox.IsChecked = playback.HardwareDecode;
@@ -319,6 +328,10 @@ public partial class SettingsDialog : Window
             novel.AutoDetectEncoding = AutoDetectEncodingBox.IsChecked == true;
             novel.ChapterPattern = ChapterPatternBox.Text.Trim();
         });
+
+        var novelOnline = config.NovelOnline ??= new NovelOnlineSettings();
+        novelOnline.Enabled = NovelOnlineEnabledBox.IsChecked == true;
+        novelOnline.Proxy = NovelProxyBox.Text.Trim();
 
         config.VideoPlayback ??= new VideoPlaybackSettings();
         config.VideoPlayback.HardwareDecode = HardwareDecodeBox.IsChecked == true;

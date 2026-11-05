@@ -27,7 +27,13 @@ public class NovelReadingHistoryService
     {
         if (string.IsNullOrWhiteSpace(fullPath)) return null;
         var key = Normalize(fullPath);
-        lock(_lock) return _items.TryGetValue(key, out var v) ? v : null;
+        lock(_lock)
+        {
+            if (_items.TryGetValue(key, out var v)) return v;
+            // 兼容旧键：早期版本把在线键里的 / 也换成了 \
+            var alt = key.Replace('/', '\\');
+            return alt != key && _items.TryGetValue(alt, out v) ? v : null;
+        }
     }
 
     public void Save(string fullPath, int page, int pageCount, int charsPerPage, double fontSize, int totalChars, string title="")
@@ -60,7 +66,15 @@ public class NovelReadingHistoryService
         lock(_lock) return _items.Values.OrderByDescending(x=>x.UpdatedAt).Take(count).ToList();
     }
 
-    private static string Normalize(string p) => p.Replace("/","\\").Trim().ToLowerInvariant();
+    /// <summary>
+    /// 键规范化：本地路径统一成反斜杠；在线键（online:源:书:章）原样保留，
+    /// 因为章节 id 里本身带 /，换成反斜杠会让历史页面的"续读"找不到章节。
+    /// </summary>
+    private static string Normalize(string p)
+    {
+        var key = p.Trim().ToLowerInvariant();
+        return key.StartsWith("online:", StringComparison.Ordinal) ? key : key.Replace('/', '\\');
+    }
 
     private void Load()
     {

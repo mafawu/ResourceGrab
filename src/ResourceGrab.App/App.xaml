@@ -13,6 +13,8 @@
                 <ResourceDictionary Source="Themes/Cards.xaml" />
                 <ResourceDictionary Source="Themes/Search.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- 全局转换器：模板里的 {StaticResource BoolToVis} 不再依赖各视图自己定义（漏了就会在模板实例化时炸） -->
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

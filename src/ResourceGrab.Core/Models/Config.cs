@@ -22,6 +22,22 @@ public class Config
 
     /// <summary>短剧页设置（下载目录 / 线路 / 并发）。null 表示用户从未打开过短剧设置。</summary>
     [JsonPropertyName("shortDrama")] public ShortDramaSettings? ShortDrama { get; set; }
+
+    /// <summary>在线小说（爱丽丝书屋）设置：18+ 确认、开关与专用代理。</summary>
+    [JsonPropertyName("novelOnline")] public NovelOnlineSettings? NovelOnline { get; set; }
+}
+
+/// <summary>
+/// 在线小说源设置。<see cref="Enabled"/> 控制整组入口是否显示；
+/// <see cref="Proxy"/> 留空表示跟随系统代理。
+/// </summary>
+public sealed class NovelOnlineSettings
+{
+    [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
+
+    [JsonPropertyName("proxy")] public string Proxy { get; set; } = "";
+
+    public bool IsProxyConfigured => !string.IsNullOrWhiteSpace(Proxy);
 }
 
 public class TitleTranslateOptions

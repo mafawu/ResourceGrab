@@ -53,6 +53,8 @@
                                 <Border Height="92" CornerRadius="10,10,0,0" Background="{DynamicResource HoverBgBrush}" ClipToBounds="True">
                                     <Grid>
                                         <TextBlock Text="{Binding Initial}" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.85"/>
+                                        <Image Source="{Binding Cover}" Stretch="UniformToFill" SnapsToDevicePixels="True"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
                                         <Border Style="{StaticResource KindBadgeBorderStyle}" Background="{DynamicResource NovelAccentBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"><TextBlock Text="小" Style="{StaticResource KindBadgeTextStyle}"/></Border>
                                         <Border Style="{StaticResource MediaOverlayBadgeStyle}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"><TextBlock Text="{Binding SizeText}" Style="{StaticResource KindBadgeTextStyle}" FontWeight="Normal"/></Border>
                                     </Grid>

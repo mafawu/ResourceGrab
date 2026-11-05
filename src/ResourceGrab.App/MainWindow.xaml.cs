@@ -48,6 +48,8 @@ public partial class MainWindow : Window
     private VideoView? _videoView;
     private UserControl? _lastMangaContent;
     private UserControl? _lastNovelContent;
+    /// <summary>离开小说页时的"返回目标"（_lastPage 会被别的媒体覆盖，单独存一份）。</summary>
+    private UserControl? _lastNovelBackTarget;
     private UserControl? _lastVideoContent;
     private UserControl? _lastPhotobookContent;
 
@@ -61,9 +63,24 @@ public partial class MainWindow : Window
     private NovelSearchPanel? _novelSearchPanel;
     private VideoSearchPanel? _videoSearchPanel;
     private NovelReaderView? _novelReaderView;
+    private NovelOnlineView? _novelOnlineView;
+    private NovelBrowseView? _novelCategoryView;
+    private NovelBrowseView? _novelRankView;
+    private NovelShelfView? _novelShelfView;
+    private NovelHistoryView? _novelHistoryView;
+    /// <summary>最近打开的在线书籍详情页：阅读器返回时回到它，而不是弹回本地索引。</summary>
+    private UserControl? _novelBookView;
     private ScrapeToolsView? _scrapeToolsView;
     private AuthorSearchView? _authorSearchView;
     private readonly Dictionary<TaxonomyKind, PhotobookBrowseView> _photobookViews = new();
+
+    private NovelOnlineView NovelOnlineViewInstance => _novelOnlineView ??= new NovelOnlineView();
+    private NovelBrowseView NovelCategoryViewInstance =>
+        _novelCategoryView ??= new NovelBrowseView(NovelBrowseView.BrowseMode.Category);
+    private NovelBrowseView NovelRankViewInstance =>
+        _novelRankView ??= new NovelBrowseView(NovelBrowseView.BrowseMode.Rank);
+    private NovelShelfView NovelShelfViewInstance => _novelShelfView ??= new NovelShelfView();
+    private NovelHistoryView NovelHistoryViewInstance => _novelHistoryView ??= new NovelHistoryView();
 
     /// <summary>「写真」列表页与「随机」页：同一视图的两种模式，各占一条独立路由。</summary>
     private PhotobookGalleryView? _photobookHomeView;
@@ -147,9 +164,37 @@ public partial class MainWindow : Window
         Navigation.OpenReaderHandler = OpenReader;
         Navigation.OpenLocalDetailHandler = OpenLocalDetail;
         Navigation.OpenNovelReaderHandler = OpenNovelReader;
+        Navigation.OpenNovelReaderAtHandler = OpenNovelReaderAt;
+        Navigation.OpenNovelBookHandler = OpenNovelBook;
+        Navigation.OpenNovelBookAtHandler = OpenNovelBookAt;
+        Navigation.OpenNovelTagHandler = OpenNovelTag;
+        Navigation.GoNovelOnlineHandler = GoNovelOnline;
+        Navigation.OpenNovelOnlineReaderHandler = OpenNovelOnlineReader;
         Navigation.CloseLocalDetailHandler = ShowLocalList;
         Navigation.BackHandler = () =>
         {
+            // 在线阅读器：先退回书籍详情页（哪本书进来的就回哪本）
+            if (PageHost.Content is NovelReaderView onlineReader && onlineReader.IsOnline && _novelBookView is not null)
+            {
+                SetPage(_novelBookView);
+                LeftNavHost.Visibility = Visibility.Visible;
+                RightPanelHost.Visibility = Visibility.Collapsed;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
+                UpdateTopBarForKind();
+                return;
+            }
+            // 书籍详情页：退回进入详情前的页面（搜索页 / 本地索引）
+            if (PageHost.Content is NovelBookView)
+            {
+                SetPage(_lastPage ?? _novelOnlineView ?? (UserControl)(_novelView ??= new NovelLocalView()));
+                LeftNavHost.Visibility = Visibility.Visible;
+                RightPanelHost.Visibility = Visibility.Collapsed;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
+                UpdateTopBarForKind();
+                return;
+            }
             if (PageHost.Content is NovelReaderView)
             {
                 SetPage(_novelView ?? new NovelLocalView());
@@ -233,7 +278,8 @@ public partial class MainWindow : Window
     }
 
 
-    private bool IsNovelMode => PageHost != null && (PageHost.Content is NovelLocalView || PageHost.Content is NovelReaderView);
+    private bool IsNovelMode => PageHost != null && (PageHost.Content is NovelLocalView || PageHost.Content is NovelReaderView
+        || PageHost.Content is NovelOnlineView || PageHost.Content is NovelBookView);
     private bool IsVideoMode => PageHost != null && PageHost.Content is VideoView;
     private bool IsPhotobookMode => PageHost != null && PageHost.Content is ResourceGrab.App.Views.PhotobookBrowseView;
     private bool IsDramaMode => PageHost?.Content is ShortDramaBrowseView or ShortDramaDetailView or ShortDramaLocalView;
@@ -314,7 +360,7 @@ public partial class MainWindow : Window
         var wasDownload = IsDownloadPage;
         if (PageHost?.Content is UserControl leaving && !wasDownload)
         {
-            if (IsNovelMode) _lastNovelContent = leaving;
+            if (IsNovelMode) { _lastNovelContent = leaving; _lastNovelBackTarget = _lastPage; }
             else if (IsVideoMode) _lastVideoContent = leaving;
             else if (IsPhotobookMode) _lastPhotobookContent = leaving;
             else if (IsDramaMode) _lastDramaContent = leaving;
@@ -354,9 +400,13 @@ public partial class MainWindow : Window
         if (IsDramaMode && kind == ResourceKind.Manga) { RestoreMangaContent(); return; }
         if (kind == ResourceKind.Novel && !IsNovelMode)
         {
-            // 首次进入小说走默认路由；非首次恢复该类型最近的页面状态
+            // 详情页 / 阅读器 / 搜索页都不在路由里，只按路由恢复会退回默认页。
+            // 先恢复路由态（导航选中项、返回栈、侧栏策略），再把离开时那一页盖回去。
             if (!_navigator.RestoreLast(MediaKind.Novel))
                 _navigator.GoTo("novel.index");
+
+            if (_lastNovelContent is { } saved && IsNovelContent(saved))
+                RestoreNovelContent(saved);
             return;
         }
         if (kind == ResourceKind.Video && !IsVideoMode)
@@ -430,7 +480,7 @@ public partial class MainWindow : Window
         INavSectionProvider provider = _currentKind switch
         {
             ResourceKind.Video => new VideoNavSectionProvider(),
-            ResourceKind.Novel => new NovelNavSectionProvider(),
+            ResourceKind.Novel => new NovelNavSectionProvider(IsNovelOnlineEnabled()),
             ResourceKind.Photobook => new PhotobookNavSectionProvider(_sourceManager.Current),
             ResourceKind.ShortDrama => new ShortDramaNavSectionProvider(),
             _ => new MangaNavSectionProvider(_sourceManager.Current.Info),
@@ -438,9 +488,37 @@ public partial class MainWindow : Window
         NavRailControl.Sections = provider.GetSections();
     }
 
+    /// <summary>在线书库是否启用（设置里关掉后，发现整组从导航消失）。</summary>
+    private bool IsNovelOnlineEnabled()
+    {
+        try
+        {
+            var config = App.Services.GetRequiredService<ResourceGrab.Core.Services.ConfigService>();
+            return config.Current.NovelOnline?.Enabled ?? true;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     private void OnNavItemClicked(object? sender, NavItem item)
     {
         if (!item.IsEnabled) return;
+
+        // 阅读设置不是页面，是弹窗：不参与路由
+        if (item.Id == "novel.settings")
+        {
+            var dialog = new SettingsDialog(true) { Owner = this };
+            dialog.ShowDialog();
+            // 关掉后重新同步左栏（18+ / 启用开关可能改了状态）
+            RefreshNavRailSections();
+            return;
+        }
+
+        // 在线书库首次进入先过 18+ 确认；用户取消就留在原地
+        if (item.Id == "novel.online" && !EnsureNovelOnlineAllowed()) return;
+
         if (!_navigator.GoTo(item.Id))
         {
             // 未注册的路由：回退搜索页并记录，避免静默失败
@@ -670,6 +748,18 @@ public partial class MainWindow : Window
         _navigator.Register("download.page", () => DownloadPageView, new SidebarPolicy(SidebarMode.Hidden));
         _navigator.Register("novel.index", () => { OpenNovelLocal(); return _novelView!; },
             new SidebarPolicy(SidebarMode.Filter, "filter.novel"));
+        _navigator.Register("novel.online", () =>
+        {
+            LeftNavHost.Visibility = Visibility.Visible;
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+            UpdateTopBarForKind();
+            return NovelOnlineViewInstance;
+        });
+        _navigator.Register("novel.category", () => PrepareNovelListPage(NovelCategoryViewInstance));
+        _navigator.Register("novel.rank", () => PrepareNovelListPage(NovelRankViewInstance));
+        _navigator.Register("novel.shelf", () => PrepareNovelListPage(NovelShelfViewInstance));
+        _navigator.Register("novel.history", () => PrepareNovelListPage(NovelHistoryViewInstance));
         _navigator.Register("novel.reader", () => { NovelReaderViewInstance.LoadFile(""); return NovelReaderViewInstance; });
     }
 
@@ -987,7 +1077,7 @@ public partial class MainWindow : Window
         // 进入下载页前记住当前页：阅读器/详情页不是路由，靠路由恢复会退回列表
         if (!IsDownloadPage && PageHost?.Content is UserControl leaving)
         {
-            if (IsNovelMode) _lastNovelContent = leaving;
+            if (IsNovelMode) { _lastNovelContent = leaving; _lastNovelBackTarget = _lastPage; }
             else if (IsVideoMode) _lastVideoContent = leaving;
             else if (IsPhotobookMode) _lastPhotobookContent = leaving;
             else if (IsDramaMode) _lastDramaContent = leaving;
@@ -1418,6 +1508,223 @@ private void OpenNovelLocal()
         _lastPage = PageHost.Content as UserControl;
         SetPage(_novelReaderView);
         RightPanelHost.Visibility = Visibility.Collapsed;
+        UpdateTopBarForKind();
+    }
+
+    /// <summary>在线书籍详情页：整页（简介 + 目录），左侧导航保留。</summary>
+    private void OpenNovelBook(ResourceGrab.Core.Sources.Novel.INovelSource source,
+        ResourceGrab.Core.Sources.Novel.NovelSummary summary)
+    {
+        try
+        {
+            CollapseRightPanel();
+            LeftNavHost.Visibility = Visibility.Visible;
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+
+            _lastPage = PageHost.Content as UserControl;
+            var view = new NovelBookView(source, summary);
+            _novelBookView = view;
+            SetPage(view);
+            UpdateTopBarForKind();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "打开书籍失败：");
+        }
+    }
+
+    /// <summary>从阅读历史打开：先取详情，再续到上次那章。</summary>
+    private async void OpenNovelBookAt(string sourceId, string novelId, string chapterId, string title)
+    {
+        try
+        {
+            var source = App.Services.GetRequiredService<NovelSourceManager>().Get(sourceId);
+            if (source is null)
+            {
+                ToastService.Show("找不到书源：" + sourceId, ToastKind.Error);
+                return;
+            }
+
+            CollapseRightPanel();
+            LeftNavHost.Visibility = Visibility.Visible;
+            _rightPanelVisible = false;
+            ApplyRightPanelVisibility();
+
+            _lastPage = PageHost.Content as UserControl;
+            var summary = new ResourceGrab.Core.Sources.Novel.NovelSummary
+            {
+                Id = novelId,
+                Title = string.IsNullOrWhiteSpace(title) ? "续读" : title,
+            };
+            var view = new NovelBookView(source, summary, chapterId);
+            _novelBookView = view;
+            SetPage(view);
+            UpdateTopBarForKind();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "打开书籍失败：");
+        }
+    }
+
+    /// <summary>列表类小说页的公共前置：显示左栏、收右栏。</summary>
+    private UserControl PrepareNovelListPage(UserControl view)
+    {
+        LeftNavHost.Visibility = Visibility.Visible;
+        _rightPanelVisible = false;
+        ApplyRightPanelVisibility();
+        UpdateTopBarForKind();
+        return view;
+    }
+
+    /// <summary>跳到在线书库；首次进入先过 18+ 确认。</summary>
+    private void GoNovelOnline()
+    {
+        if (!EnsureNovelOnlineAllowed()) return;
+        _navigator.GoTo("novel.online");
+    }
+
+    /// <summary>详情页点标签：命中站点分类就走分类页，否则按标签搜。</summary>
+    private async void OpenNovelTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return;
+        tag = tag.Trim();
+
+        try
+        {
+            var source = App.Services.GetRequiredService<NovelSourceManager>().Current;
+            if (source is not null)
+            {
+                var categories = await source.GetCategoriesAsync();
+                var match = ResourceGrab.Core.Services.NovelTagResolver.MatchCategory(tag, categories);
+                if (match is not null)
+                {
+                    NovelCategoryViewInstance.SelectCategory(match.Id);
+                    if (!_navigator.GoTo("novel.category"))
+                    {
+                        SetPage(NovelCategoryViewInstance);
+                        UpdateTopBarForKind();
+                    }
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "打开分类失败：");
+        }
+
+        // 不是分类名：按标签搜（站点 /search.html?f=tag）
+        _navigator.GoTo("novel.online");
+        NovelOnlineViewInstance.SearchTag(tag);
+    }
+
+    private static bool IsNovelContent(UserControl page) =>
+        page is NovelLocalView or NovelOnlineView or NovelBookView or NovelReaderView
+            or NovelBrowseView or NovelShelfView or NovelHistoryView;
+
+    /// <summary>切回小说时把离开前那一页原样放回来（详情页、阅读器都不在路由里）。</summary>
+    private void RestoreNovelContent(UserControl page)
+    {
+        try
+        {
+            if (page is NovelReaderView)
+            {
+                LeftNavHost.Visibility = Visibility.Collapsed;
+                RightPanelHost.Visibility = Visibility.Collapsed;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
+            }
+            else
+            {
+                LeftNavHost.Visibility = Visibility.Visible;
+                _rightPanelVisible = false;
+                ApplyRightPanelVisibility();
+            }
+
+            SetPage(page);
+
+            // 左栏选中项跟着路由走：内容被我们手动换回来时路由可能没变，不会触发 RouteChanged。
+            // 必须延到 Loaded 优先级——同步调用时 RadioButton 容器还没生成，只会记个 pending 然后被覆盖。
+            var routeId = _currentRoute?.RouteId;
+            if (routeId is not null)
+            {
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                    new Action(() => NavRailControl.SelectItem(routeId)));
+            }
+
+            // SetPage 会把"刚离开的那一页"记成返回目标（此时是漫画页），换回小说自己的目标
+            if (_lastNovelBackTarget is { } back && !ReferenceEquals(back, page))
+                _lastPage = back;
+
+            UpdateTopBarForKind();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "恢复小说页面失败：");
+        }
+    }
+
+    /// <summary>在线书库开关校验：只在设置里被关掉时才拦。</summary>
+    private bool EnsureNovelOnlineAllowed()
+    {
+        try
+        {
+            var config = App.Services.GetRequiredService<ResourceGrab.Core.Services.ConfigService>();
+            var settings = config.Current.NovelOnline ??= new ResourceGrab.Core.Models.NovelOnlineSettings();
+
+            if (settings.Enabled) return true;
+
+            ToastService.Show("在线书库已在「设置 → 小说」里关闭", ToastKind.Info);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "打开在线书库失败：");
+            try { App.Services.GetRequiredService<ResourceGrab.Core.Logging.ILogger>().Error("[Novel] 打开在线书库失败", ex); } catch { }
+            return false;
+        }
+    }
+
+    /// <summary>在线阅读器：沉浸式，进入前记住详情页，返回时回到它。</summary>
+    private void OpenNovelOnlineReader(ResourceGrab.Core.Sources.Novel.INovelSource source,
+        ResourceGrab.Core.Sources.Novel.NovelDetail detail, int chapterIndex)
+    {
+        LeftNavHost.Visibility = Visibility.Collapsed;
+        _rightPanelVisible = false;
+        ApplyRightPanelVisibility();
+
+        _novelReaderView ??= new NovelReaderView();
+        _lastPage = PageHost.Content as UserControl;
+        RightPanelHost.Visibility = Visibility.Collapsed;
+        SetPage(_novelReaderView);
+
+        try
+        {
+            var session = new NovelOnlineSession(source, detail,
+                App.Services.GetRequiredService<NovelChapterCache>(),
+                App.Services.GetService<NovelShelfService>());
+            _ = _novelReaderView.AttachOnlineAsync(session, chapterIndex);
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex, "打开章节失败：");
+        }
+        UpdateTopBarForKind();
+    }
+
+    /// <summary>本地章节跳转：按字符偏移打开本地文件。</summary>
+    private async void OpenNovelReaderAt(string path, int charOffset)
+    {
+        LeftNavHost.Visibility = Visibility.Collapsed;
+        _rightPanelVisible = false;
+        ApplyRightPanelVisibility();
+        _novelReaderView ??= new NovelReaderView();
+        _lastPage = PageHost.Content as UserControl;
+        RightPanelHost.Visibility = Visibility.Collapsed;
+        SetPage(_novelReaderView);
+        await _novelReaderView.LoadFileAsync(path, charOffset);
         UpdateTopBarForKind();
     }
 

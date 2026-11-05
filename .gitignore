@@ -25,3 +25,12 @@ config/
 
 # 本轮 UI 重构的工作区：截图与临时脚本，不入库（图标源码在 resources/icon/）
 .design/
+
+# 抓源时抓下来的站点 HTML 片段（临时排查用）
+probe_*.txt
+
+# 权限诊断脚本写的备份与报告
+.acl-reports/
+
+# 设计走查时临时抓下来的封面样本（截图证据用 png，这些是抓到的小图）
+design/novel-online/shots/*.jpg

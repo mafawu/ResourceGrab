@@ -25,6 +25,11 @@ public partial class NovelLocalView : CardGridViewBase
     private string _indexPath = @"E:\备份\小说\小说标签索引.json";
     private bool _loaded;
 
+    // 封面：当前页的卡片 + 已加载过的封面图（翻页回来不用重新解码）
+    private readonly Dictionary<string, List<NovelCardViewModel>> _liveCards = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, System.Windows.Media.ImageSource> _coverCache = new(StringComparer.OrdinalIgnoreCase);
+    private NovelCoverQueue? _coverQueue;
+
     protected override void UpdateCellSize()
     {
         if (ActualWidth <= 0) return;
@@ -48,9 +53,67 @@ public partial class NovelLocalView : CardGridViewBase
     {
         InitializeComponent();
         _novelService = App.Services.GetService<ResourceGrab.Core.Services.NovelIndexService>() ?? new ResourceGrab.Core.Services.NovelIndexService();
+        try
+        {
+            _coverQueue = App.Services.GetService<NovelCoverQueue>();
+            if (_coverQueue != null) _coverQueue.CoverReady += OnCoverReady;
+        }
+        catch { }
         Loaded += NovelLocalView_Loaded;
         SizeChanged += (_, _) => UpdateCellSize();
         Loaded += (_, _) => { if (NovelGrid != null) NovelGrid.SizeChanged += (_, _) => UpdateCellSize(); UpdateCellSize(); };
+    }
+
+    /// <summary>封面临到：在 UI 线程换上（卡片属性是 INotifyPropertyChanged，绑定会自己刷新）。</summary>
+    private void OnCoverReady(string key, string path)
+    {
+        try
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var image = LoadCoverImage(path);
+                if (image is null) return;
+                _coverCache[key] = image;
+                if (_liveCards.TryGetValue(key, out var cards))
+                {
+                    foreach (var card in cards) card.Cover = image;
+                }
+            }));
+        }
+        catch { }
+    }
+
+    private static System.Windows.Media.ImageSource? LoadCoverImage(string path)
+    {
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+            bmp.DecodePixelWidth = 360; // 卡片宽也就 160 上下，不用原图
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private bool IsCoverScrapeEnabled()
+    {
+        try
+        {
+            var cfg = App.Services.GetService<ResourceGrab.Core.Services.ConfigService>();
+            return cfg?.Current.NovelOnline?.Enabled ?? false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async void NovelLocalView_Loaded(object sender, RoutedEventArgs e)
@@ -203,6 +266,7 @@ public partial class NovelLocalView : CardGridViewBase
             PrevPageBtn.IsEnabled = _page > 1;
             NextPageBtn.IsEnabled = _page < _pageCount;
             NovelGrid.ScrollToTop();
+            BindCoversForPage(pageItems);
         }
         catch { }
     }
@@ -212,6 +276,36 @@ public partial class NovelLocalView : CardGridViewBase
         if (bytes < 1024) return $"{bytes} B";
         if (bytes < 1024*1024) return $"{bytes/1024.0:F1} KB";
         return $"{bytes/1024.0/1024.0:F1} MB";
+    }
+
+    /// <summary>登记当前页的卡片、复用已有封面，缺的丢进后台队列慢慢刮。</summary>
+    private void BindCoversForPage(List<NovelCardViewModel> pageItems)
+    {
+        _liveCards.Clear();
+
+        // 先给每本书一张"离线封面"：不等网络，翻到哪一页立刻就有图。
+        // 在线刮到真封面后会被替换（见 OnCoverReady）。
+        foreach (var item in pageItems)
+        {
+            item.Cover = NovelCoverArt.Get(item.DisplayName);
+        }
+
+        var scrape = _coverQueue is not null && IsCoverScrapeEnabled();
+        if (!scrape) return;
+
+        _coverQueue!.ClearPending();
+        foreach (var item in pageItems)
+        {
+            var key = ResourceGrab.Core.Services.NovelCoverService.NormalizeTitle(item.DisplayName);
+            if (key.Length == 0) continue;
+
+            if (!_liveCards.TryGetValue(key, out var list))
+                _liveCards[key] = list = new List<NovelCardViewModel>();
+            list.Add(item);
+
+            if (_coverCache.TryGetValue(key, out var cached)) item.Cover = cached;
+            else _coverQueue.Enqueue(item.DisplayName);
+        }
     }
 
     private void SortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -243,8 +337,10 @@ public partial class NovelLocalView : CardGridViewBase
     }
 }
 
-public class NovelCardViewModel
+public class NovelCardViewModel : System.ComponentModel.INotifyPropertyChanged
 {
+    private System.Windows.Media.ImageSource? _cover;
+
     public string DisplayName { get; set; } = "";
     public string PrimaryTag { get; set; } = "";
     public List<string> DisplayTags { get; set; } = new();
@@ -254,4 +350,18 @@ public class NovelCardViewModel
     public string ProgressText { get; set; } = "";
     public Visibility ProgressVisibility { get; set; } = Visibility.Collapsed;
     public double ProgressWidth { get; set; }
+
+    /// <summary>刮削到的封面；为空时露出首字占位。</summary>
+    public System.Windows.Media.ImageSource? Cover
+    {
+        get => _cover;
+        set
+        {
+            if (ReferenceEquals(_cover, value)) return;
+            _cover = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Cover)));
+        }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }

@@ -16,6 +16,16 @@ public static class AppPaths
     public static string DownloadHistoryPath => Path.Combine(AppDataDir, "download-history.json");
     public static string VideoDownloadHistoryPath => Path.Combine(AppDataDir, "video-download-history.json");
     public static string NovelHistoryPath => Path.Combine(AppDataDir, "novel-history.json");
+    /// <summary>在线小说章节缓存：{sourceId}/{bookId}/{key}.txt，读过即缓存，离线可读。</summary>
+    public static string NovelChapterCacheDir => Path.Combine(AppDataDir, "novel-cache");
+    /// <summary>在线小说导出 txt 的默认目录。</summary>
+    public static string NovelExportDir => Path.Combine(AppDataDir, "小说导出");
+    /// <summary>在线小说书架（收藏的书与进度）。</summary>
+    public static string NovelShelfPath => Path.Combine(AppDataDir, "novel-shelf.json");
+    /// <summary>本地小说封面缓存（在线刮削下载到本地的封面图）。</summary>
+    public static string NovelCoverDir => Path.Combine(AppDataDir, "novel-covers");
+    /// <summary>本地小说封面索引：书名 → 封面文件 / 未命中时间。</summary>
+    public static string NovelCoverIndexPath => Path.Combine(AppDataDir, "novel-covers.json");
     public static string NovelIndexPath => Path.Combine(AppDataDir, "novel-index.json");
     public static string NovelReaderSettingsPath => Path.Combine(AppDataDir, "novel-reader-settings.json");
     public static string ComicUserDataPath => Path.Combine(AppDataDir, "comic-user-data.json");
